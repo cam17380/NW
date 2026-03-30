@@ -84,17 +84,17 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     if (!neighborDev) break;
 
     if (neighborDev.type === 'switch') {
-      if (!visited.has(neighbor.device)) {
-        path.push(neighbor.device);
-        visited.add(neighbor.device);
-      }
+      // Always add switch to path (switches are L2 transit points, can appear multiple times)
+      path.push(neighbor.device);
+      visited.add(neighbor.device);
 
       const targetDevId = findDeviceByIP(devices, nextHopIP);
       if (!targetDevId || visited.has(targetDevId)) break;
 
       const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId);
       for (const sid of swPath) {
-        if (!visited.has(sid)) { path.push(sid); visited.add(sid); }
+        path.push(sid);
+        visited.add(sid);
       }
 
       path.push(targetDevId);

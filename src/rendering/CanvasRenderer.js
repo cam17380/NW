@@ -122,7 +122,7 @@ export class CanvasRenderer {
     const myId = this.pingAnimId;
     const segDur = 300;
     const fadeDur = 400;
-    const startTime = performance.now();
+    let startTime = -1;
     const maxTime = segments.length * segDur + fadeDur + 1000;
     this.pingAnimRunning = true;
 
@@ -141,6 +141,7 @@ export class CanvasRenderer {
     function frame(now) {
       if (myId !== self.pingAnimId || !self.pingAnimRunning) return;
 
+      if (startTime < 0) startTime = now;
       const elapsed = now - startTime;
       const totalSegTime = segments.length * segDur;
 
@@ -155,7 +156,7 @@ export class CanvasRenderer {
         self.draw();
 
         if (elapsed < totalSegTime) {
-          const segIdx = Math.min(Math.floor(elapsed / segDur), segments.length - 1);
+          const segIdx = Math.max(0, Math.min(Math.floor(elapsed / segDur), segments.length - 1));
           const seg = segments[segIdx];
           const t = Math.min((elapsed - segIdx * segDur) / segDur, 1);
 
