@@ -105,6 +105,55 @@ export function execShow(input, parts, store, termWrite, execPing) {
     return;
   }
 
+  if (lower === 'show ip nat translations') {
+    if (dev.type !== 'router' || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    // Build translation table from static entries + active translations
+    const allTrans = [];
+    for (const e of dev.nat.staticEntries) {
+      allTrans.push({ proto: '---', insideGlobal: e.insideGlobal, insideLocal: e.insideLocal, outsideLocal: '---', outsideGlobal: '---', type: 'static' });
+    }
+    for (const t of dev.nat.translations) {
+      if (t.type === 'dynamic') {
+        allTrans.push({ proto: '---', insideGlobal: t.insideGlobal, insideLocal: t.insideLocal, outsideLocal: '---', outsideGlobal: '---', type: 'dynamic' });
+      }
+    }
+    termWrite('Pro  Inside global      Inside local       Outside local      Outside global');
+    termWrite('---  ----------------   ----------------   ----------------   ----------------');
+    if (allTrans.length === 0) {
+      termWrite('  (no translations)');
+    } else {
+      for (const t of allTrans) {
+        termWrite(t.proto.padEnd(5) + t.insideGlobal.padEnd(19) + t.insideLocal.padEnd(19) + t.outsideLocal.padEnd(19) + t.outsideGlobal);
+      }
+    }
+    return;
+  }
+
+  if (lower === 'show ip nat statistics') {
+    if (dev.type !== 'router' || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    const nat = dev.nat;
+    const totalTrans = nat.staticEntries.length + nat.translations.filter(t => t.type === 'dynamic').length;
+    termWrite(`Total active translations: ${totalTrans} (${nat.staticEntries.length} static, ${totalTrans - nat.staticEntries.length} dynamic)`);
+    termWrite(`Hits: ${nat.stats.hits}  Misses: ${nat.stats.misses}`);
+    // Inside/outside interfaces
+    const insideIfs = [], outsideIfs = [];
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (iface.natRole === 'inside') insideIfs.push(shortIfName(ifName));
+      if (iface.natRole === 'outside') outsideIfs.push(shortIfName(ifName));
+    }
+    termWrite(`Inside interfaces: ${insideIfs.length > 0 ? insideIfs.join(', ') : '(none)'}`);
+    termWrite(`Outside interfaces: ${outsideIfs.length > 0 ? outsideIfs.join(', ') : '(none)'}`);
+    // Pools
+    for (const [name, pool] of Object.entries(nat.pools)) {
+      termWrite(`Pool ${name}: ${pool.startIP} - ${pool.endIP} netmask ${pool.netmask}`);
+    }
+    // Dynamic rules
+    for (const rule of nat.dynamicRules) {
+      termWrite(`Dynamic rule: ACL ${rule.aclNum} -> pool ${rule.poolName}`);
+    }
+    return;
+  }
+
   if (lower === 'show running-config') {
     termWrite('Building configuration...\n');
     termWrite('!');
@@ -132,9 +181,33 @@ export function execShow(input, parts, store, termWrite, execPing) {
           if (sp.accessVlan !== 1) termWrite(` switchport access vlan ${sp.accessVlan}`);
         }
       }
+      if (iface.natRole) termWrite(` ip nat ${iface.natRole}`);
       if (iface.status === 'down') termWrite(' shutdown');
       else termWrite(' no shutdown');
       termWrite('!');
+    }
+    // ACLs
+    if (dev.accessLists) {
+      for (const [num, entries] of Object.entries(dev.accessLists)) {
+        for (const entry of entries) {
+          termWrite(`access-list ${num} ${entry.action} ${entry.network} ${entry.wildcard}`);
+        }
+      }
+    }
+    // NAT
+    if (dev.nat) {
+      for (const [name, pool] of Object.entries(dev.nat.pools)) {
+        termWrite(`ip nat pool ${name} ${pool.startIP} ${pool.endIP} netmask ${pool.netmask}`);
+      }
+      for (const e of dev.nat.staticEntries) {
+        termWrite(`ip nat inside source static ${e.insideLocal} ${e.insideGlobal}`);
+      }
+      for (const r of dev.nat.dynamicRules) {
+        termWrite(`ip nat inside source list ${r.aclNum} pool ${r.poolName}`);
+      }
+      if (Object.keys(dev.nat.pools).length > 0 || dev.nat.staticEntries.length > 0 || dev.nat.dynamicRules.length > 0) {
+        termWrite('!');
+      }
     }
     if (dev.routes && dev.routes.length > 0) {
       for (const r of dev.routes) {

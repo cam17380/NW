@@ -5,6 +5,8 @@ export function createDefaultDevices() {
     R1: {
       type: 'router', hostname: 'Router1', x: 200, y: 160,
       routes: [],
+      nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+      accessLists: {},
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R2', iface: 'GigabitEthernet0/1' } },
@@ -13,6 +15,8 @@ export function createDefaultDevices() {
     R2: {
       type: 'router', hostname: 'Router2', x: 600, y: 160,
       routes: [],
+      nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+      accessLists: {},
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },

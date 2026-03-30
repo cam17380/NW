@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -19,6 +19,11 @@ export function execPing(targetIP, store, terminal, animatePing) {
   const reachable = canReach(devices, currentDeviceId, targetIP);
 
   terminal.write(`Sending 5, 100-byte ICMP Echos to ${targetIP}, timeout is 2 seconds:`);
+
+  // Apply NAT translations along the path
+  if (reachable) {
+    applyNATAlongPath(devices, currentDeviceId, srcIP, targetIP);
+  }
 
   const path = buildPingPath(devices, currentDeviceId, targetIP, reachable);
 
@@ -129,4 +134,77 @@ function bfsSwitchPath(devices, startSwId, targetDevId) {
     }
   }
   return [];
+}
+
+// Walk the forwarding path and apply NAT at each router hop
+function applyNATAlongPath(devices, fromId, srcIP, dstIP) {
+  const visited = new Set();
+  let curId = fromId;
+  let curSrcIP = srcIP;
+  let curDstIP = dstIP;
+
+  for (let step = 0; step < 20; step++) {
+    if (visited.has(curId)) break;
+    visited.add(curId);
+    const dv = devices[curId];
+
+    // Check if target reached
+    for (const iface of Object.values(dv.interfaces)) {
+      if (iface.ip === curDstIP && iface.status === 'up') return;
+    }
+
+    // Determine ingress interface (for NAT direction detection)
+    if (dv.type === 'router' && dv.nat) {
+      // Find which interface the packet arrives on (from previous hop)
+      let ingressIfName = null;
+      if (step === 0) {
+        // First hop: find interface toward the destination's subnet or next hop
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (!iface.ip || iface.status !== 'up') continue;
+          if (getNetwork(iface.ip, iface.mask) === getNetwork(curDstIP, iface.mask)) {
+            ingressIfName = ifName; break;
+          }
+        }
+      }
+      // For intermediate hops, find the interface connected to previous device
+      // We approximate by checking all inside interfaces
+      if (!ingressIfName) {
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (iface.natRole === 'inside' && iface.status === 'up') {
+            ingressIfName = ifName; break;
+          }
+        }
+      }
+      if (ingressIfName) {
+        const result = applyNAT(dv, curSrcIP, curDstIP, ingressIfName);
+        curSrcIP = result.srcIP;
+        curDstIP = result.dstIP;
+      }
+    }
+
+    // Find next hop
+    let nextHopIP = null;
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(curDstIP, iface.mask)) {
+        nextHopIP = curDstIP; break;
+      }
+    }
+    if (!nextHopIP) nextHopIP = lookupRoute(dv, curDstIP);
+    if (!nextHopIP) break;
+
+    const nextDevId = findDeviceByIP(devices, nextHopIP);
+    if (!nextDevId) break;
+
+    // Skip through switches to find the actual L3 device
+    const nextDev = devices[nextDevId];
+    if (nextDev.type === 'switch') {
+      // Find the endpoint device behind this switch
+      const endDevId = findDeviceByIP(devices, curDstIP);
+      if (endDevId) curId = endDevId;
+      else break;
+    } else {
+      curId = nextDevId;
+    }
+  }
 }

@@ -85,6 +85,18 @@
         <tr><td><code>ip default-gateway &lt;ip&gt;</code></td><td>config (PC)</td><td>Set default gateway</td></tr>
         <tr><td><code>show ip route</code></td><td>EXEC</td><td>Show routing table</td></tr>
       </table>
+      <h3>NAT Commands (Router only)</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td><code>ip nat inside</code></td><td>config-if</td><td>Mark interface as NAT inside</td></tr>
+        <tr><td><code>ip nat outside</code></td><td>config-if</td><td>Mark interface as NAT outside</td></tr>
+        <tr><td><code>ip nat inside source static &lt;local&gt; &lt;global&gt;</code></td><td>config</td><td>Create static NAT translation</td></tr>
+        <tr><td><code>ip nat pool &lt;name&gt; &lt;start&gt; &lt;end&gt; netmask &lt;mask&gt;</code></td><td>config</td><td>Define NAT address pool</td></tr>
+        <tr><td><code>ip nat inside source list &lt;acl&gt; pool &lt;name&gt;</code></td><td>config</td><td>Dynamic NAT with ACL and pool</td></tr>
+        <tr><td><code>access-list &lt;num&gt; permit &lt;network&gt; &lt;wildcard&gt;</code></td><td>config</td><td>Standard ACL (1-99) for NAT</td></tr>
+        <tr><td><code>show ip nat translations</code></td><td>EXEC</td><td>Show NAT translation table</td></tr>
+        <tr><td><code>show ip nat statistics</code></td><td>EXEC</td><td>Show NAT statistics and config</td></tr>
+      </table>
       <h3>Show Commands</h3>
       <table>
         <tr><th>Command</th><th>Description</th></tr>
@@ -92,7 +104,9 @@
         <tr><td><code>show running-config</code></td><td>Show current configuration</td></tr>
         <tr><td><code>show interfaces</code></td><td>Show detailed interface info</td></tr>
         <tr><td><code>show ip route</code></td><td>Show routing table (routers/PCs)</td></tr>
-        <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN aware)</td></tr>
+        <tr><td><code>show ip nat translations</code></td><td>Show NAT translation table</td></tr>
+        <tr><td><code>show ip nat statistics</code></td><td>Show NAT statistics</td></tr>
+        <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT aware)</td></tr>
       </table>
       <h3>Tips</h3>
       <table>
@@ -101,6 +115,7 @@
         <tr><td>VLAN colors appear on links in the network diagram</td></tr>
         <tr><td>Routers need <code>ip route</code> to forward packets between networks</td></tr>
         <tr><td>PCs need <code>ip default-gateway</code> to reach other networks</td></tr>
+        <tr><td>NAT requires <code>ip nat inside/outside</code> on interfaces + translation rules</td></tr>
       </table>
     </div>
   </div>

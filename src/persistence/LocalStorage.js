@@ -104,6 +104,11 @@ export function doReset(store, refreshUI) {
     if (dv.type === 'router') {
       dv.hostname = id === 'R1' ? 'Router1' : 'Router2';
       dv.routes = [];
+      if (dv.nat) {
+        dv.nat.staticEntries = []; dv.nat.pools = {}; dv.nat.dynamicRules = [];
+        dv.nat.translations = []; dv.nat.stats = { hits: 0, misses: 0 };
+      }
+      dv.accessLists = {};
     }
     if (dv.type === 'switch') {
       dv.hostname = 'Switch1';
@@ -119,6 +124,7 @@ export function doReset(store, refreshUI) {
       iface.status = 'down';
       iface.protocol = 'down';
       iface.description = '';
+      if (iface.natRole) iface.natRole = null;
       if (iface.switchport) {
         iface.switchport = { mode: 'access', accessVlan: 1, trunkAllowed: 'all' };
       }

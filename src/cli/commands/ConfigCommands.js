@@ -97,6 +97,129 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
+  // ── NAT commands (router only) ──
+
+  // ip nat inside source static <inside-local> <inside-global>
+  if (lower.startsWith('ip nat inside source static')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
+    const insideLocal = args[5], insideGlobal = args[6];
+    if (!isValidIP(insideLocal) || !isValidIP(insideGlobal)) { termWrite('% Invalid IP address', 'error-line'); return; }
+    const dup = dev.nat.staticEntries.find(e => e.insideLocal === insideLocal && e.insideGlobal === insideGlobal);
+    if (dup) { termWrite('% Translation already exists', 'error-line'); return; }
+    dev.nat.staticEntries.push({ insideLocal, insideGlobal });
+    termWrite(`% Static NAT: ${insideLocal} -> ${insideGlobal}`, 'success-line');
+    return;
+  }
+
+  // no ip nat inside source static <inside-local> <inside-global>
+  if (lower.startsWith('no ip nat inside source static')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 8) { termWrite('% Incomplete command — usage: no ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
+    const insideLocal = args[6], insideGlobal = args[7];
+    const idx = dev.nat.staticEntries.findIndex(e => e.insideLocal === insideLocal && e.insideGlobal === insideGlobal);
+    if (idx === -1) { termWrite('% Translation not found', 'error-line'); return; }
+    dev.nat.staticEntries.splice(idx, 1);
+    dev.nat.translations = dev.nat.translations.filter(t => !(t.insideLocal === insideLocal && t.insideGlobal === insideGlobal && t.type === 'static'));
+    termWrite(`% Static NAT removed`, 'success-line');
+    return;
+  }
+
+  // ip nat inside source list <acl-num> pool <pool-name>
+  if (lower.startsWith('ip nat inside source list')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 8 || args[6].toLowerCase() !== 'pool') {
+      termWrite('% Incomplete command — usage: ip nat inside source list <acl-num> pool <pool-name>', 'error-line'); return;
+    }
+    const aclNum = parseInt(args[5]);
+    const poolName = args[7];
+    if (isNaN(aclNum) || aclNum < 1 || aclNum > 99) { termWrite('% Invalid ACL number (1-99)', 'error-line'); return; }
+    if (!dev.nat.pools[poolName]) { termWrite(`% Pool "${poolName}" not found`, 'error-line'); return; }
+    const dup = dev.nat.dynamicRules.find(r => r.aclNum === aclNum && r.poolName === poolName);
+    if (dup) { termWrite('% Dynamic NAT rule already exists', 'error-line'); return; }
+    dev.nat.dynamicRules.push({ aclNum, poolName });
+    termWrite(`% Dynamic NAT: ACL ${aclNum} -> pool ${poolName}`, 'success-line');
+    return;
+  }
+
+  // no ip nat inside source list <acl-num> pool <pool-name>
+  if (lower.startsWith('no ip nat inside source list')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 9) { termWrite('% Incomplete command', 'error-line'); return; }
+    const aclNum = parseInt(args[6]);
+    const poolName = args[8];
+    const idx = dev.nat.dynamicRules.findIndex(r => r.aclNum === aclNum && r.poolName === poolName);
+    if (idx === -1) { termWrite('% Dynamic NAT rule not found', 'error-line'); return; }
+    dev.nat.dynamicRules.splice(idx, 1);
+    termWrite(`% Dynamic NAT rule removed`, 'success-line');
+    return;
+  }
+
+  // ip nat pool <name> <start-ip> <end-ip> netmask <mask>
+  if (lower.startsWith('ip nat pool')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat pool <name> <start-ip> <end-ip> netmask <mask>', 'error-line'); return; }
+    const poolName = args[3], startIP = args[4], endIP = args[5];
+    if (!isValidIP(startIP) || !isValidIP(endIP)) { termWrite('% Invalid IP address', 'error-line'); return; }
+    let netmask = '255.255.255.0';
+    if (args.length >= 8 && args[6].toLowerCase() === 'netmask') {
+      if (!isValidIP(args[7])) { termWrite('% Invalid netmask', 'error-line'); return; }
+      netmask = args[7];
+    }
+    dev.nat.pools[poolName] = { startIP, endIP, netmask };
+    termWrite(`% NAT pool "${poolName}" defined: ${startIP} - ${endIP}`, 'success-line');
+    return;
+  }
+
+  // no ip nat pool <name>
+  if (lower.startsWith('no ip nat pool')) {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Incomplete command — usage: no ip nat pool <name>', 'error-line'); return; }
+    const poolName = args[4];
+    if (!dev.nat.pools[poolName]) { termWrite(`% Pool "${poolName}" not found`, 'error-line'); return; }
+    const inUse = dev.nat.dynamicRules.some(r => r.poolName === poolName);
+    if (inUse) { termWrite(`% Pool "${poolName}" is in use by a dynamic NAT rule`, 'error-line'); return; }
+    delete dev.nat.pools[poolName];
+    termWrite(`% NAT pool "${poolName}" removed`, 'success-line');
+    return;
+  }
+
+  // access-list <num> permit <network> <wildcard>
+  if (cmd === 'access-list') {
+    if (dev.type !== 'router') { termWrite('% access-list is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit <network> <wildcard>', 'error-line'); return; }
+    const aclNum = parseInt(args[1]);
+    if (isNaN(aclNum) || aclNum < 1 || aclNum > 99) { termWrite('% Invalid ACL number (1-99 for standard)', 'error-line'); return; }
+    const action = args[2].toLowerCase();
+    if (action !== 'permit' && action !== 'deny') { termWrite('% Invalid action — use "permit" or "deny"', 'error-line'); return; }
+    const network = args[3];
+    const wildcard = args.length >= 5 ? args[4] : '0.0.0.0';
+    if (!isValidIP(network) || !isValidIP(wildcard)) { termWrite('% Invalid IP address or wildcard', 'error-line'); return; }
+    if (!dev.accessLists[aclNum]) dev.accessLists[aclNum] = [];
+    dev.accessLists[aclNum].push({ action, network, wildcard });
+    termWrite(`% ACL ${aclNum}: ${action} ${network} ${wildcard}`, 'success-line');
+    return;
+  }
+
+  // no access-list <num>
+  if (lower.startsWith('no access-list')) {
+    if (dev.type !== 'router') { termWrite('% access-list is only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    const aclNum = parseInt(args[2]);
+    if (isNaN(aclNum)) { termWrite('% Incomplete command — usage: no access-list <num>', 'error-line'); return; }
+    if (!dev.accessLists[aclNum]) { termWrite(`% ACL ${aclNum} not found`, 'error-line'); return; }
+    delete dev.accessLists[aclNum];
+    termWrite(`% ACL ${aclNum} removed`, 'success-line');
+    return;
+  }
+
   if (cmd === 'exit') { store.setCLIMode('privileged'); return; }
   if (cmd === 'end') { store.setCLIMode('privileged'); return; }
   termWrite(`% Unknown command "${parts[0]}" in config mode`, 'error-line');

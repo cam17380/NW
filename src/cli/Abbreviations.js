@@ -44,6 +44,15 @@ const abbreviations = {
   'ip def': 'ip default-gateway',
   'ip default': 'ip default-gateway',
   'no ip ro': 'no ip route',
+  // NAT
+  'sh ip nat trans': 'show ip nat translations',
+  'sh ip nat translation': 'show ip nat translations',
+  'show ip nat trans': 'show ip nat translations',
+  'sh ip nat stat': 'show ip nat statistics',
+  'show ip nat stat': 'show ip nat statistics',
+  'ip nat in': 'ip nat inside',
+  'ip nat out': 'ip nat outside',
+  'acc': 'access-list',
 };
 
 export function expandAbbrev(input) {

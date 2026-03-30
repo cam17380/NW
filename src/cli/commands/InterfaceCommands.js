@@ -88,6 +88,25 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     return;
   }
 
+  // ── NAT interface role (router only) ──
+  if (lower === 'ip nat inside') {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    iface.natRole = 'inside';
+    termWrite(`% Interface ${currentInterface} marked as NAT inside`, 'success-line');
+    return;
+  }
+  if (lower === 'ip nat outside') {
+    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    iface.natRole = 'outside';
+    termWrite(`% Interface ${currentInterface} marked as NAT outside`, 'success-line');
+    return;
+  }
+  if (lower === 'no ip nat inside' || lower === 'no ip nat outside') {
+    iface.natRole = null;
+    termWrite(`% NAT role removed from ${currentInterface}`, 'success-line');
+    return;
+  }
+
   if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentInterface(''); return; }
   if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentInterface(''); return; }
   termWrite(`% Unknown command "${parts[0]}" in interface config mode`, 'error-line');
