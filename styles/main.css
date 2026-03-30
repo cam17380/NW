@@ -1,0 +1,166 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  background: #0a0e17;
+  color: #e0e0e0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+header {
+  background: #141b2d;
+  padding: 8px 20px;
+  border-bottom: 1px solid #1e2a3a;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+header h1 { font-size: 16px; color: #4fc3f7; font-weight: 600; }
+.device-tabs { display: flex; gap: 4px; margin-left: 24px; }
+.device-tab {
+  padding: 4px 14px; background: #1a2332; border: 1px solid #2a3a4a;
+  border-radius: 4px; cursor: pointer; font-size: 12px; color: #8899aa; transition: all 0.2s;
+}
+.device-tab:hover { background: #223344; color: #aabbcc; }
+.device-tab.active { background: #1a3a5c; border-color: #4fc3f7; color: #4fc3f7; }
+.main-container { display: flex; flex: 1; overflow: hidden; }
+.diagram-panel { flex: 1; position: relative; background: #0d1117; border-right: 1px solid #1e2a3a; }
+canvas { display: block; width: 100%; height: 100%; }
+.terminal-panel { width: 540px; display: flex; flex-direction: column; background: #0c0c0c; }
+.terminal-header {
+  padding: 6px 12px; background: #1a1a2e; border-bottom: 1px solid #2a2a3e;
+  font-size: 11px; color: #888; display: flex; justify-content: space-between;
+}
+.terminal-output {
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
+  line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+}
+.terminal-output .cmd-line { color: #4fc3f7; }
+.terminal-output .output-line { color: #b0b0b0; }
+.terminal-output .error-line { color: #ff6b6b; }
+.terminal-output .success-line { color: #69f0ae; }
+.terminal-input-area { display: flex; border-top: 1px solid #1e2a3a; background: #111; }
+.prompt-label {
+  padding: 8px 4px 8px 12px; font-family: 'Consolas', monospace;
+  font-size: 13px; color: #4fc3f7; white-space: nowrap;
+}
+#cmdInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e0e0e0; font-family: 'Consolas', monospace; font-size: 13px; padding: 8px 4px;
+}
+.help-badge {
+  position: absolute; bottom: 12px; right: 12px; background: #1a2332;
+  border: 1px solid #2a3a4a; border-radius: 6px; padding: 8px 12px;
+  font-size: 11px; color: #667788; cursor: pointer; transition: all 0.2s; z-index: 10;
+}
+.help-badge:hover { background: #223344; color: #aabbcc; }
+.help-overlay {
+  display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 14, 23, 0.95); z-index: 20; padding: 32px; overflow-y: auto;
+}
+.help-overlay.show { display: block; }
+.help-overlay h2 { color: #4fc3f7; margin-bottom: 16px; font-size: 18px; }
+.help-overlay h3 { color: #69f0ae; margin: 16px 0 8px; font-size: 14px; }
+.help-overlay table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+.help-overlay td, .help-overlay th {
+  padding: 4px 12px; text-align: left; font-size: 12px; border-bottom: 1px solid #1e2a3a;
+}
+.help-overlay th { color: #4fc3f7; }
+.help-overlay code { color: #f0c040; background: #1a1a2e; padding: 1px 5px; border-radius: 3px; }
+.help-close {
+  position: absolute; top: 12px; right: 16px; background: none; border: 1px solid #444;
+  color: #aaa; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.help-close:hover { background: #333; color: #fff; }
+.legend {
+  position: absolute; top: 8px; left: 12px; display: flex; gap: 14px; flex-wrap: wrap;
+  font-size: 11px; color: #667; z-index: 5;
+}
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.legend-line { width: 18px; height: 3px; border-radius: 2px; }
+.terminal-output::-webkit-scrollbar { width: 6px; }
+.terminal-output::-webkit-scrollbar-track { background: #111; }
+.terminal-output::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+/* Save/Load buttons */
+.toolbar {
+  display: flex; gap: 4px; margin-left: auto;
+}
+.toolbar-btn {
+  padding: 4px 12px; background: #1a2332; border: 1px solid #2a3a4a;
+  border-radius: 4px; cursor: pointer; font-size: 11px; color: #8899aa;
+  transition: all 0.2s; font-family: 'Segoe UI', sans-serif;
+}
+.toolbar-btn:hover { background: #223344; color: #ccc; }
+.toolbar-btn.save { border-color: #2e7d32; }
+.toolbar-btn.save:hover { background: #1b3d1f; color: #69f0ae; }
+.toolbar-btn.load { border-color: #1565c0; }
+.toolbar-btn.load:hover { background: #0d2744; color: #4fc3f7; }
+.toolbar-btn.reset { border-color: #c62828; }
+.toolbar-btn.reset:hover { background: #3d1111; color: #ff6b6b; }
+.toolbar-btn.export { border-color: #6a1b9a; }
+.toolbar-btn.export:hover { background: #2a1040; color: #ce93d8; }
+.toolbar-btn.import { border-color: #6a1b9a; }
+.toolbar-btn.import:hover { background: #2a1040; color: #ce93d8; }
+/* Toast notification */
+.toast {
+  position: fixed; top: 50px; left: 50%; transform: translateX(-50%);
+  background: #1a3a5c; border: 1px solid #4fc3f7; color: #e0e0e0;
+  padding: 10px 24px; border-radius: 6px; font-size: 13px;
+  z-index: 100; opacity: 0; transition: opacity 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; }
+.toast.error { background: #3d1111; border-color: #ff6b6b; }
+.toast.success { background: #1b3d1f; border-color: #69f0ae; }
+/* Confirm dialog */
+.confirm-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6); z-index: 50;
+  justify-content: center; align-items: center;
+}
+.confirm-overlay.show { display: flex; }
+.confirm-box {
+  background: #141b2d; border: 1px solid #2a3a4a; border-radius: 8px;
+  padding: 24px 32px; max-width: 400px; text-align: center;
+}
+.confirm-box p { margin-bottom: 16px; font-size: 14px; line-height: 1.6; }
+.confirm-box .btn-row { display: flex; gap: 12px; justify-content: center; }
+.confirm-box button {
+  padding: 6px 20px; border-radius: 4px; border: 1px solid #444;
+  cursor: pointer; font-size: 13px; background: #1a2332; color: #ccc;
+}
+.confirm-box button:hover { background: #2a3a4a; }
+.confirm-box button.danger { border-color: #c62828; color: #ff6b6b; }
+.confirm-box button.danger:hover { background: #3d1111; }
+/* Save slot info */
+.save-info {
+  font-size: 10px; color: #556; margin-left: 8px;
+}
+/* Command hint panel */
+.cmd-hints {
+  border-top: 1px solid #1e2a3a; background: #10141c;
+  padding: 6px 12px; max-height: 140px; overflow-y: auto;
+  display: flex; flex-wrap: wrap; gap: 4px 6px;
+  align-content: flex-start;
+}
+.cmd-hints::-webkit-scrollbar { width: 4px; }
+.cmd-hints::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+.cmd-hint-title {
+  width: 100%; font-size: 10px; color: #556; margin-bottom: 2px;
+  font-family: 'Segoe UI', sans-serif; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.cmd-chip {
+  padding: 2px 8px; background: #1a2332; border: 1px solid #2a3a4a;
+  border-radius: 3px; font-family: 'Consolas', monospace; font-size: 11px;
+  color: #8899aa; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.cmd-chip:hover { background: #1a3a5c; border-color: #4fc3f7; color: #4fc3f7; }
+.cmd-chip.category-nav { border-left: 2px solid #4fc3f7; }
+.cmd-chip.category-config { border-left: 2px solid #69f0ae; }
+.cmd-chip.category-show { border-left: 2px solid #ffa726; }
+.cmd-chip.category-vlan { border-left: 2px solid #ab47bc; }
+.cmd-chip.category-route { border-left: 2px solid #ef5350; }
