@@ -1,5 +1,82 @@
 // ─── Topology: Device/Link data definitions and management ───
 
+// ─── Device factory ───
+export function createDevice(type, id, x, y) {
+  const base = { type, hostname: id, x, y };
+  if (type === 'router') {
+    return {
+      ...base,
+      routes: [],
+      nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+      accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+      }
+    };
+  }
+  if (type === 'switch') {
+    return {
+      ...base,
+      vlans: { 1: { name: 'default' } },
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/3': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/4': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    };
+  }
+  // pc
+  return {
+    ...base,
+    defaultGateway: '',
+    interfaces: {
+      'Ethernet0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+    }
+  };
+}
+
+export function generateDeviceId(type, existingDevices) {
+  const prefix = type === 'router' ? 'R' : type === 'switch' ? 'SW' : 'PC';
+  const pattern = type === 'switch' ? /^SW(\d+)$/ : new RegExp(`^${prefix}(\\d+)$`);
+  let max = 0;
+  for (const id of Object.keys(existingDevices)) {
+    const m = id.match(pattern);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return prefix + (max + 1);
+}
+
+export function generateInterfaceName(device) {
+  const ifaces = Object.keys(device.interfaces);
+  if (device.type === 'pc') {
+    // Ethernet0, Ethernet1, ...
+    let max = -1;
+    for (const name of ifaces) {
+      const m = name.match(/^Ethernet(\d+)$/);
+      if (m) max = Math.max(max, parseInt(m[1], 10));
+    }
+    return 'Ethernet' + (max + 1);
+  }
+  // Router and switch: GigabitEthernet0/N
+  let max = -1;
+  for (const name of ifaces) {
+    const m = name.match(/^GigabitEthernet0\/(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return 'GigabitEthernet0/' + (max + 1);
+}
+
+export function createInterfaceForDevice(device) {
+  const name = generateInterfaceName(device);
+  const iface = { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null };
+  if (device.type === 'switch') {
+    iface.switchport = { mode: 'access', accessVlan: 1, trunkAllowed: 'all' };
+  }
+  return { name, iface };
+}
+
 export function createDefaultDevices() {
   return {
     R1: {

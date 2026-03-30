@@ -52,25 +52,77 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
   const path = [fromId];
   const visited = new Set([fromId]);
   let curId = fromId;
+  let curTargetIP = targetIP;
+  let curSrcIP = null;
+
+  // Get source IP
+  const srcDev = devices[fromId];
+  for (const iface of Object.values(srcDev.interfaces)) {
+    if (iface.status === 'up' && iface.ip) { curSrcIP = iface.ip; break; }
+  }
 
   for (let step = 0; step < 20; step++) {
     const dv = devices[curId];
 
     for (const iface of Object.values(dv.interfaces)) {
-      if (iface.ip === targetIP && iface.status === 'up') return path;
+      if (iface.ip === curTargetIP && iface.status === 'up') return path;
     }
 
-    let nextHopIP = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up') continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
-        nextHopIP = targetIP;
-        break;
+    // Apply NAT at routers — update curTargetIP for subsequent path decisions
+    if (dv.type === 'router' && dv.nat && step > 0) {
+      // Find ingress interface by tracing which interface connects to the previous device
+      const prevDevId = path[path.length - 2] || null;
+      let ingressIfName = null;
+      if (prevDevId) {
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (!iface.connected || iface.status !== 'up') continue;
+          if (iface.connected.device === prevDevId) { ingressIfName = ifName; break; }
+          // Check if previous device is behind a switch
+          const connDev = devices[iface.connected.device];
+          if (connDev && connDev.type === 'switch') {
+            const swVisited = new Set([iface.connected.device]);
+            const queue = [iface.connected.device];
+            while (queue.length > 0) {
+              const swId = queue.shift();
+              const sw = devices[swId];
+              for (const swIf of Object.values(sw.interfaces)) {
+                if (!swIf.connected || swIf.status !== 'up') continue;
+                if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
+                const cd = devices[swIf.connected.device];
+                if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
+                  swVisited.add(swIf.connected.device);
+                  queue.push(swIf.connected.device);
+                }
+              }
+              if (ingressIfName) break;
+            }
+          }
+          if (ingressIfName) break;
+        }
+      }
+      if (ingressIfName) {
+        const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
+        curSrcIP = natResult.srcIP;
+        curTargetIP = natResult.dstIP;
+        // Re-check: did NAT resolve to a local address on this device?
+        for (const iface of Object.values(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') return path;
+        }
       }
     }
 
+    // Check routing table first (specific route like /32 takes priority over connected /24)
+    let nextHopIP = lookupRoute(dv, curTargetIP);
+
+    // If no explicit route, check directly connected networks
     if (!nextHopIP) {
-      nextHopIP = lookupRoute(dv, targetIP);
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!iface.ip || iface.status !== 'up') continue;
+        if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
+          nextHopIP = curTargetIP;
+          break;
+        }
+      }
     }
     if (!nextHopIP) break;
 
@@ -182,15 +234,16 @@ function applyNATAlongPath(devices, fromId, srcIP, dstIP) {
       }
     }
 
-    // Find next hop
-    let nextHopIP = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up') continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(curDstIP, iface.mask)) {
-        nextHopIP = curDstIP; break;
+    // Find next hop — routing table first (specific route takes priority)
+    let nextHopIP = lookupRoute(dv, curDstIP);
+    if (!nextHopIP) {
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!iface.ip || iface.status !== 'up') continue;
+        if (getNetwork(iface.ip, iface.mask) === getNetwork(curDstIP, iface.mask)) {
+          nextHopIP = curDstIP; break;
+        }
       }
     }
-    if (!nextHopIP) nextHopIP = lookupRoute(dv, curDstIP);
     if (!nextHopIP) break;
 
     const nextDevId = findDeviceByIP(devices, nextHopIP);

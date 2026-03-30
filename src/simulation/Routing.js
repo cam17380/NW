@@ -3,35 +3,87 @@ import { getNetwork, maskToCIDR, ipToInt, intToIP } from './NetworkUtils.js';
 
 export function canReach(devices, fromId, targetIP) {
   const visited = new Set();
-  return forwardPacket(devices, fromId, targetIP, visited);
+  let srcIP = null;
+  const srcDev = devices[fromId];
+  for (const iface of Object.values(srcDev.interfaces)) {
+    if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
+  }
+  return forwardPacket(devices, fromId, targetIP, visited, srcIP, null);
 }
 
-export function forwardPacket(devices, devId, targetIP, visited) {
+export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevId) {
   if (visited.has(devId)) return false;
   visited.add(devId);
 
   const dv = devices[devId];
+  let curTargetIP = targetIP;
+  let curSrcIP = srcIP;
 
   // 1. Check if target is directly on this device
   for (const iface of Object.values(dv.interfaces)) {
-    if (iface.ip === targetIP && iface.status === 'up') return true;
+    if (iface.ip === curTargetIP && iface.status === 'up') return true;
   }
 
-  // 2. Check if target is on a directly connected network
-  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-    if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-    const net = getNetwork(iface.ip, iface.mask);
-    const targetNet = getNetwork(targetIP, iface.mask);
-    if (net === targetNet) {
-      return canReachL2(devices, devId, ifName, targetIP);
+  // 1b. Apply NAT if this is a router with NAT config
+  if (dv.type === 'router' && dv.nat && prevDevId !== null) {
+    // Find ingress interface (the one connected to previous device)
+    let ingressIfName = null;
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.connected || iface.status !== 'up') continue;
+      if (iface.connected.device === prevDevId) {
+        ingressIfName = ifName; break;
+      }
+      // Also check if previous device is behind a switch connected to this interface
+      const connDev = devices[iface.connected.device];
+      if (connDev && connDev.type === 'switch') {
+        // BFS: is prevDevId reachable through this switch?
+        const swVisited = new Set([iface.connected.device]);
+        const queue = [iface.connected.device];
+        while (queue.length > 0) {
+          const swId = queue.shift();
+          const sw = devices[swId];
+          for (const swIf of Object.values(sw.interfaces)) {
+            if (!swIf.connected || swIf.status !== 'up') continue;
+            if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
+            const cd = devices[swIf.connected.device];
+            if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
+              swVisited.add(swIf.connected.device);
+              queue.push(swIf.connected.device);
+            }
+          }
+          if (ingressIfName) break;
+        }
+      }
+      if (ingressIfName) break;
+    }
+    if (ingressIfName) {
+      const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
+      curSrcIP = natResult.srcIP;
+      curTargetIP = natResult.dstIP;
+      // Re-check after NAT
+      for (const iface of Object.values(dv.interfaces)) {
+        if (iface.ip === curTargetIP && iface.status === 'up') return true;
+      }
     }
   }
 
-  // 3. Look up routing table for next hop
-  const nextHop = lookupRoute(dv, targetIP);
-  if (!nextHop) return false;
+  // 2. Check routing table for a specific route (e.g. /32 takes priority over connected /24)
+  const nextHop = lookupRoute(dv, curTargetIP);
 
-  // 4. Find which interface can reach the next hop
+  // 3. If no explicit route, check directly connected networks via L2
+  if (!nextHop) {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
+      const net = getNetwork(iface.ip, iface.mask);
+      const targetNet = getNetwork(curTargetIP, iface.mask);
+      if (net === targetNet) {
+        return canReachL2(devices, devId, ifName, curTargetIP);
+      }
+    }
+    return false;
+  }
+
+  // 4. Find which interface can reach the next hop and forward
   for (const [ifName, iface] of Object.entries(dv.interfaces)) {
     if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
     const net = getNetwork(iface.ip, iface.mask);
@@ -40,7 +92,7 @@ export function forwardPacket(devices, devId, targetIP, visited) {
       const nextDevId = findDeviceByIP(devices, nextHop);
       if (!nextDevId) return false;
       if (!canReachL2(devices, devId, ifName, nextHop)) return false;
-      return forwardPacket(devices, nextDevId, targetIP, visited);
+      return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId);
     }
   }
   return false;
@@ -168,15 +220,18 @@ export function allocateFromPool(pool, translations) {
 }
 
 function findEgressInterface(dv, targetIP) {
+  // Check routing table first (specific route takes priority over connected network)
+  const nextHop = lookupRoute(dv, targetIP);
+  if (nextHop) {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHop, iface.mask)) return ifName;
+    }
+  }
+  // Fallback: directly connected network
   for (const [ifName, iface] of Object.entries(dv.interfaces)) {
     if (!iface.ip || iface.status !== 'up') continue;
     if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return ifName;
-  }
-  const nextHop = lookupRoute(dv, targetIP);
-  if (!nextHop) return null;
-  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-    if (!iface.ip || iface.status !== 'up') continue;
-    if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHop, iface.mask)) return ifName;
   }
   return null;
 }

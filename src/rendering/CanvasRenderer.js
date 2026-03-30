@@ -49,6 +49,21 @@ export class CanvasRenderer {
     const links = this.store.getLinks();
     const currentDeviceId = this.store.getCurrentDeviceId();
 
+    // Draw grid background in design mode
+    if (this.store.designMode) {
+      ctx.save();
+      ctx.strokeStyle = '#1a2332';
+      ctx.lineWidth = 0.5;
+      const gridSize = 40;
+      for (let gx = 0; gx <= 800; gx += gridSize) {
+        ctx.beginPath(); ctx.moveTo(sx(gx), 0); ctx.lineTo(sx(gx), h); ctx.stroke();
+      }
+      for (let gy = 0; gy <= 560; gy += gridSize) {
+        ctx.beginPath(); ctx.moveTo(0, sy(gy)); ctx.lineTo(w, sy(gy)); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // Draw links
     for (const link of links) {
       drawLink(ctx, link, devices, sx, sy);
@@ -95,6 +110,54 @@ export class CanvasRenderer {
       }
       ctx.textAlign = 'left';
     }
+
+    // ─── Design mode overlay ───
+    if (this.store.designMode) {
+      this._drawDesignOverlay(ctx, w, h, sx, sy);
+    }
+  }
+
+  _drawDesignOverlay(ctx, w, h, sx, sy) {
+    const state = this.store.designState;
+    const devices = this.store.getDevices();
+
+    // Hover highlight
+    if (state.hoverDeviceId && devices[state.hoverDeviceId]) {
+      const dv = devices[state.hoverDeviceId];
+      ctx.save();
+      ctx.strokeStyle = '#4fc3f7';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 3]);
+      ctx.beginPath();
+      ctx.arc(sx(dv.x), sy(dv.y), 38, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Rubber band line during link creation
+    if (state.linking && state.cursorPos) {
+      const fromDev = devices[state.linking.fromDeviceId];
+      if (fromDev) {
+        ctx.save();
+        ctx.strokeStyle = '#4fc3f7';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(sx(fromDev.x), sy(fromDev.y));
+        ctx.lineTo(sx(state.cursorPos.x), sy(state.cursorPos.y));
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // "DESIGN MODE" indicator
+    ctx.save();
+    ctx.font = '11px Segoe UI, sans-serif';
+    ctx.fillStyle = '#4fc3f755';
+    ctx.textAlign = 'right';
+    ctx.fillText('DESIGN MODE', w - 12, h - 12);
+    ctx.restore();
   }
 
   // ─── Ping animation ───
@@ -205,8 +268,17 @@ export class CanvasRenderer {
   }
 
   // ─── Canvas click handling ───
-  setupClickHandler(switchDevice) {
-    this.canvas.addEventListener('click', (e) => {
+  setupClickHandler(switchDevice, designController, palette) {
+    this.canvas.addEventListener('click', async (e) => {
+      // In design mode with link tool active, delegate to design controller
+      if (this.store.designMode && palette && palette.isLinkMode()) {
+        const handled = await designController.handleDesignClick(e);
+        if (handled) return;
+      }
+      // In design mode without link tool, clicks do nothing (drag handles movement)
+      if (this.store.designMode) return;
+
+      // Normal simulation mode: switch device on click
       const rect = this.canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;

@@ -14,6 +14,10 @@ import {
   setupImport, updateSaveInfo, autoLoadConfig,
   confirmReset, closeConfirm, doReset,
 } from './persistence/LocalStorage.js';
+import { DesignController } from './design/DesignController.js';
+import { DevicePalette } from './design/DevicePalette.js';
+import { InterfacePicker } from './design/InterfacePicker.js';
+import { ContextMenu } from './design/ContextMenu.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -22,6 +26,14 @@ const terminal = new Terminal(document.getElementById('termOutput'));
 const canvas = document.getElementById('netCanvas');
 const renderer = new CanvasRenderer(canvas, store, eventBus);
 const cli = new CLIEngine(store, terminal, eventBus);
+
+// ─── Initialize design mode ───
+const designController = new DesignController(canvas, store, eventBus, renderer);
+const interfacePicker = new InterfacePicker(store);
+const contextMenu = new ContextMenu(store, eventBus);
+const palette = new DevicePalette(store, eventBus, designController);
+designController.interfacePicker = interfacePicker;
+designController.contextMenu = contextMenu;
 
 // ─── Wire up dependencies ───
 function switchDevice(id) {
@@ -72,6 +84,22 @@ eventBus.on('device:switched', () => {
   doUpdateTabs();
 });
 
+eventBus.on('device:listChanged', () => {
+  doUpdateTabs();
+  doUpdateVlanLegend();
+});
+
+// ─── Design mode toggle ───
+const designToggle = document.getElementById('designToggle');
+eventBus.on('design:modeChanged', (enabled) => {
+  designToggle.classList.toggle('active', enabled);
+  canvas.style.cursor = enabled ? 'default' : '';
+});
+
+designToggle.addEventListener('click', () => {
+  store.setDesignMode(!store.designMode);
+});
+
 // ─── Input handling ───
 const cmdInput = document.getElementById('cmdInput');
 
@@ -115,7 +143,7 @@ window.toggleHelp = toggleHelp;
 
 // ─── Setup ───
 setupImport(store, refreshUI);
-renderer.setupClickHandler(switchDevice);
+renderer.setupClickHandler(switchDevice, designController, palette);
 
 // ─── Initial render ───
 renderer.resize();

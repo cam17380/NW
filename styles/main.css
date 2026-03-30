@@ -165,3 +165,81 @@ canvas { display: block; width: 100%; height: 100%; }
 .cmd-chip.category-vlan { border-left: 2px solid #ab47bc; }
 .cmd-chip.category-route { border-left: 2px solid #ef5350; }
 .cmd-chip.category-nat { border-left: 2px solid #26c6da; }
+
+/* ─── Design Mode ─── */
+.toolbar-btn.design { border-color: #ff9800; }
+.toolbar-btn.design:hover { background: #3d2800; color: #ffb74d; }
+.toolbar-btn.design.active { background: #3d2800; border-color: #ff9800; color: #ffb74d; }
+
+/* Device Palette */
+.design-palette {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 88px;
+  background: #141b2d; border-right: 1px solid #1e2a3a;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 0; gap: 4px; z-index: 15; overflow-y: auto;
+}
+.palette-title {
+  font-size: 10px; color: #556; text-transform: uppercase;
+  letter-spacing: 0.5px; margin: 4px 0 2px; width: 100%; text-align: center;
+}
+.palette-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 8px; width: 76px; border-radius: 6px;
+  cursor: grab; transition: all 0.15s; border: 1px solid transparent;
+}
+.palette-item:hover { background: #1a3a5c; border-color: #2a4a6a; }
+.palette-item.active { background: #3d2800; border-color: #ff9800; }
+.palette-icon {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: bold; color: #aab;
+  border: 2px solid #2a3a4a; background: #1a2332;
+}
+.palette-icon-router { border-color: #69f0ae; color: #69f0ae; border-radius: 50%; }
+.palette-icon-switch { border-color: #4fc3f7; color: #4fc3f7; border-radius: 6px; }
+.palette-icon-pc { border-color: #ffa726; color: #ffa726; border-radius: 4px; }
+.palette-icon-link { border-color: #ab47bc; color: #ab47bc; font-size: 18px; }
+.palette-label { font-size: 10px; color: #8899aa; }
+.palette-separator {
+  width: 60px; height: 1px; background: #1e2a3a; margin: 6px 0;
+}
+.palette-tool { cursor: pointer; }
+
+/* Interface Picker */
+.interface-picker {
+  position: fixed; z-index: 100;
+  background: #141b2d; border: 1px solid #2a3a4a; border-radius: 8px;
+  padding: 8px; min-width: 160px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.picker-title {
+  font-size: 11px; color: #4fc3f7; margin-bottom: 6px;
+  padding-bottom: 4px; border-bottom: 1px solid #1e2a3a;
+}
+.picker-item {
+  display: block; width: 100%; padding: 5px 10px; margin: 2px 0;
+  background: #1a2332; border: 1px solid #2a3a4a; border-radius: 4px;
+  color: #b0c4de; font-family: 'Consolas', monospace; font-size: 12px;
+  cursor: pointer; text-align: left; transition: all 0.15s;
+}
+.picker-item:hover { background: #1a3a5c; border-color: #4fc3f7; color: #4fc3f7; }
+.picker-cancel {
+  display: block; width: 100%; padding: 4px 10px; margin-top: 6px;
+  background: none; border: 1px solid #333; border-radius: 4px;
+  color: #666; font-size: 11px; cursor: pointer; text-align: center;
+}
+.picker-cancel:hover { background: #1a1a2e; color: #aaa; }
+
+/* Context Menu */
+.design-context-menu {
+  position: fixed; z-index: 100;
+  background: #141b2d; border: 1px solid #2a3a4a; border-radius: 6px;
+  padding: 4px 0; min-width: 180px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.context-menu-item {
+  padding: 6px 14px; font-size: 12px; color: #b0c4de;
+  cursor: pointer; transition: all 0.15s;
+}
+.context-menu-item:hover { background: #1a3a5c; color: #4fc3f7; }
+.context-menu-item.danger { color: #ff6b6b; }
+.context-menu-item.danger:hover { background: #3d1111; color: #ff6b6b; }
+.context-menu-separator { height: 1px; background: #1e2a3a; margin: 4px 0; }

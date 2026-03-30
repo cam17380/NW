@@ -1,12 +1,13 @@
 // ─── LocalStorage persistence ───
 import { getSnapshot, applySnapshot } from './Snapshot.js';
+import { createDefaultDevices, createDefaultLinks } from '../model/Topology.js';
 import { showToast } from '../ui/Toast.js';
 
 const SAVE_KEY = 'netsim_save';
 
 export function saveConfig(store) {
-  const snap = getSnapshot(store.getDevices());
-  const data = { timestamp: new Date().toISOString(), devices: snap };
+  const snap = getSnapshot(store.getDevices(), store.getLinks());
+  const data = { timestamp: new Date().toISOString(), ...snap };
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   showToast('Config saved to browser storage', 'success');
   updateSaveInfo();
@@ -17,7 +18,7 @@ export function loadConfig(store, refreshUI) {
   if (!raw) { showToast('No saved config found', 'error'); return; }
   try {
     const data = JSON.parse(raw);
-    applySnapshot(store.getDevices(), data.devices);
+    applySnapshot(store, data);
     refreshUI();
     showToast('Config loaded successfully', 'success');
   } catch (e) {
@@ -26,8 +27,8 @@ export function loadConfig(store, refreshUI) {
 }
 
 export function exportConfig(store) {
-  const snap = getSnapshot(store.getDevices());
-  const data = { timestamp: new Date().toISOString(), version: 1, devices: snap };
+  const snap = getSnapshot(store.getDevices(), store.getLinks());
+  const data = { timestamp: new Date().toISOString(), ...snap };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -48,7 +49,7 @@ export function setupImport(store, refreshUI) {
       try {
         const data = JSON.parse(ev.target.result);
         if (!data.devices) throw new Error('Invalid config file format');
-        applySnapshot(store.getDevices(), data.devices);
+        applySnapshot(store, data);
         refreshUI();
         showToast('Config imported from file', 'success');
       } catch (err) {
@@ -80,7 +81,7 @@ export function autoLoadConfig(store) {
   if (!raw) return false;
   try {
     const data = JSON.parse(raw);
-    applySnapshot(store.getDevices(), data.devices);
+    applySnapshot(store, data);
     return true;
   } catch {
     return false;
@@ -99,37 +100,7 @@ export function closeConfirm() {
 
 export function doReset(store, refreshUI) {
   closeConfirm();
-  const devices = store.getDevices();
-  for (const [id, dv] of Object.entries(devices)) {
-    if (dv.type === 'router') {
-      dv.hostname = id === 'R1' ? 'Router1' : 'Router2';
-      dv.routes = [];
-      if (dv.nat) {
-        dv.nat.staticEntries = []; dv.nat.pools = {}; dv.nat.dynamicRules = [];
-        dv.nat.translations = []; dv.nat.stats = { hits: 0, misses: 0 };
-      }
-      dv.accessLists = {};
-    }
-    if (dv.type === 'switch') {
-      dv.hostname = 'Switch1';
-      dv.vlans = { 1: { name: 'default' } };
-    }
-    if (dv.type === 'pc') {
-      dv.hostname = id;
-      dv.defaultGateway = '';
-    }
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      iface.ip = '';
-      iface.mask = '';
-      iface.status = 'down';
-      iface.protocol = 'down';
-      iface.description = '';
-      if (iface.natRole) iface.natRole = null;
-      if (iface.switchport) {
-        iface.switchport = { mode: 'access', accessVlan: 1, trunkAllowed: 'all' };
-      }
-    }
-  }
+  store.setTopology(createDefaultDevices(), createDefaultLinks());
   refreshUI();
   showToast('All devices reset to factory defaults', 'success');
 }
