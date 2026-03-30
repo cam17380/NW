@@ -31,6 +31,7 @@ export class DevicePalette {
     const deviceTypes = [
       { type: 'router', label: 'Router', icon: 'R' },
       { type: 'switch', label: 'Switch', icon: 'S' },
+      { type: 'firewall', label: 'Firewall', icon: 'FW' },
       { type: 'pc', label: 'PC', icon: 'PC' },
     ];
 

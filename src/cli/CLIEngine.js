@@ -10,10 +10,12 @@ export class CLIEngine {
     this.terminal = terminal;
     this.eventBus = eventBus;
     this._execPing = null;  // Set externally to avoid circular dependency
+    this._execTraceroute = null;
     this._updateTabs = null;
   }
 
   setExecPing(fn) { this._execPing = fn; }
+  setExecTraceroute(fn) { this._execTraceroute = fn; }
   setUpdateTabs(fn) { this._updateTabs = fn; }
 
   executeCommand(rawInput) {
@@ -55,8 +57,8 @@ export class CLIEngine {
 
   _execUser(input, parts, cmd) {
     if (cmd === 'enable') { this.store.setCLIMode('privileged'); return; }
-    if (input.toLowerCase().startsWith('show') || cmd === 'ping') {
-      return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing);
+    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute') {
+      return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
     }
     this.terminal.write(`% Unknown command "${parts[0]}" in user mode`, 'error-line');
   }
@@ -68,8 +70,14 @@ export class CLIEngine {
       return;
     }
     if (cmd === 'disable' || cmd === 'exit') { this.store.setCLIMode('user'); return; }
-    if (input.toLowerCase().startsWith('show') || cmd === 'ping') {
-      return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing);
+    if (input.toLowerCase() === 'clear arp' || input.toLowerCase() === 'clear arp-cache') {
+      const dev = this.store.getCurrentDevice();
+      dev.arpTable = [];
+      this.terminal.write('% ARP cache cleared', 'success-line');
+      return;
+    }
+    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute') {
+      return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
     }
     this.terminal.write(`% Unknown command "${parts[0]}"`, 'error-line');
   }

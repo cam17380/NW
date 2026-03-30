@@ -8,7 +8,7 @@ import { CanvasRenderer } from './rendering/CanvasRenderer.js';
 import { updateTabs } from './ui/DeviceTabs.js';
 import { updatePrompt } from './ui/CommandHints.js';
 import { updateVlanLegend } from './ui/VlanLegend.js';
-import { execPing } from './simulation/PingEngine.js';
+import { execPing, execTraceroute } from './simulation/PingEngine.js';
 import {
   saveConfig, loadConfig, exportConfig, importConfig,
   setupImport, updateSaveInfo, autoLoadConfig,
@@ -67,6 +67,9 @@ function refreshUI() {
 // Set CLIEngine callbacks
 cli.setExecPing((targetIP) => {
   execPing(targetIP, store, terminal, (path, success, onComplete) => renderer.animatePing(path, success, onComplete));
+});
+cli.setExecTraceroute((targetIP) => {
+  execTraceroute(targetIP, store, terminal, (path, success, onComplete) => renderer.animateTraceroute(path, success, onComplete));
 });
 cli.setUpdateTabs(doUpdateTabs);
 

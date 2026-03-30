@@ -90,13 +90,13 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
 
   // ── NAT interface role (router only) ──
   if (lower === 'ip nat inside') {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     iface.natRole = 'inside';
     termWrite(`% Interface ${currentInterface} marked as NAT inside`, 'success-line');
     return;
   }
   if (lower === 'ip nat outside') {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     iface.natRole = 'outside';
     termWrite(`% Interface ${currentInterface} marked as NAT outside`, 'success-line');
     return;

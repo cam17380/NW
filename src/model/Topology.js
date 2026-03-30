@@ -15,6 +15,19 @@ export function createDevice(type, id, x, y) {
       }
     };
   }
+  if (type === 'firewall') {
+    return {
+      ...base,
+      routes: [],
+      nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+      accessLists: {},
+      policies: [],
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+      }
+    };
+  }
   if (type === 'switch') {
     return {
       ...base,
@@ -38,8 +51,9 @@ export function createDevice(type, id, x, y) {
 }
 
 export function generateDeviceId(type, existingDevices) {
-  const prefix = type === 'router' ? 'R' : type === 'switch' ? 'SW' : 'PC';
-  const pattern = type === 'switch' ? /^SW(\d+)$/ : new RegExp(`^${prefix}(\\d+)$`);
+  const prefixMap = { router: 'R', switch: 'SW', pc: 'PC', firewall: 'FW' };
+  const prefix = prefixMap[type] || type.toUpperCase();
+  const pattern = new RegExp(`^${prefix}(\\d+)$`);
   let max = 0;
   for (const id of Object.keys(existingDevices)) {
     const m = id.match(pattern);

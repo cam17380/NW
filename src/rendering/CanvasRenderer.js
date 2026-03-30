@@ -1,5 +1,5 @@
 // ─── Canvas Renderer: Main drawing orchestrator ───
-import { drawRouter, drawSwitch, drawPC } from './DeviceRenderer.js';
+import { drawRouter, drawSwitch, drawPC, drawFirewall } from './DeviceRenderer.js';
 import { drawLink } from './LinkRenderer.js';
 
 export class CanvasRenderer {
@@ -79,6 +79,7 @@ export class CanvasRenderer {
 
       if (dv.type === 'router') drawRouter(ctx, x, y, dv, isSelected);
       else if (dv.type === 'switch') drawSwitch(ctx, x, y, dv, isSelected);
+      else if (dv.type === 'firewall') drawFirewall(ctx, x, y, dv, isSelected);
       else drawPC(ctx, x, y, dv, isSelected);
 
       ctx.shadowBlur = 0;
@@ -101,6 +102,17 @@ export class CanvasRenderer {
         ctx.font = '10px Consolas, monospace';
         ctx.fillStyle = '#ffa726';
         ctx.fillText(dv.routes.length + ' route' + (dv.routes.length > 1 ? 's' : ''), x, y + 47);
+      }
+      // Show policy/route count on firewall
+      if (dv.type === 'firewall') {
+        const pCount = dv.policies ? dv.policies.length : 0;
+        ctx.font = '10px Consolas, monospace';
+        ctx.fillStyle = '#ef5350';
+        ctx.fillText(pCount + ' polic' + (pCount === 1 ? 'y' : 'ies'), x, y + 47);
+        if (dv.routes && dv.routes.length > 0) {
+          ctx.fillStyle = '#ffa726';
+          ctx.fillText(dv.routes.length + ' route' + (dv.routes.length > 1 ? 's' : ''), x, y + 59);
+        }
       }
       // Show default gateway on PC
       if (dv.type === 'pc' && dv.defaultGateway) {
@@ -255,6 +267,178 @@ export class CanvasRenderer {
         }
       } catch (e) {
         console.error('Ping animation error:', e);
+        self.pingAnimRunning = false;
+        try { self.draw(); } catch(e2) {}
+        onComplete();
+        return;
+      }
+
+      requestAnimationFrame(frame);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // ─── Traceroute animation ───
+  animateTraceroute(path, success, onComplete) {
+    this.pingAnimId++;
+    this.pingAnimRunning = false;
+
+    const devices = this.store.getDevices();
+    const validPath = path.filter(id => devices[id]);
+    if (validPath.length < 2) { onComplete(); return; }
+
+    // Build forward-only segments
+    const segments = [];
+    for (let i = 0; i < validPath.length - 1; i++) {
+      segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: success ? 'request' : 'fail' });
+    }
+    if (segments.length === 0) { onComplete(); return; }
+
+    // Compute L3 hop indices (non-switch devices, excluding source)
+    const hopNumbers = new Map();
+    let hopNum = 0;
+    for (let i = 1; i < validPath.length; i++) {
+      const dv = devices[validPath[i]];
+      if (dv && dv.type !== 'switch') {
+        hopNum++;
+        hopNumbers.set(validPath[i], hopNum);
+      }
+    }
+
+    const myId = this.pingAnimId;
+    const segDur = 400;
+    const holdDur = 300;
+    let startTime = -1;
+    const totalTime = segments.length * segDur + holdDur + 1000;
+    this.pingAnimRunning = true;
+
+    const canvas = this.canvas;
+    const ctx = this.ctx;
+    const dpr = this.dpr;
+    const self = this;
+
+    function getCoords(devId) {
+      const dv = devices[devId];
+      if (!dv) return { x: 0, y: 0 };
+      const w = canvas.width / dpr, h = canvas.height / dpr;
+      return { x: dv.x * (w / 800), y: dv.y * (h / 560) };
+    }
+
+    function frame(now) {
+      if (myId !== self.pingAnimId || !self.pingAnimRunning) return;
+      if (startTime < 0) startTime = now;
+      const elapsed = now - startTime;
+
+      if (elapsed > totalTime) {
+        self.pingAnimRunning = false;
+        try { self.draw(); } catch(e) {}
+        onComplete();
+        return;
+      }
+
+      try {
+        self.draw();
+        const segIdx = Math.min(Math.floor(elapsed / segDur), segments.length - 1);
+        const seg = segments[segIdx];
+        const t = Math.min((elapsed - segIdx * segDur) / segDur, 1);
+
+        if (elapsed < segments.length * segDur) {
+          const from = getCoords(seg.fromId);
+          const to = getCoords(seg.toId);
+          const px = from.x + (to.x - from.x) * t;
+          const py = from.y + (to.y - from.y) * t;
+
+          const color = success ? '#ffa726' : '#ff6b6b';
+          drawPingParticle(ctx, px, py, color, 1.0);
+
+          // Draw trail
+          ctx.save();
+          ctx.setLineDash([]);
+          ctx.shadowBlur = 0;
+          for (let i = segIdx; i >= Math.max(0, segIdx - 3); i--) {
+            const s = segments[i];
+            const f = getCoords(s.fromId);
+            const tCoord = getCoords(s.toId);
+            const age = segIdx - i;
+            const alpha = Math.max(0, 0.4 - age * 0.12);
+            ctx.globalAlpha = alpha;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            if (i === segIdx) {
+              const cx = f.x + (tCoord.x - f.x) * t;
+              const cy = f.y + (tCoord.y - f.y) * t;
+              ctx.moveTo(f.x, f.y); ctx.lineTo(cx, cy);
+            } else {
+              ctx.moveTo(f.x, f.y); ctx.lineTo(tCoord.x, tCoord.y);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // Draw hop number labels at visited L3 devices
+          ctx.save();
+          ctx.font = 'bold 12px Consolas, monospace';
+          ctx.textAlign = 'center';
+          for (let i = 0; i <= segIdx; i++) {
+            const devId = segments[i].toId;
+            const hn = hopNumbers.get(devId);
+            if (hn === undefined) continue;
+            // Only label if we've completed arriving at this hop
+            if (i < segIdx || (i === segIdx && t > 0.9)) {
+              const c = getCoords(devId);
+              ctx.fillStyle = '#0d1117cc';
+              ctx.beginPath();
+              ctx.arc(c.x + 28, c.y - 28, 11, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = success ? '#ffa726' : '#ff6b6b';
+              ctx.fillText(String(hn), c.x + 28, c.y - 24);
+            }
+          }
+          ctx.restore();
+        } else {
+          // Hold phase — show final state with all hop labels
+          self.draw();
+          ctx.save();
+          ctx.font = 'bold 12px Consolas, monospace';
+          ctx.textAlign = 'center';
+          for (const [devId, hn] of hopNumbers) {
+            const c = getCoords(devId);
+            ctx.fillStyle = '#0d1117cc';
+            ctx.beginPath();
+            ctx.arc(c.x + 28, c.y - 28, 11, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = success ? '#ffa726' : '#ff6b6b';
+            ctx.fillText(String(hn), c.x + 28, c.y - 24);
+          }
+          ctx.restore();
+
+          if (!success) {
+            const lastSeg = segments[segments.length - 1];
+            const to = getCoords(lastSeg.toId);
+            const fade = Math.min((elapsed - segments.length * segDur) / holdDur, 1);
+            ctx.save();
+            ctx.globalAlpha = 1 - fade;
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 3;
+            const sz = 10 + fade * 8;
+            ctx.beginPath();
+            ctx.moveTo(to.x - sz, to.y - sz); ctx.lineTo(to.x + sz, to.y + sz);
+            ctx.moveTo(to.x + sz, to.y - sz); ctx.lineTo(to.x - sz, to.y + sz);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          if (elapsed > segments.length * segDur + holdDur + 500) {
+            self.pingAnimRunning = false;
+            self.draw();
+            onComplete();
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Traceroute animation error:', e);
         self.pingAnimRunning = false;
         try { self.draw(); } catch(e2) {}
         onComplete();

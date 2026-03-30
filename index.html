@@ -81,12 +81,12 @@
       <h3>Routing Commands</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (Router)</td><td>Add static route</td></tr>
-        <tr><td><code>no ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (Router)</td><td>Remove static route</td></tr>
+        <tr><td><code>ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (Router/FW)</td><td>Add static route</td></tr>
+        <tr><td><code>no ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (Router/FW)</td><td>Remove static route</td></tr>
         <tr><td><code>ip default-gateway &lt;ip&gt;</code></td><td>config (PC)</td><td>Set default gateway</td></tr>
         <tr><td><code>show ip route</code></td><td>EXEC</td><td>Show routing table</td></tr>
       </table>
-      <h3>NAT Commands (Router only)</h3>
+      <h3>NAT Commands (Router / Firewall)</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
         <tr><td><code>ip nat inside</code></td><td>config-if</td><td>Mark interface as NAT inside</td></tr>
@@ -98,6 +98,21 @@
         <tr><td><code>show ip nat translations</code></td><td>EXEC</td><td>Show NAT translation table</td></tr>
         <tr><td><code>show ip nat statistics</code></td><td>EXEC</td><td>Show NAT statistics and config</td></tr>
       </table>
+      <h3>Firewall Policy Commands (Firewall only)</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td><code>firewall policy &lt;seq&gt; permit|deny &lt;src&gt; &lt;srcWC&gt; &lt;dst&gt; &lt;dstWC&gt; &lt;proto&gt; [port]</code></td><td>config</td><td>Add/update firewall policy</td></tr>
+        <tr><td><code>no firewall policy &lt;seq&gt;</code></td><td>config</td><td>Remove policy by sequence number</td></tr>
+        <tr><td><code>no firewall policy all</code></td><td>config</td><td>Remove all policies</td></tr>
+        <tr><td><code>show firewall policy</code></td><td>EXEC</td><td>Show firewall policy table</td></tr>
+      </table>
+      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
+        <b>seq</b>: sequence number (evaluated in order) &nbsp;
+        <b>src/dst</b>: IP address + wildcard mask, or <code>any</code> &nbsp;
+        <b>proto</b>: <code>ip</code> (all), <code>icmp</code>, <code>tcp</code>, <code>udp</code> &nbsp;
+        <b>port</b>: optional (tcp/udp only) &nbsp;
+        Implicit <b>deny all</b> at end
+      </p>
       <h3>Show Commands</h3>
       <table>
         <tr><th>Command</th><th>Description</th></tr>
@@ -107,7 +122,11 @@
         <tr><td><code>show ip route</code></td><td>Show routing table (routers/PCs)</td></tr>
         <tr><td><code>show ip nat translations</code></td><td>Show NAT translation table</td></tr>
         <tr><td><code>show ip nat statistics</code></td><td>Show NAT statistics</td></tr>
-        <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT aware)</td></tr>
+        <tr><td><code>show firewall policy</code></td><td>Show firewall policy table (Firewall only)</td></tr>
+        <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
+        <tr><td><code>clear arp</code></td><td>Clear ARP cache (privileged mode)</td></tr>
+        <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT + FW aware)</td></tr>
+        <tr><td><code>traceroute &lt;ip&gt;</code></td><td>Trace route hop-by-hop to destination</td></tr>
       </table>
       <h3>Tips</h3>
       <table>
@@ -117,6 +136,7 @@
         <tr><td>Routers need <code>ip route</code> to forward packets between networks</td></tr>
         <tr><td>PCs need <code>ip default-gateway</code> to reach other networks</td></tr>
         <tr><td>NAT requires <code>ip nat inside/outside</code> on interfaces + translation rules</td></tr>
+        <tr><td>Firewalls have an implicit <b>deny all</b> — add <code>firewall policy</code> to permit traffic</td></tr>
       </table>
     </div>
   </div>

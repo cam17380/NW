@@ -14,6 +14,7 @@ export function getSnapshot(devices, links) {
       vlans: dv.vlans ? JSON.parse(JSON.stringify(dv.vlans)) : undefined,
       nat: dv.nat ? JSON.parse(JSON.stringify({ staticEntries: dv.nat.staticEntries, pools: dv.nat.pools, dynamicRules: dv.nat.dynamicRules })) : undefined,
       accessLists: dv.accessLists && Object.keys(dv.accessLists).length > 0 ? JSON.parse(JSON.stringify(dv.accessLists)) : undefined,
+      policies: dv.policies && dv.policies.length > 0 ? JSON.parse(JSON.stringify(dv.policies)) : undefined,
       interfaces: {},
     };
     for (const [ifName, iface] of Object.entries(dv.interfaces)) {
@@ -54,6 +55,7 @@ export function applySnapshot(store, snap) {
         dv.nat.stats = { hits: 0, misses: 0 };
       }
       if (saved.accessLists !== undefined) dv.accessLists = saved.accessLists;
+      if (saved.policies !== undefined) dv.policies = saved.policies;
       // Rebuild interfaces: use exactly what was saved
       // Remove factory defaults not in snapshot, add snapshot interfaces not in factory
       for (const ifName of Object.keys(dv.interfaces)) {
@@ -96,6 +98,7 @@ export function applySnapshot(store, snap) {
       dv.nat.stats = { hits: 0, misses: 0 };
     }
     if (saved.accessLists !== undefined) dv.accessLists = saved.accessLists;
+    if (saved.policies !== undefined) dv.policies = saved.policies;
     for (const [ifName, savedIf] of Object.entries(saved.interfaces)) {
       const iface = dv.interfaces[ifName];
       if (!iface) continue;

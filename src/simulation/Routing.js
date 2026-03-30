@@ -24,8 +24,8 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     if (iface.ip === curTargetIP && iface.status === 'up') return true;
   }
 
-  // 1b. Apply NAT if this is a router with NAT config
-  if (dv.type === 'router' && dv.nat && prevDevId !== null) {
+  // 1b. Apply NAT if this is a router/firewall with NAT config
+  if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && prevDevId !== null) {
     // Find ingress interface (the one connected to previous device)
     let ingressIfName = null;
     for (const [ifName, iface] of Object.entries(dv.interfaces)) {
@@ -67,6 +67,11 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     }
   }
 
+  // 1c. Firewall policy check
+  if (dv.type === 'firewall' && prevDevId !== null) {
+    if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) return false;
+  }
+
   // 2. Check routing table for a specific route (e.g. /32 takes priority over connected /24)
   const nextHop = lookupRoute(dv, curTargetIP);
 
@@ -100,6 +105,11 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
 
 export function lookupRoute(dv, targetIP) {
   if (dv.type === 'pc') {
+    // If target is on a directly connected subnet, no gateway needed (L2 reachable)
+    for (const iface of Object.values(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    }
     return dv.defaultGateway || null;
   }
   if (!dv.routes || dv.routes.length === 0) return null;
@@ -193,6 +203,34 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
   return false;
 }
 
+// ─── Firewall policy check ──────────────────────────────
+
+export function checkFirewallPolicies(dv, srcIP, dstIP) {
+  if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) return true;
+  const sorted = [...dv.policies].sort((a, b) => a.seq - b.seq);
+  for (const p of sorted) {
+    if (matchesWildcard(srcIP, p.src, p.srcWildcard) &&
+        matchesWildcard(dstIP, p.dst, p.dstWildcard) &&
+        matchesProtocolField(p.protocol)) {
+      return p.action === 'permit';
+    }
+  }
+  return false; // implicit deny
+}
+
+function matchesWildcard(ip, network, wildcard) {
+  if (network === 'any') return true;
+  const ipN = ipToInt(ip);
+  const netN = ipToInt(network);
+  const wcN = ipToInt(wildcard);
+  return (ipN & ~wcN) === (netN & ~wcN);
+}
+
+function matchesProtocolField(protocol) {
+  // Current simulation is ICMP (ping) only; 'ip' matches all
+  return protocol === 'ip' || protocol === 'icmp';
+}
+
 // ─── NAT logic ──────────────────────────────────────────
 
 export function matchesACL(aclEntries, ip) {
@@ -237,7 +275,7 @@ function findEgressInterface(dv, targetIP) {
 }
 
 export function applyNAT(dv, srcIP, dstIP, ingressIfName) {
-  if (dv.type !== 'router' || !dv.nat) return { srcIP, dstIP, translated: false };
+  if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false };
 
   const ingressRole = dv.interfaces[ingressIfName]?.natRole;
   if (!ingressRole) return { srcIP, dstIP, translated: false };

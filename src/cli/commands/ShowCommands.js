@@ -1,8 +1,8 @@
 // ─── Show commands ───
-import { shortIfName } from '../../simulation/NetworkUtils.js';
+import { shortIfName, generateMAC } from '../../simulation/NetworkUtils.js';
 import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
 
-export function execShow(input, parts, store, termWrite, execPing) {
+export function execShow(input, parts, store, termWrite, execPing, execTraceroute) {
   const lower = input.toLowerCase();
   const dev = store.getCurrentDevice();
 
@@ -14,6 +14,31 @@ export function execShow(input, parts, store, termWrite, execPing) {
         (iface.status === 'up' ? 'up' : 'administratively down').padEnd(22) + iface.protocol;
       termWrite(line);
     }
+    return;
+  }
+
+  if (lower === 'show firewall policy') {
+    if (dev.type !== 'firewall') { termWrite('% Firewall policy is only available on firewall devices', 'error-line'); return; }
+    const policies = dev.policies || [];
+    termWrite('Seq    Action  Source                Destination           Protocol  Port');
+    termWrite('-----  ------  --------------------  --------------------  --------  ------');
+    if (policies.length === 0) {
+      termWrite('  (no policies configured)');
+    } else {
+      for (const p of [...policies].sort((a, b) => a.seq - b.seq)) {
+        const srcStr = p.src === 'any' ? 'any' : `${p.src} ${p.srcWildcard}`;
+        const dstStr = p.dst === 'any' ? 'any' : `${p.dst} ${p.dstWildcard}`;
+        termWrite(
+          String(p.seq).padEnd(7) +
+          p.action.padEnd(8) +
+          srcStr.padEnd(22) +
+          dstStr.padEnd(22) +
+          p.protocol.padEnd(10) +
+          (p.port ? String(p.port) : '---')
+        );
+      }
+    }
+    termWrite(String('').padEnd(7) + 'deny'.padEnd(8) + 'any'.padEnd(22) + 'any'.padEnd(22) + 'ip'.padEnd(10) + '---  (implicit)');
     return;
   }
 
@@ -106,7 +131,7 @@ export function execShow(input, parts, store, termWrite, execPing) {
   }
 
   if (lower === 'show ip nat translations') {
-    if (dev.type !== 'router' || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    if ((dev.type !== 'router' && dev.type !== 'firewall') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
     // Build translation table from static entries + active translations
     const allTrans = [];
     for (const e of dev.nat.staticEntries) {
@@ -130,7 +155,7 @@ export function execShow(input, parts, store, termWrite, execPing) {
   }
 
   if (lower === 'show ip nat statistics') {
-    if (dev.type !== 'router' || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    if ((dev.type !== 'router' && dev.type !== 'firewall') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
     const nat = dev.nat;
     const totalTrans = nat.staticEntries.length + nat.translations.filter(t => t.type === 'dynamic').length;
     termWrite(`Total active translations: ${totalTrans} (${nat.staticEntries.length} static, ${totalTrans - nat.staticEntries.length} dynamic)`);
@@ -209,6 +234,15 @@ export function execShow(input, parts, store, termWrite, execPing) {
         termWrite('!');
       }
     }
+    // Firewall policies
+    if (dev.policies && dev.policies.length > 0) {
+      for (const p of [...dev.policies].sort((a, b) => a.seq - b.seq)) {
+        const srcStr = p.src === 'any' ? 'any' : `${p.src} ${p.srcWildcard}`;
+        const dstStr = p.dst === 'any' ? 'any' : `${p.dst} ${p.dstWildcard}`;
+        termWrite(`firewall policy ${p.seq} ${p.action} ${srcStr} ${dstStr} ${p.protocol}${p.port ? ' ' + p.port : ''}`);
+      }
+      termWrite('!');
+    }
     if (dev.routes && dev.routes.length > 0) {
       for (const r of dev.routes) {
         termWrite(`ip route ${r.network} ${r.mask} ${r.nextHop}`);
@@ -237,9 +271,35 @@ export function execShow(input, parts, store, termWrite, execPing) {
     return;
   }
 
+  if (lower === 'show arp') {
+    if (dev.type === 'switch') { termWrite('% ARP table is not available on switches', 'error-line'); return; }
+    termWrite('Protocol  Address          Age (min)  Hardware Addr   Type   Interface');
+    // Self entries: device's own interfaces
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      const mac = generateMAC(store.getCurrentDeviceId(), ifName);
+      termWrite(`Internet  ${iface.ip.padEnd(16)} -          ${mac}  ARPA   ${shortIfName(ifName)}`);
+    }
+    // Dynamic entries from ARP table
+    const arpTable = dev.arpTable || [];
+    for (const entry of arpTable) {
+      termWrite(`Internet  ${entry.ip.padEnd(16)} 0          ${entry.mac}  ARPA   ${shortIfName(entry.iface)}`);
+    }
+    if (Object.values(dev.interfaces).every(i => !i.ip || i.status !== 'up') && arpTable.length === 0) {
+      termWrite('  (no ARP entries)');
+    }
+    return;
+  }
+
   if (parts[0].toLowerCase() === 'ping') {
     if (parts.length < 2) { termWrite('% Incomplete command — usage: ping <ip>', 'error-line'); return; }
     execPing(parts[1]);
+    return;
+  }
+
+  if (parts[0].toLowerCase() === 'traceroute') {
+    if (parts.length < 2) { termWrite('% Incomplete command — usage: traceroute <ip>', 'error-line'); return; }
+    execTraceroute(parts[1]);
     return;
   }
   termWrite(`% Unknown show command`, 'error-line');

@@ -23,6 +23,7 @@ export class Store {
   getCurrentDevice() { return this.devices[this.currentDeviceId]; }
   getCurrentDeviceId() { return this.currentDeviceId; }
   isSwitch() { return this.getCurrentDevice().type === 'switch'; }
+  isFirewall() { return this.getCurrentDevice().type === 'firewall'; }
 
   // ─── Device switching ───
   setCurrentDevice(id) {

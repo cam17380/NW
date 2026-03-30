@@ -25,9 +25,9 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
-  // ip route <network> <mask> <next-hop> — router only
+  // ip route <network> <mask> <next-hop> — router/firewall only
   if (lower.startsWith('ip route ')) {
-    if (dev.type !== 'router') { termWrite('% ip route is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip route is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[2], mask = args[3], nextHop = args[4];
@@ -44,7 +44,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip route <network> <mask> <next-hop>
   if (lower.startsWith('no ip route')) {
-    if (dev.type !== 'router') { termWrite('% ip route is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip route is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 6) { termWrite('% Incomplete command — usage: no ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[3], mask = args[4], nextHop = args[5];
@@ -101,7 +101,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat inside source static <inside-local> <inside-global>
   if (lower.startsWith('ip nat inside source static')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
     const insideLocal = args[5], insideGlobal = args[6];
@@ -115,7 +115,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat inside source static <inside-local> <inside-global>
   if (lower.startsWith('no ip nat inside source static')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 8) { termWrite('% Incomplete command — usage: no ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
     const insideLocal = args[6], insideGlobal = args[7];
@@ -129,7 +129,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat inside source list <acl-num> pool <pool-name>
   if (lower.startsWith('ip nat inside source list')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 8 || args[6].toLowerCase() !== 'pool') {
       termWrite('% Incomplete command — usage: ip nat inside source list <acl-num> pool <pool-name>', 'error-line'); return;
@@ -147,7 +147,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat inside source list <acl-num> pool <pool-name>
   if (lower.startsWith('no ip nat inside source list')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 9) { termWrite('% Incomplete command', 'error-line'); return; }
     const aclNum = parseInt(args[6]);
@@ -161,7 +161,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat pool <name> <start-ip> <end-ip> netmask <mask>
   if (lower.startsWith('ip nat pool')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat pool <name> <start-ip> <end-ip> netmask <mask>', 'error-line'); return; }
     const poolName = args[3], startIP = args[4], endIP = args[5];
@@ -178,7 +178,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat pool <name>
   if (lower.startsWith('no ip nat pool')) {
-    if (dev.type !== 'router') { termWrite('% ip nat is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: no ip nat pool <name>', 'error-line'); return; }
     const poolName = args[4];
@@ -192,7 +192,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // access-list <num> permit <network> <wildcard>
   if (cmd === 'access-list') {
-    if (dev.type !== 'router') { termWrite('% access-list is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% access-list is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit <network> <wildcard>', 'error-line'); return; }
     const aclNum = parseInt(args[1]);
@@ -210,13 +210,87 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no access-list <num>
   if (lower.startsWith('no access-list')) {
-    if (dev.type !== 'router') { termWrite('% access-list is only available on routers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% access-list is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     const aclNum = parseInt(args[2]);
     if (isNaN(aclNum)) { termWrite('% Incomplete command — usage: no access-list <num>', 'error-line'); return; }
     if (!dev.accessLists[aclNum]) { termWrite(`% ACL ${aclNum} not found`, 'error-line'); return; }
     delete dev.accessLists[aclNum];
     termWrite(`% ACL ${aclNum} removed`, 'success-line');
+    return;
+  }
+
+  // ── Firewall policy commands (firewall only) ──
+
+  // firewall policy <seq> permit|deny <src> <srcWC> <dst> <dstWC> <proto> [port]
+  if (lower.startsWith('firewall policy')) {
+    if (dev.type !== 'firewall') { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 9) {
+      termWrite('% Usage: firewall policy <seq> permit|deny <src> <srcWC> <dst> <dstWC> <protocol> [port]', 'error-line');
+      termWrite('  protocol: ip, tcp, udp, icmp  |  src/dst: IP or "any"  |  port: number (tcp/udp only)', 'error-line');
+      return;
+    }
+    const seq = parseInt(args[2]);
+    if (isNaN(seq) || seq < 1) { termWrite('% Invalid sequence number', 'error-line'); return; }
+    const action = args[3].toLowerCase();
+    if (action !== 'permit' && action !== 'deny') { termWrite('% Action must be "permit" or "deny"', 'error-line'); return; }
+    // Parse with awareness of "any" keyword
+    let idx = 2; // start after "firewall policy"
+    idx++; // seq
+    idx++; // action
+    const srcToken = args[idx]; idx++;
+    let parsedSrc, parsedSrcWC;
+    if (srcToken.toLowerCase() === 'any') {
+      parsedSrc = 'any'; parsedSrcWC = '255.255.255.255';
+    } else {
+      parsedSrc = srcToken; parsedSrcWC = args[idx]; idx++;
+      if (!isValidIP(parsedSrc) || !isValidIP(parsedSrcWC)) { termWrite('% Invalid source address or wildcard', 'error-line'); return; }
+    }
+    const dstToken = args[idx]; idx++;
+    let parsedDst, parsedDstWC;
+    if (dstToken.toLowerCase() === 'any') {
+      parsedDst = 'any'; parsedDstWC = '255.255.255.255';
+    } else {
+      parsedDst = dstToken; parsedDstWC = args[idx]; idx++;
+      if (!isValidIP(parsedDst) || !isValidIP(parsedDstWC)) { termWrite('% Invalid destination address or wildcard', 'error-line'); return; }
+    }
+    const protocol = (args[idx] || '').toLowerCase(); idx++;
+    if (!['ip', 'tcp', 'udp', 'icmp'].includes(protocol)) { termWrite('% Invalid protocol — use ip, tcp, udp, or icmp', 'error-line'); return; }
+    let port = null;
+    if ((protocol === 'tcp' || protocol === 'udp') && args[idx]) {
+      port = parseInt(args[idx]);
+      if (isNaN(port) || port < 1 || port > 65535) { termWrite('% Invalid port number (1-65535)', 'error-line'); return; }
+    }
+
+    // Remove existing policy with same seq if present
+    if (!dev.policies) dev.policies = [];
+    dev.policies = dev.policies.filter(p => p.seq !== seq);
+    dev.policies.push({ seq, action, src: parsedSrc, srcWildcard: parsedSrcWC, dst: parsedDst, dstWildcard: parsedDstWC, protocol, port });
+    dev.policies.sort((a, b) => a.seq - b.seq);
+    const srcStr = parsedSrc === 'any' ? 'any' : `${parsedSrc} ${parsedSrcWC}`;
+    const dstStr = parsedDst === 'any' ? 'any' : `${parsedDst} ${parsedDstWC}`;
+    termWrite(`% Policy ${seq}: ${action} ${srcStr} -> ${dstStr} ${protocol}${port ? ' ' + port : ''}`, 'success-line');
+    return;
+  }
+
+  // no firewall policy <seq> | no firewall policy all
+  if (lower.startsWith('no firewall policy')) {
+    if (dev.type !== 'firewall') { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
+    if (!dev.policies) dev.policies = [];
+    const arg = parts[3];
+    if (!arg) { termWrite('% Usage: no firewall policy <seq> | no firewall policy all', 'error-line'); return; }
+    if (arg.toLowerCase() === 'all') {
+      dev.policies = [];
+      termWrite('% All firewall policies removed', 'success-line');
+      return;
+    }
+    const seq = parseInt(arg);
+    if (isNaN(seq)) { termWrite('% Invalid sequence number', 'error-line'); return; }
+    const before = dev.policies.length;
+    dev.policies = dev.policies.filter(p => p.seq !== seq);
+    if (dev.policies.length === before) { termWrite(`% Policy ${seq} not found`, 'error-line'); return; }
+    termWrite(`% Policy ${seq} removed`, 'success-line');
     return;
   }
 

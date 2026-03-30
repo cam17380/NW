@@ -166,7 +166,7 @@ export class DesignController {
     if (!this.store.designMode) return;
     e.preventDefault();
     const type = e.dataTransfer.getData('text/plain');
-    if (!['router', 'switch', 'pc'].includes(type)) return;
+    if (!['router', 'switch', 'firewall', 'pc'].includes(type)) return;
     const pos = this.canvasToLogical(e.clientX, e.clientY);
     const id = this.store.addDevice(type, pos.x, pos.y);
     showToast(`Added ${type}: ${id}`, 'success');

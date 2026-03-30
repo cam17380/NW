@@ -34,6 +34,23 @@ export function shortIfName(name) {
   return name.replace('GigabitEthernet', 'Gi').replace('FastEthernet', 'Fa').replace('Ethernet', 'Eth');
 }
 
+// Generate a deterministic MAC address from deviceId and interface name
+export function generateMAC(deviceId, ifName) {
+  let hash = 0;
+  const str = deviceId + ':' + ifName;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  const h = Math.abs(hash);
+  const bytes = [
+    0x00, 0x50, 0x56,  // OUI prefix
+    (h >> 16) & 0xff,
+    (h >> 8) & 0xff,
+    h & 0xff,
+  ];
+  return bytes.map(b => b.toString(16).padStart(2, '0')).join(':');
+}
+
 export function ipToInt(ip) {
   return ip.split('.').reduce((acc, o) => (acc << 8) + parseInt(o), 0) >>> 0;
 }

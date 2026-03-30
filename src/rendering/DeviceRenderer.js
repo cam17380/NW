@@ -54,6 +54,37 @@ export function drawPC(ctx, x, y, dv, selected) {
   ctx.stroke();
 }
 
+export function drawFirewall(ctx, x, y, dv, selected) {
+  // Shield shape
+  const w = 22, h = 30;
+  ctx.beginPath();
+  ctx.moveTo(x, y - h);
+  ctx.quadraticCurveTo(x + w + 4, y - h + 4, x + w, y - 4);
+  ctx.lineTo(x + w * 0.6, y + h * 0.4);
+  ctx.lineTo(x, y + h * 0.6);
+  ctx.lineTo(x - w * 0.6, y + h * 0.4);
+  ctx.lineTo(x - w, y - 4);
+  ctx.quadraticCurveTo(x - w - 4, y - h + 4, x, y - h);
+  ctx.closePath();
+  ctx.fillStyle = selected ? '#1a3a5c' : '#1a2332';
+  ctx.fill();
+  ctx.strokeStyle = getDeviceBorderColor(dv);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Brick pattern inside
+  ctx.strokeStyle = getDeviceBorderColor(dv);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - 14, y - 10); ctx.lineTo(x + 14, y - 10);
+  ctx.moveTo(x - 12, y - 2); ctx.lineTo(x + 12, y - 2);
+  ctx.moveTo(x - 8, y + 6); ctx.lineTo(x + 8, y + 6);
+  ctx.moveTo(x, y - 18); ctx.lineTo(x, y - 10);
+  ctx.moveTo(x - 7, y - 10); ctx.lineTo(x - 7, y - 2);
+  ctx.moveTo(x + 7, y - 10); ctx.lineTo(x + 7, y - 2);
+  ctx.moveTo(x, y - 2); ctx.lineTo(x, y + 6);
+  ctx.stroke();
+}
+
 export function drawArrowHead(ctx, x, y, angle) {
   const size = 5;
   ctx.beginPath();

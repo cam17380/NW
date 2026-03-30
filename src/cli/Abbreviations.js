@@ -53,6 +53,22 @@ const abbreviations = {
   'ip nat in': 'ip nat inside',
   'ip nat out': 'ip nat outside',
   'acc': 'access-list',
+  // ARP
+  'sh arp': 'show arp',
+  'cl arp': 'clear arp',
+  // Traceroute
+  'tr': 'traceroute',
+  'trace': 'traceroute',
+  // Firewall
+  'sh fw pol': 'show firewall policy',
+  'sh firewall pol': 'show firewall policy',
+  'show fw pol': 'show firewall policy',
+  'show fw policy': 'show firewall policy',
+  'show firewall pol': 'show firewall policy',
+  'fw pol': 'firewall policy',
+  'fw policy': 'firewall policy',
+  'no fw pol': 'no firewall policy',
+  'no fw policy': 'no firewall policy',
 };
 
 export function expandAbbrev(input) {
