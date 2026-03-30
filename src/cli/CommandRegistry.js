@@ -1,8 +1,8 @@
 // ─── Command tree and hint data for CLI modes ───
 
 export const commandTree = {
-  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show arp', 'ping', 'traceroute', 'exit'],
-  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show arp', 'ping', 'traceroute', 'clear arp', 'disable', 'exit'],
+  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show arp', 'show packet-flow', 'ping', 'traceroute', 'exit'],
+  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show arp', 'show packet-flow', 'ping', 'traceroute', 'clear arp', 'disable', 'exit'],
   config: ['hostname', 'interface', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'exit', 'end'],
   'config-if': ['ip address', 'no shutdown', 'shutdown', 'description', 'switchport mode access', 'switchport mode trunk', 'switchport access vlan', 'switchport trunk allowed vlan', 'ip nat inside', 'ip nat outside', 'no ip nat inside', 'no ip nat outside', 'exit', 'end'],
   'config-vlan': ['name', 'exit', 'end'],
@@ -28,6 +28,7 @@ export function getCmdHintData(store) {
       { label: 'show ip nat statistics', fill: 'show ip nat statistics', cat: 'nat', cond: isRouterOrFW },
       { label: 'show firewall policy', fill: 'show firewall policy', cat: 'firewall', cond: isFirewall },
       { label: 'show arp', fill: 'show arp', cat: 'show', cond: () => dev().type !== 'switch' },
+      { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
     ],
@@ -44,6 +45,7 @@ export function getCmdHintData(store) {
       { label: 'show ip nat statistics', fill: 'show ip nat statistics', cat: 'nat', cond: isRouterOrFW },
       { label: 'show firewall policy', fill: 'show firewall policy', cat: 'firewall', cond: isFirewall },
       { label: 'show arp', fill: 'show arp', cat: 'show', cond: () => dev().type !== 'switch' },
+      { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
       { label: 'clear arp', fill: 'clear arp', cat: 'config', cond: () => dev().type !== 'switch' },

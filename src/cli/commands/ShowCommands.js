@@ -1,6 +1,7 @@
 // ─── Show commands ───
-import { shortIfName, generateMAC } from '../../simulation/NetworkUtils.js';
+import { shortIfName, generateMAC, isValidIP } from '../../simulation/NetworkUtils.js';
 import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
+import { tracePacketFlow } from '../../simulation/PingEngine.js';
 
 export function execShow(input, parts, store, termWrite, execPing, execTraceroute) {
   const lower = input.toLowerCase();
@@ -288,6 +289,57 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     if (Object.values(dev.interfaces).every(i => !i.ip || i.status !== 'up') && arpTable.length === 0) {
       termWrite('  (no ARP entries)');
     }
+    return;
+  }
+
+  if (lower.startsWith('show packet-flow ')) {
+    if (dev.type === 'switch') { termWrite('% packet-flow is not available on switches', 'error-line'); return; }
+    const targetIP = parts[2];
+    if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: show packet-flow <target-ip>', 'error-line'); return; }
+
+    const devices = store.getDevices();
+    const currentId = store.getCurrentDeviceId();
+    const { hops, reachable } = tracePacketFlow(devices, currentId, targetIP);
+
+    // Find source IP
+    let srcIP = '?';
+    for (const iface of Object.values(dev.interfaces)) {
+      if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
+    }
+
+    termWrite(`\nPacket flow: ${dev.hostname} (${srcIP}) -> ${targetIP}\n`);
+    termWrite('─'.repeat(60));
+
+    for (let i = 0; i < hops.length; i++) {
+      const hop = hops[i];
+      const typeLabel = hop.deviceType.charAt(0).toUpperCase() + hop.deviceType.slice(1);
+      const via = hop.ingressIf ? ` via ${shortIfName(hop.ingressIf)}` : '';
+      termWrite(`\n[Hop ${i + 1}] ${hop.hostname} (${typeLabel})${via}`);
+      for (const d of hop.decisions) {
+        const prefix = d.type === 'error' ? '  ✗ ' :
+                       d.type === 'forward' ? '  └ ' :
+                       d.type === 'firewall' ? '  ├ ' :
+                       d.type === 'l2-switch' ? '  ~ ' : '  ├ ';
+        const cls = d.type === 'error' ? 'error-line' :
+                    d.type === 'firewall' && d.text.includes('DENY') ? 'error-line' :
+                    d.type === 'forward' ? 'success-line' :
+                    d.type === 'local-check' && d.text.includes('REACHED') ? 'success-line' : '';
+        termWrite(`${prefix}${d.text}`, cls);
+      }
+    }
+
+    termWrite('\n' + '─'.repeat(60));
+    if (reachable) {
+      termWrite(`Result: Packet delivered successfully (${hops.length} hop${hops.length > 1 ? 's' : ''})`, 'success-line');
+    } else {
+      const lastHop = hops[hops.length - 1];
+      const reason = lastHop?.result === 'dropped' ? 'DROPPED by firewall policy' :
+                     lastHop?.result === 'no-route' ? 'No route to host' :
+                     lastHop?.result === 'loop' ? 'Routing loop detected' :
+                     lastHop?.result === 'no-source' ? 'No source interface' : 'Unreachable';
+      termWrite(`Result: ${reason} at ${lastHop?.hostname || 'unknown'}`, 'error-line');
+    }
+    termWrite('');
     return;
   }
 

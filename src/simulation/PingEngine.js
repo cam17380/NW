@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, describeRouteLookup, describeFirewallCheck, describeNAT } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -277,11 +277,18 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
     hops.push({ deviceId: path[i], hostname: dv.hostname, ip: hopIP || '*' });
   }
   // If reachable and the last hop's ingress IP is not the target IP,
-  // the target is on a different interface of the same device — add final hop
+  // add final hop only if the target IP actually exists on that device
+  // (i.e. it's a different local interface, not a NAT-translated address)
   if (reachable && hops.length > 0) {
     const lastHop = hops[hops.length - 1];
     if (lastHop.ip !== targetIP) {
-      hops.push({ deviceId: lastHop.deviceId, hostname: lastHop.hostname, ip: targetIP });
+      const lastDev = devices[lastHop.deviceId];
+      const targetIsLocal = lastDev && Object.values(lastDev.interfaces).some(
+        iface => iface.ip === targetIP && iface.status === 'up'
+      );
+      if (targetIsLocal) {
+        hops.push({ deviceId: lastHop.deviceId, hostname: lastHop.hostname, ip: targetIP });
+      }
     }
   }
 
@@ -294,11 +301,8 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
         terminal.write(`  ${String(i + 1).padStart(2)}   <1ms  <1ms  <1ms  ${hop.ip}  (${hop.hostname})`);
       }
       if (!reachable) {
-        const nextHop = hops.length + 1;
-        terminal.write(`  ${String(nextHop).padStart(2)}   *   *   *   Request timed out.`, 'error-line');
-      }
-      if (hops.length === 0 && !reachable) {
-        terminal.write('  1   *   *   *   Request timed out.', 'error-line');
+        const nextHopNum = hops.length > 0 ? hops.length + 1 : 1;
+        terminal.write(`  ${String(nextHopNum).padStart(2)}   *   *   *   Request timed out.`, 'error-line');
       }
       terminal.write('\nTrace complete.');
     });
@@ -311,6 +315,201 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
     }
     terminal.write('\nTrace complete.');
   }
+}
+
+// ─── Packet flow trace (read-only diagnostics) ───
+
+export function tracePacketFlow(devices, fromId, targetIP) {
+  const hops = [];
+  const visited = new Set();
+  let curId = fromId;
+  let curSrcIP = null;
+  let curTargetIP = targetIP;
+
+  // Get source IP
+  const srcDev = devices[fromId];
+  for (const iface of Object.values(srcDev.interfaces)) {
+    if (iface.status === 'up' && iface.ip) { curSrcIP = iface.ip; break; }
+  }
+  if (!curSrcIP) {
+    return { hops: [{ deviceId: fromId, hostname: srcDev.hostname, deviceType: srcDev.type, ingressIf: null, decisions: [{ type: 'error', text: 'No source interface available' }], result: 'no-source' }], reachable: false };
+  }
+
+  let prevDevId = null;
+
+  for (let step = 0; step < 20; step++) {
+    if (visited.has(curId)) {
+      hops.push({ deviceId: curId, hostname: devices[curId].hostname, deviceType: devices[curId].type, ingressIf: null, decisions: [{ type: 'error', text: 'Routing loop detected' }], result: 'loop' });
+      return { hops, reachable: false };
+    }
+    visited.add(curId);
+    const dv = devices[curId];
+    const hop = { deviceId: curId, hostname: dv.hostname, deviceType: dv.type, ingressIf: null, decisions: [], result: 'forward' };
+
+    // Find ingress interface (for step > 0)
+    if (step > 0 && prevDevId) {
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!iface.connected || iface.status !== 'up') continue;
+        if (iface.connected.device === prevDevId) { hop.ingressIf = ifName; break; }
+        const connDev = devices[iface.connected.device];
+        if (connDev && connDev.type === 'switch') {
+          if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) { hop.ingressIf = ifName; break; }
+        }
+      }
+      if (hop.ingressIf) {
+        const inIface = dv.interfaces[hop.ingressIf];
+        hop.decisions.push({ type: 'ingress', text: `Received on ${hop.ingressIf}${inIface.ip ? ' (' + inIface.ip + ')' : ''}` });
+      }
+    }
+
+    // Switch: L2 transit — should not normally appear as curId
+    // (switches are traversed inline when an L3 device forwards through them)
+    if (dv.type === 'switch') {
+      hop.decisions.push({ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' });
+      hop.result = 'transit';
+      hops.push(hop);
+      // Find the target device behind this switch using BFS
+      const l2TargetId = findDeviceByIP(devices, curTargetIP);
+      if (l2TargetId && !visited.has(l2TargetId)) {
+        prevDevId = curId;
+        curId = l2TargetId;
+      } else {
+        return { hops, reachable: false };
+      }
+      continue;
+    }
+
+    // Check if target is on this device
+    let localMatch = null;
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (iface.ip === curTargetIP && iface.status === 'up') { localMatch = ifName; break; }
+    }
+    if (localMatch) {
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch} -> REACHED` });
+      hop.result = 'reached';
+      hops.push(hop);
+      return { hops, reachable: true };
+    }
+    hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+
+    // NAT check (router/firewall, step > 0)
+    if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && step > 0 && hop.ingressIf) {
+      const natInfo = describeNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
+      if (natInfo.description) {
+        hop.decisions.push({ type: 'nat', text: natInfo.description });
+      }
+      if (natInfo.translated) {
+        curSrcIP = natInfo.srcIP;
+        curTargetIP = natInfo.dstIP;
+        // Re-check local after NAT
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') {
+            hop.decisions.push({ type: 'local-check', text: `After NAT: ${curTargetIP} matches local interface ${ifName} -> REACHED` });
+            hop.result = 'reached';
+            hops.push(hop);
+            return { hops, reachable: true };
+          }
+        }
+      }
+    }
+
+    // Firewall policy check
+    if (dv.type === 'firewall' && step > 0) {
+      const fwInfo = describeFirewallCheck(dv, curSrcIP, curTargetIP);
+      if (fwInfo.description) {
+        hop.decisions.push({ type: 'firewall', text: fwInfo.description });
+      }
+      if (!fwInfo.allowed) {
+        hop.result = 'dropped';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
+    }
+
+    // Route lookup
+    const routeInfo = describeRouteLookup(dv, curTargetIP);
+    hop.decisions.push({ type: 'route-lookup', text: routeInfo.description });
+
+    const nextHop = routeInfo.nextHop || lookupRoute(dv, curTargetIP);
+
+    // Find egress interface
+    if (!nextHop) {
+      // Directly connected — find the egress interface
+      let egressIf = null;
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
+        if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
+          egressIf = ifName; break;
+        }
+      }
+      if (!egressIf) {
+        hop.result = 'no-route';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
+      hop.decisions.push({ type: 'forward', text: `Exit ${egressIf} -> L2 delivery to ${curTargetIP}` });
+      hops.push(hop);
+      const exitIface = dv.interfaces[egressIf];
+      if (!exitIface.connected) return { hops, reachable: false };
+      // If connected to a switch, add switch transit hop and find target via BFS
+      const nextDev = devices[exitIface.connected.device];
+      if (nextDev && nextDev.type === 'switch') {
+        const swId = exitIface.connected.device;
+        visited.add(swId);
+        hops.push({ deviceId: swId, hostname: nextDev.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
+        const l2Target = findDeviceByIP(devices, curTargetIP);
+        if (l2Target && !visited.has(l2Target)) {
+          prevDevId = swId;
+          curId = l2Target;
+        } else {
+          return { hops, reachable: false };
+        }
+      } else {
+        prevDevId = curId;
+        curId = exitIface.connected.device;
+      }
+      continue;
+    }
+
+    // Has a next hop — find egress interface toward it
+    let egressIf = null;
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHop, iface.mask)) {
+        egressIf = ifName; break;
+      }
+    }
+    if (!egressIf) {
+      hop.decisions.push({ type: 'error', text: `No egress interface for next hop ${nextHop}` });
+      hop.result = 'no-route';
+      hops.push(hop);
+      return { hops, reachable: false };
+    }
+    hop.decisions.push({ type: 'forward', text: `Exit ${egressIf} -> next hop ${nextHop}` });
+    hops.push(hop);
+
+    const exitIface = dv.interfaces[egressIf];
+    if (!exitIface.connected) return { hops, reachable: false };
+    // If connected to a switch, add switch transit hop and find next-hop device via BFS
+    const nextDev2 = devices[exitIface.connected.device];
+    if (nextDev2 && nextDev2.type === 'switch') {
+      const swId = exitIface.connected.device;
+      visited.add(swId);
+      hops.push({ deviceId: swId, hostname: nextDev2.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
+      const nhDevId = findDeviceByIP(devices, nextHop);
+      if (nhDevId && !visited.has(nhDevId)) {
+        prevDevId = swId;
+        curId = nhDevId;
+      } else {
+        return { hops, reachable: false };
+      }
+    } else {
+      prevDevId = curId;
+      curId = exitIface.connected.device;
+    }
+  }
+
+  return { hops, reachable: false };
 }
 
 // ─── ARP table building ───

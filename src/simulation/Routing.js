@@ -326,3 +326,108 @@ export function applyNAT(dv, srcIP, dstIP, ingressIfName) {
 
   return { srcIP, dstIP, translated: false };
 }
+
+// ─── Diagnostic helpers (read-only, no side effects) ────
+
+export function describeRouteLookup(dv, targetIP) {
+  if (dv.type === 'pc') {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+        return { nextHop: null, description: `${targetIP} is on directly connected subnet ${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)} (${ifName})` };
+      }
+    }
+    if (dv.defaultGateway) {
+      return { nextHop: dv.defaultGateway, description: `Using default gateway ${dv.defaultGateway}` };
+    }
+    return { nextHop: null, description: 'No default gateway configured' };
+  }
+  if (!dv.routes || dv.routes.length === 0) {
+    // Check directly connected
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+        return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
+      }
+    }
+    return { nextHop: null, description: 'No matching route' };
+  }
+  let bestRoute = null, bestCIDR = -1;
+  for (const r of dv.routes) {
+    const routeNet = getNetwork(r.network, r.mask);
+    const targetNet = getNetwork(targetIP, r.mask);
+    if (routeNet === targetNet) {
+      const cidr = maskToCIDR(r.mask);
+      if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+    }
+  }
+  if (bestRoute) {
+    const isDefault = bestRoute.network === '0.0.0.0' && bestRoute.mask === '0.0.0.0';
+    const prefix = isDefault ? 'default route' : `static route ${bestRoute.network}/${maskToCIDR(bestRoute.mask)}`;
+    return { nextHop: bestRoute.nextHop, description: `Matched ${prefix} via ${bestRoute.nextHop}` };
+  }
+  // Check directly connected
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.ip || iface.status !== 'up') continue;
+    if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+      return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
+    }
+  }
+  return { nextHop: null, description: 'No matching route' };
+}
+
+export function describeFirewallCheck(dv, srcIP, dstIP) {
+  if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) {
+    if (dv.type === 'firewall') return { allowed: false, description: 'No policies configured -> implicit DENY' };
+    return { allowed: true, description: null };
+  }
+  const sorted = [...dv.policies].sort((a, b) => a.seq - b.seq);
+  for (const p of sorted) {
+    if (matchesWildcard(srcIP, p.src, p.srcWildcard) &&
+        matchesWildcard(dstIP, p.dst, p.dstWildcard) &&
+        matchesProtocolField(p.protocol)) {
+      const srcStr = p.src === 'any' ? 'any' : `${p.src} ${p.srcWildcard}`;
+      const dstStr = p.dst === 'any' ? 'any' : `${p.dst} ${p.dstWildcard}`;
+      const result = p.action === 'permit' ? 'PERMIT' : 'DENY';
+      return { allowed: p.action === 'permit', description: `Policy seq ${p.seq}: ${p.action} ${srcStr} -> ${dstStr} ${p.protocol} -> ${result}` };
+    }
+  }
+  return { allowed: false, description: 'No matching policy -> implicit DENY' };
+}
+
+export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
+  if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false, description: null };
+  const ingressRole = dv.interfaces[ingressIfName]?.natRole;
+  if (!ingressRole) return { srcIP, dstIP, translated: false, description: 'No NAT role on ingress interface' };
+
+  if (ingressRole === 'outside') {
+    const match = dv.nat.translations.find(t => t.insideGlobal === dstIP) ||
+                  dv.nat.staticEntries.find(e => e.insideGlobal === dstIP);
+    if (match) {
+      return { srcIP, dstIP: match.insideLocal, translated: true, description: `NAT outside->inside: dst ${dstIP} -> ${match.insideLocal}` };
+    }
+  }
+
+  const egressIfName = findEgressInterface(dv, dstIP);
+  if (!egressIfName) return { srcIP, dstIP, translated: false, description: 'NAT: no egress interface found' };
+  const egressRole = dv.interfaces[egressIfName]?.natRole;
+  if (!egressRole) return { srcIP, dstIP, translated: false, description: null };
+
+  if (ingressRole === 'inside' && egressRole === 'outside') {
+    const staticMatch = dv.nat.staticEntries.find(e => e.insideLocal === srcIP);
+    if (staticMatch) {
+      return { srcIP: staticMatch.insideGlobal, dstIP, translated: true, description: `NAT inside->outside: static src ${srcIP} -> ${staticMatch.insideGlobal}` };
+    }
+    for (const rule of dv.nat.dynamicRules) {
+      if (matchesACL(dv.accessLists[rule.aclNum], srcIP)) {
+        const existing = dv.nat.translations.find(t => t.insideLocal === srcIP && t.type === 'dynamic');
+        if (existing) {
+          return { srcIP: existing.insideGlobal, dstIP, translated: true, description: `NAT inside->outside: dynamic src ${srcIP} -> ${existing.insideGlobal}` };
+        }
+        return { srcIP, dstIP, translated: false, description: `NAT inside->outside: ACL ${rule.aclNum} matched, pool ${rule.poolName} (would allocate)` };
+      }
+    }
+    return { srcIP, dstIP, translated: false, description: 'NAT inside->outside: no matching rule' };
+  }
+  return { srcIP, dstIP, translated: false, description: null };
+}
