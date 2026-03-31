@@ -1,6 +1,6 @@
 // ─── Canvas Renderer: Main drawing orchestrator ───
 import { drawRouter, drawSwitch, drawPC, drawFirewall, drawServer } from './DeviceRenderer.js';
-import { drawLink } from './LinkRenderer.js';
+import { drawLink, getDeviceEdgePoint } from './LinkRenderer.js';
 
 export class CanvasRenderer {
   constructor(canvas, store, eventBus) {
@@ -76,7 +76,7 @@ export class CanvasRenderer {
       const total = pairCount[key];
       if (!pairIndex[key]) pairIndex[key] = 0;
       const idx = pairIndex[key]++;
-      const offset = total > 1 ? (idx - (total - 1) / 2) * 10 : 0;
+      const offset = total > 1 ? (idx - (total - 1) / 2) * 20 : 0;
       drawLink(ctx, link, devices, sx, sy, offset, idx);
     }
 
@@ -190,8 +190,73 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
+  // ─── Compute edge endpoints for animation segments ───
+  _computeSegmentEndpoints(segments) {
+    const devices = this.store.getDevices();
+    const links = this.store.getLinks();
+    const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dpr;
+    const sx = v => v * (w / 800);
+    const sy = v => v * (h / 560);
+
+    // Build per-link offset map (same logic as draw())
+    const pairCount = {};
+    for (const link of links) {
+      const key = [link.from, link.to].sort().join('::');
+      pairCount[key] = (pairCount[key] || 0) + 1;
+    }
+    const linkOffsets = new Map(); // link object → offset value
+    const pairIdx = {};
+    for (const link of links) {
+      const key = [link.from, link.to].sort().join('::');
+      if (!pairIdx[key]) pairIdx[key] = 0;
+      const idx = pairIdx[key]++;
+      const total = pairCount[key];
+      const offset = total > 1 ? (idx - (total - 1) / 2) * 20 : 0;
+      linkOffsets.set(link, offset);
+    }
+
+    for (const seg of segments) {
+      const d1 = devices[seg.fromId], d2 = devices[seg.toId];
+      if (!d1 || !d2) {
+        seg.fromPt = { x: 0, y: 0 };
+        seg.toPt = { x: 0, y: 0 };
+        continue;
+      }
+      const baseX1 = sx(d1.x), baseY1 = sy(d1.y);
+      const baseX2 = sx(d2.x), baseY2 = sy(d2.y);
+
+      // Find the matching link using hint (interface pair) if available
+      let matchedLink = null;
+      if (seg.hint && seg.hint.fromIf) {
+        matchedLink = links.find(l =>
+          (l.from === seg.fromId && l.fromIf === seg.hint.fromIf && l.to === seg.toId && l.toIf === seg.hint.toIf) ||
+          (l.to === seg.fromId && l.toIf === seg.hint.fromIf && l.from === seg.toId && l.fromIf === seg.hint.toIf)
+        );
+      }
+      // Fallback: first link between the pair
+      if (!matchedLink) {
+        matchedLink = links.find(l =>
+          (l.from === seg.fromId && l.to === seg.toId) ||
+          (l.to === seg.fromId && l.from === seg.toId)
+        );
+      }
+
+      const offset = matchedLink ? (linkOffsets.get(matchedLink) || 0) : 0;
+      // Consistent perpendicular normal based on sorted device order
+      const sortedIds = [seg.fromId, seg.toId].sort();
+      const dSA = devices[sortedIds[0]], dSB = devices[sortedIds[1]];
+      const ldx = sx(dSB.x) - sx(dSA.x);
+      const ldy = sy(dSB.y) - sy(dSA.y);
+      const llen = Math.sqrt(ldx * ldx + ldy * ldy) || 1;
+      const nx = -ldy / llen;
+      const ny = ldx / llen;
+      seg.fromPt = getDeviceEdgePoint(d1.type, baseX1, baseY1, baseX2, baseY2, nx, ny, offset);
+      seg.toPt = getDeviceEdgePoint(d2.type, baseX2, baseY2, baseX1, baseY1, nx, ny, offset);
+    }
+  }
+
   // ─── Ping animation ───
-  animatePing(path, success, onComplete) {
+  animatePing(path, linkHints, success, onComplete) {
     this.pingAnimId++;
     this.pingAnimRunning = false;
 
@@ -200,17 +265,22 @@ export class CanvasRenderer {
     if (validPath.length < 2) { onComplete(); return; }
 
     const segments = [];
+    const hints = linkHints || [];
     if (success) {
       for (let i = 0; i < validPath.length - 1; i++)
-        segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: 'request' });
-      for (let i = validPath.length - 1; i > 0; i--)
-        segments.push({ fromId: validPath[i], toId: validPath[i - 1], type: 'reply' });
+        segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: 'request', hint: hints[i] || null });
+      for (let i = validPath.length - 1; i > 0; i--) {
+        const fwdHint = hints[i - 1];
+        segments.push({ fromId: validPath[i], toId: validPath[i - 1], type: 'reply', hint: fwdHint ? { fromIf: fwdHint.toIf, toIf: fwdHint.fromIf } : null });
+      }
     } else {
       for (let i = 0; i < validPath.length - 1; i++)
-        segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: 'fail' });
+        segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: 'fail', hint: hints[i] || null });
     }
 
     if (segments.length === 0) { onComplete(); return; }
+
+    this._computeSegmentEndpoints(segments);
 
     const myId = this.pingAnimId;
     const segDur = 300;
@@ -219,17 +289,8 @@ export class CanvasRenderer {
     const maxTime = segments.length * segDur + fadeDur + 1000;
     this.pingAnimRunning = true;
 
-    const canvas = this.canvas;
     const ctx = this.ctx;
-    const dpr = this.dpr;
     const self = this;
-
-    function getCoords(devId) {
-      const dv = devices[devId];
-      if (!dv) return { x: 0, y: 0 };
-      const w = canvas.width / dpr, h = canvas.height / dpr;
-      return { x: dv.x * (w / 800), y: dv.y * (h / 560) };
-    }
 
     function frame(now) {
       if (myId !== self.pingAnimId || !self.pingAnimRunning) return;
@@ -253,19 +314,19 @@ export class CanvasRenderer {
           const seg = segments[segIdx];
           const t = Math.min((elapsed - segIdx * segDur) / segDur, 1);
 
-          const from = getCoords(seg.fromId);
-          const to = getCoords(seg.toId);
+          const from = seg.fromPt;
+          const to = seg.toPt;
           const px = from.x + (to.x - from.x) * t;
           const py = from.y + (to.y - from.y) * t;
 
           const color = seg.type === 'reply' ? '#4fc3f7' : seg.type === 'request' ? '#69f0ae' : '#ff6b6b';
           drawPingParticle(ctx, px, py, color, 1.0);
-          drawPingTrail(ctx, segments, segIdx, t, getCoords);
+          drawPingTrail(ctx, segments, segIdx, t);
 
         } else if (!success && elapsed < totalSegTime + fadeDur) {
           const fade = (elapsed - totalSegTime) / fadeDur;
           const last = segments[segments.length - 1];
-          const to = getCoords(last.toId);
+          const to = last.toPt;
           drawPingParticle(ctx, to.x, to.y, '#ff6b6b', 1 - fade);
           ctx.save();
           ctx.globalAlpha = 1 - fade;
@@ -298,7 +359,7 @@ export class CanvasRenderer {
   }
 
   // ─── Traceroute animation ───
-  animateTraceroute(path, success, onComplete) {
+  animateTraceroute(path, linkHints, success, onComplete) {
     this.pingAnimId++;
     this.pingAnimRunning = false;
 
@@ -307,11 +368,14 @@ export class CanvasRenderer {
     if (validPath.length < 2) { onComplete(); return; }
 
     // Build forward-only segments
+    const hints = linkHints || [];
     const segments = [];
     for (let i = 0; i < validPath.length - 1; i++) {
-      segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: success ? 'request' : 'fail' });
+      segments.push({ fromId: validPath[i], toId: validPath[i + 1], type: success ? 'request' : 'fail', hint: hints[i] || null });
     }
     if (segments.length === 0) { onComplete(); return; }
+
+    this._computeSegmentEndpoints(segments);
 
     // Compute L3 hop indices (non-switch devices, excluding source)
     const hopNumbers = new Map();
@@ -336,7 +400,8 @@ export class CanvasRenderer {
     const dpr = this.dpr;
     const self = this;
 
-    function getCoords(devId) {
+    // Center coords only for hop labels
+    function getCenterCoords(devId) {
       const dv = devices[devId];
       if (!dv) return { x: 0, y: 0 };
       const w = canvas.width / dpr, h = canvas.height / dpr;
@@ -362,8 +427,8 @@ export class CanvasRenderer {
         const t = Math.min((elapsed - segIdx * segDur) / segDur, 1);
 
         if (elapsed < segments.length * segDur) {
-          const from = getCoords(seg.fromId);
-          const to = getCoords(seg.toId);
+          const from = seg.fromPt;
+          const to = seg.toPt;
           const px = from.x + (to.x - from.x) * t;
           const py = from.y + (to.y - from.y) * t;
 
@@ -376,8 +441,8 @@ export class CanvasRenderer {
           ctx.shadowBlur = 0;
           for (let i = segIdx; i >= Math.max(0, segIdx - 3); i--) {
             const s = segments[i];
-            const f = getCoords(s.fromId);
-            const tCoord = getCoords(s.toId);
+            const f = s.fromPt;
+            const tCoord = s.toPt;
             const age = segIdx - i;
             const alpha = Math.max(0, 0.4 - age * 0.12);
             ctx.globalAlpha = alpha;
@@ -403,9 +468,8 @@ export class CanvasRenderer {
             const devId = segments[i].toId;
             const hn = hopNumbers.get(devId);
             if (hn === undefined) continue;
-            // Only label if we've completed arriving at this hop
             if (i < segIdx || (i === segIdx && t > 0.9)) {
-              const c = getCoords(devId);
+              const c = getCenterCoords(devId);
               ctx.fillStyle = '#0d1117cc';
               ctx.beginPath();
               ctx.arc(c.x + 28, c.y - 28, 11, 0, Math.PI * 2);
@@ -422,7 +486,7 @@ export class CanvasRenderer {
           ctx.font = 'bold 12px Consolas, monospace';
           ctx.textAlign = 'center';
           for (const [devId, hn] of hopNumbers) {
-            const c = getCoords(devId);
+            const c = getCenterCoords(devId);
             ctx.fillStyle = '#0d1117cc';
             ctx.beginPath();
             ctx.arc(c.x + 28, c.y - 28, 11, 0, Math.PI * 2);
@@ -434,7 +498,7 @@ export class CanvasRenderer {
 
           if (!success) {
             const lastSeg = segments[segments.length - 1];
-            const to = getCoords(lastSeg.toId);
+            const to = lastSeg.toPt;
             const fade = Math.min((elapsed - segments.length * segDur) / holdDur, 1);
             ctx.save();
             ctx.globalAlpha = 1 - fade;
@@ -520,14 +584,14 @@ function drawPingParticle(ctx, x, y, color, alpha) {
   ctx.restore();
 }
 
-function drawPingTrail(ctx, segments, curIdx, curT, getCoords) {
+function drawPingTrail(ctx, segments, curIdx, curT) {
   ctx.save();
   ctx.setLineDash([]);
   ctx.shadowBlur = 0;
   for (let i = curIdx; i >= Math.max(0, curIdx - 3); i--) {
     const seg = segments[i];
-    const from = getCoords(seg.fromId);
-    const to = getCoords(seg.toId);
+    const from = seg.fromPt;
+    const to = seg.toPt;
     const age = curIdx - i;
     const alpha = Math.max(0, 0.4 - age * 0.12);
     const color = seg.type === 'reply' ? '#4fc3f7' : seg.type === 'fail' ? '#ff6b6b' : '#69f0ae';

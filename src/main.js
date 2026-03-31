@@ -70,10 +70,10 @@ function refreshUI() {
 
 // Set CLIEngine callbacks
 cli.setExecPing((targetIP) => {
-  execPing(targetIP, store, terminal, (path, success, onComplete) => renderer.animatePing(path, success, onComplete));
+  execPing(targetIP, store, terminal, (path, linkHints, success, onComplete) => renderer.animatePing(path, linkHints, success, onComplete));
 });
 cli.setExecTraceroute((targetIP) => {
-  execTraceroute(targetIP, store, terminal, (path, success, onComplete) => renderer.animateTraceroute(path, success, onComplete));
+  execTraceroute(targetIP, store, terminal, (path, linkHints, success, onComplete) => renderer.animateTraceroute(path, linkHints, success, onComplete));
 });
 cli.setUpdateTabs(doUpdateTabs);
 

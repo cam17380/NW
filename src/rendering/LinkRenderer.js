@@ -36,6 +36,45 @@ export function getLinkVlanInfo(d1, if1, d2, if2) {
   return { vlans: [sp.accessVlan], isTrunk: false };
 }
 
+// Compute a point on the device boundary facing the target, with perpendicular offset.
+// nx, ny: perpendicular normal direction (must be consistent for both endpoints of a link)
+export function getDeviceEdgePoint(type, cx, cy, targetX, targetY, nx, ny, perpOffset) {
+  // Shift the "virtual center" by the perpendicular offset so each parallel link
+  // originates from a distinct point on the device edge
+  const ocx = cx + nx * perpOffset;
+  const ocy = cy + ny * perpOffset;
+  const dx = targetX - ocx;
+  const dy = targetY - ocy;
+  const angle = Math.atan2(dy, dx);
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  if (type === 'router') {
+    const r = 26;
+    return { x: ocx + r * cos, y: ocy + r * sin };
+  }
+
+  // Half-widths / half-heights for rectangular devices
+  let hw, hh;
+  if (type === 'switch')        { hw = 27; hh = 15; }
+  else if (type === 'server')   { hw = 14; hh = 19; }
+  else if (type === 'pc')       { hw = 18; hh = 14; }
+  else if (type === 'firewall') { hw = 24; hh = 20; }
+  else                          { hw = 18; hh = 18; }
+
+  const absCos = Math.abs(cos) || 0.001;
+  const absSin = Math.abs(sin) || 0.001;
+  const t = Math.min(hw / absCos, hh / absSin);
+
+  // Clamp so the edge point doesn't exceed the device boundary from the real center
+  const ex = ocx + t * cos;
+  const ey = ocy + t * sin;
+  const clampedX = Math.max(cx - hw, Math.min(cx + hw, ex));
+  const clampedY = Math.max(cy - hh, Math.min(cy + hh, ey));
+
+  return { x: clampedX, y: clampedY };
+}
+
 export function drawLink(ctx, link, devices, sx, sy, parallelOffset = 0, parallelIndex = 0) {
   const d1 = devices[link.from];
   const d2 = devices[link.to];
@@ -50,17 +89,21 @@ export function drawLink(ctx, link, devices, sx, sy, parallelOffset = 0, paralle
   const baseX1 = sx(d1.x), baseY1 = sy(d1.y);
   const baseX2 = sx(d2.x), baseY2 = sy(d2.y);
 
-  // Compute perpendicular offset for parallel links
-  const ldx = baseX2 - baseX1;
-  const ldy = baseY2 - baseY1;
+  // Compute a consistent perpendicular normal based on sorted device order
+  // so links with reversed from/to still get the same normal direction
+  const sortedIds = [link.from, link.to].sort();
+  const dA = devices[sortedIds[0]], dB = devices[sortedIds[1]];
+  const ldx = sx(dB.x) - sx(dA.x);
+  const ldy = sy(dB.y) - sy(dA.y);
   const llen = Math.sqrt(ldx * ldx + ldy * ldy) || 1;
-  const nx = -ldy / llen; // normal x
-  const ny = ldx / llen;  // normal y
+  const nx = -ldy / llen;
+  const ny = ldx / llen;
 
-  const x1 = baseX1 + nx * parallelOffset;
-  const y1 = baseY1 + ny * parallelOffset;
-  const x2 = baseX2 + nx * parallelOffset;
-  const y2 = baseY2 + ny * parallelOffset;
+  // Compute endpoints on device edges with perpendicular offset for parallel links
+  const p1 = getDeviceEdgePoint(d1.type, baseX1, baseY1, baseX2, baseY2, nx, ny, parallelOffset);
+  const p2 = getDeviceEdgePoint(d2.type, baseX2, baseY2, baseX1, baseY1, nx, ny, parallelOffset);
+  const x1 = p1.x, y1 = p1.y;
+  const x2 = p2.x, y2 = p2.y;
 
   if (bothUp && linkInfo.isTrunk) {
     ctx.beginPath();
@@ -107,7 +150,7 @@ export function drawLink(ctx, link, devices, sx, sy, parallelOffset = 0, paralle
   const tx = dx / len; // tangent (unit vector along link)
   const ty = dy / len;
 
-  const labelDist = 50 + parallelIndex * 30; // each parallel link's labels shift further from device
+  const labelDist = 30 + parallelIndex * 30; // each parallel link's labels shift further from edge
   const off1x = x1 + tx * labelDist;
   const off1y = y1 + ty * labelDist;
   const off2x = x2 - tx * labelDist;

@@ -25,13 +25,13 @@ export function execPing(targetIP, store, terminal, animatePing) {
     applyNATAlongPath(devices, currentDeviceId, srcIP, targetIP);
   }
 
-  const path = buildPingPath(devices, currentDeviceId, targetIP, reachable);
+  const { path, linkHints } = buildPingPath(devices, currentDeviceId, targetIP, reachable);
 
   // Learn ARP entries along the path
   buildArpAlongPath(devices, path);
 
   if (path.length >= 2) {
-    animatePing(path, reachable, () => {
+    animatePing(path, linkHints, reachable, () => {
       if (reachable) {
         terminal.write('!!!!!', 'success-line');
         terminal.write(`Success rate is 100 percent (5/5)`, 'success-line');
@@ -53,6 +53,7 @@ export function execPing(targetIP, store, terminal, animatePing) {
 
 export function buildPingPath(devices, fromId, targetIP, reachable) {
   const path = [fromId];
+  const linkHints = [];  // linkHints[i] = {fromIf, toIf} for segment path[i]→path[i+1]
   const visited = new Set([fromId]);
   let curId = fromId;
   let curTargetIP = targetIP;
@@ -68,7 +69,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     const dv = devices[curId];
 
     for (const iface of Object.values(dv.interfaces)) {
-      if (iface.ip === curTargetIP && iface.status === 'up') return path;
+      if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
     }
 
     // Apply NAT at routers/firewalls — update curTargetIP for subsequent path decisions
@@ -109,7 +110,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
         curTargetIP = natResult.dstIP;
         // Re-check: did NAT resolve to a local address on this device?
         for (const iface of Object.values(dv.interfaces)) {
-          if (iface.ip === curTargetIP && iface.status === 'up') return path;
+          if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
         }
       }
     }
@@ -174,6 +175,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
 
     if (neighborDev.type === 'switch') {
       // Always add switch to path (switches are L2 transit points, can appear multiple times)
+      linkHints.push({ fromIf: exitIfName, toIf: neighbor.iface });
       path.push(neighbor.device);
       visited.add(neighbor.device);
 
@@ -182,37 +184,77 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
 
       const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId);
       for (const sid of swPath) {
+        // Switch-to-switch links: find the connecting interfaces
+        const prevSwId = path[path.length - 1];
+        const prevSw = devices[prevSwId];
+        let swFromIf = null, swToIf = null;
+        for (const [ifn, iff] of Object.entries(prevSw.interfaces)) {
+          if (iff.connected && iff.connected.device === sid) { swFromIf = ifn; swToIf = iff.connected.iface; break; }
+        }
+        linkHints.push({ fromIf: swFromIf, toIf: swToIf });
         path.push(sid);
         visited.add(sid);
       }
 
+      // Switch-to-target: find the link where target interface has the target IP
+      const lastSwId = path[path.length - 1];
+      const targetDev = devices[targetDevId];
+      let swToTargetFromIf = null, swToTargetToIf = null;
+      for (const [ifName, iface] of Object.entries(targetDev.interfaces)) {
+        if (iface.connected && iface.connected.device === lastSwId && iface.ip === nextHopIP) {
+          swToTargetToIf = ifName;
+          swToTargetFromIf = iface.connected.iface;
+          break;
+        }
+      }
+      // Fallback: first connected interface to the switch
+      if (!swToTargetToIf) {
+        for (const [ifName, iface] of Object.entries(targetDev.interfaces)) {
+          if (iface.connected && iface.connected.device === lastSwId) {
+            swToTargetToIf = ifName;
+            swToTargetFromIf = iface.connected.iface;
+            break;
+          }
+        }
+      }
+      linkHints.push({ fromIf: swToTargetFromIf, toIf: swToTargetToIf });
       path.push(targetDevId);
       visited.add(targetDevId);
       curId = targetDevId;
     } else {
       if (visited.has(neighbor.device)) break;
+      linkHints.push({ fromIf: exitIfName, toIf: neighbor.iface });
       path.push(neighbor.device);
       visited.add(neighbor.device);
       curId = neighbor.device;
     }
   }
-  return path;
+  return { path, linkHints };
 }
 
 // Find the IP of the ingress interface on devId facing prevDevId
 // prevDevId may be directly connected or reachable through switches
-function findIngressIP(devices, devId, prevDevId) {
+// ingressIfHint: if provided, the exact interface name to use (from linkHints)
+function findIngressIP(devices, devId, prevDevId, ingressIfHint) {
   const dv = devices[devId];
+  // Use hint if available
+  if (ingressIfHint && dv.interfaces[ingressIfHint] && dv.interfaces[ingressIfHint].ip) {
+    return dv.interfaces[ingressIfHint].ip;
+  }
+  // Collect all candidates and prefer by target IP match (same logic as tracePacketFlow)
+  const candidates = [];
   for (const [ifName, iface] of Object.entries(dv.interfaces)) {
     if (!iface.connected || iface.status !== 'up' || !iface.ip) continue;
-    // Direct connection
-    if (iface.connected.device === prevDevId) return iface.ip;
-    // Connection through switch(es): check if prevDevId is reachable via this interface's connected switch
-    const connDev = devices[iface.connected.device];
-    if (connDev && connDev.type === 'switch') {
-      if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) return iface.ip;
+    if (iface.connected.device === prevDevId) {
+      candidates.push(ifName);
+    } else {
+      const connDev = devices[iface.connected.device];
+      if (connDev && connDev.type === 'switch') {
+        if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) candidates.push(ifName);
+      }
     }
   }
+  if (candidates.length > 0) return dv.interfaces[candidates[0]].ip;
   // Fallback: return first available IP
   for (const iface of Object.values(dv.interfaces)) {
     if (iface.ip && iface.status === 'up') return iface.ip;
@@ -284,7 +326,7 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
     applyNATAlongPath(devices, currentDeviceId, srcIP, targetIP);
   }
 
-  const path = buildPingPath(devices, currentDeviceId, targetIP, reachable);
+  const { path, linkHints } = buildPingPath(devices, currentDeviceId, targetIP, reachable);
 
   // Learn ARP entries along the path
   buildArpAlongPath(devices, path);
@@ -297,7 +339,10 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
     const dv = devices[path[i]];
     if (dv.type === 'switch') continue;
     const prevId = path[i - 1];
-    let hopIP = findIngressIP(devices, path[i], prevId);
+    // Find the linkHint whose toIf tells us the ingress interface on this device
+    const hint = linkHints[i - 1];
+    const ingressIfHint = hint ? hint.toIf : null;
+    let hopIP = findIngressIP(devices, path[i], prevId, ingressIfHint);
     hops.push({ deviceId: path[i], hostname: dv.hostname, ip: hopIP || '*' });
   }
   // If reachable and the last hop's ingress IP is not the target IP,
@@ -319,7 +364,7 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
   terminal.write(`Tracing route to ${targetIP} over a maximum of 30 hops:\n`);
 
   if (path.length >= 2) {
-    animateTraceroute(path, reachable, () => {
+    animateTraceroute(path, linkHints, reachable, () => {
       for (let i = 0; i < hops.length; i++) {
         const hop = hops[i];
         terminal.write(`  ${String(i + 1).padStart(2)}   <1ms  <1ms  <1ms  ${hop.ip}  (${hop.hostname})`);
@@ -371,14 +416,26 @@ export function tracePacketFlow(devices, fromId, targetIP) {
     const hop = { deviceId: curId, hostname: dv.hostname, deviceType: dv.type, ingressIf: null, decisions: [], result: 'forward' };
 
     // Find ingress interface (for step > 0)
+    // When multiple interfaces connect to the same previous device (or via the same switch),
+    // prefer the interface whose IP matches the target — this models L2/ARP-based delivery.
     if (step > 0 && prevDevId) {
+      const candidates = [];
       for (const [ifName, iface] of Object.entries(dv.interfaces)) {
         if (!iface.connected || iface.status !== 'up') continue;
-        if (iface.connected.device === prevDevId) { hop.ingressIf = ifName; break; }
-        const connDev = devices[iface.connected.device];
-        if (connDev && connDev.type === 'switch') {
-          if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) { hop.ingressIf = ifName; break; }
+        if (iface.connected.device === prevDevId) {
+          candidates.push(ifName);
+        } else {
+          const connDev = devices[iface.connected.device];
+          if (connDev && connDev.type === 'switch') {
+            if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) {
+              candidates.push(ifName);
+            }
+          }
         }
+      }
+      if (candidates.length > 0) {
+        // Prefer the interface whose IP matches the packet's target
+        hop.ingressIf = candidates.find(ifName => dv.interfaces[ifName].ip === curTargetIP) || candidates[0];
       }
       if (hop.ingressIf) {
         const inIface = dv.interfaces[hop.ingressIf];
