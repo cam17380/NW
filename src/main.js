@@ -19,6 +19,9 @@ import { DevicePalette } from './design/DevicePalette.js';
 import { InterfacePicker } from './design/InterfacePicker.js';
 import { ContextMenu } from './design/ContextMenu.js';
 import { initSplitter } from './ui/Splitter.js';
+import { initTemplateSelector, showTemplateSelector } from './ui/TemplateSelector.js';
+import { downloadCommandScript } from './persistence/ConfigExport.js';
+import { showToast } from './ui/Toast.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -144,8 +147,11 @@ window.confirmReset = confirmReset;
 window.closeConfirm = closeConfirm;
 window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
+window.showTemplates = showTemplateSelector;
+window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
 
 // ─── Setup ───
+initTemplateSelector(store, refreshUI);
 setupImport(store, refreshUI);
 renderer.setupClickHandler(switchDevice, designController, palette);
 

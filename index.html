@@ -12,13 +12,23 @@
   <h1>Network Simulator</h1>
   <div class="device-tabs" id="deviceTabs"></div>
   <div class="toolbar">
-    <button class="toolbar-btn save" onclick="saveConfig()">Save</button>
-    <button class="toolbar-btn load" onclick="loadConfig()">Load</button>
-    <button class="toolbar-btn export" onclick="exportConfig()">Export</button>
-    <button class="toolbar-btn import" onclick="importConfig()">Import</button>
-    <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
+    <div class="toolbar-dropdown">
+      <button class="toolbar-btn file">File ▾</button>
+      <div class="toolbar-dropdown-menu">
+        <button onclick="saveConfig()">Save</button>
+        <button onclick="loadConfig()">Load</button>
+        <div class="dropdown-sep"></div>
+        <button onclick="exportConfig()">Export JSON</button>
+        <button onclick="importConfig()">Import JSON</button>
+        <div class="dropdown-sep"></div>
+        <button onclick="exportScript()">Export Script</button>
+        <div class="dropdown-sep"></div>
+        <div class="dropdown-info" id="saveInfo"></div>
+      </div>
+    </div>
+    <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
     <button class="toolbar-btn design" id="designToggle">Design Mode</button>
-    <span class="save-info" id="saveInfo"></span>
+    <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
   </div>
 </header>
 <div class="toast" id="toast"></div>

@@ -36,7 +36,7 @@ export function getLinkVlanInfo(d1, if1, d2, if2) {
   return { vlans: [sp.accessVlan], isTrunk: false };
 }
 
-export function drawLink(ctx, link, devices, sx, sy) {
+export function drawLink(ctx, link, devices, sx, sy, parallelOffset = 0, parallelIndex = 0) {
   const d1 = devices[link.from];
   const d2 = devices[link.to];
   const if1 = d1.interfaces[link.fromIf];
@@ -47,8 +47,20 @@ export function drawLink(ctx, link, devices, sx, sy) {
 
   const linkInfo = getLinkVlanInfo(d1, if1, d2, if2);
 
-  const x1 = sx(d1.x), y1 = sy(d1.y);
-  const x2 = sx(d2.x), y2 = sy(d2.y);
+  const baseX1 = sx(d1.x), baseY1 = sy(d1.y);
+  const baseX2 = sx(d2.x), baseY2 = sy(d2.y);
+
+  // Compute perpendicular offset for parallel links
+  const ldx = baseX2 - baseX1;
+  const ldy = baseY2 - baseY1;
+  const llen = Math.sqrt(ldx * ldx + ldy * ldy) || 1;
+  const nx = -ldy / llen; // normal x
+  const ny = ldx / llen;  // normal y
+
+  const x1 = baseX1 + nx * parallelOffset;
+  const y1 = baseY1 + ny * parallelOffset;
+  const x2 = baseX2 + nx * parallelOffset;
+  const y2 = baseY2 + ny * parallelOffset;
 
   if (bothUp && linkInfo.isTrunk) {
     ctx.beginPath();
@@ -88,14 +100,18 @@ export function drawLink(ctx, link, devices, sx, sy) {
   }
 
   // Interface labels near each device
+  // For parallel links, shift labels along the link direction (tangent) so they don't overlap
   const dx = x2 - x1;
   const dy = y2 - y1;
   const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const tx = dx / len; // tangent (unit vector along link)
+  const ty = dy / len;
 
-  const off1x = x1 + (dx / len) * 45;
-  const off1y = y1 + (dy / len) * 45;
-  const off2x = x2 - (dx / len) * 45;
-  const off2y = y2 - (dy / len) * 45;
+  const labelDist = 50 + parallelIndex * 30; // each parallel link's labels shift further from device
+  const off1x = x1 + tx * labelDist;
+  const off1y = y1 + ty * labelDist;
+  const off2x = x2 - tx * labelDist;
+  const off2y = y2 - ty * labelDist;
 
   ctx.font = '10px Consolas, monospace';
   ctx.fillStyle = '#556';
@@ -112,10 +128,11 @@ export function drawLink(ctx, link, devices, sx, sy) {
     ctx.fillText(if2.ip, off2x - 10, off2y + 10);
   }
 
-  // VLAN label on link
+  // VLAN label on link (shift along tangent for parallel links)
   if (bothUp && linkInfo.vlans.length > 0) {
-    const mx = (x1 + x2) / 2;
-    const my = (y1 + y2) / 2;
+    const vlanShift = parallelIndex * 30;
+    const mx = (x1 + x2) / 2 + tx * vlanShift;
+    const my = (y1 + y2) / 2 + ty * vlanShift;
     const label = linkInfo.isTrunk
       ? 'Trunk'
       : 'VLAN ' + linkInfo.vlans[0];

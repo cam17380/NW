@@ -57,7 +57,11 @@ NW/
 ├── InterfacePicker.js      # Interface selection dialog
 ├── ContextMenu.js          # Right-click context menus
 ├── LocalStorage.js         # Browser storage persistence
-└── Snapshot.js             # Serialization/deserialization
+├── Snapshot.js             # Serialization/deserialization
+├── Templates.js            # Network topology template data
+├── ConfigExport.js         # CLI command script generator
+├── Splitter.js             # Panel splitter (canvas/terminal boundary)
+└── TemplateSelector.js     # Template selection UI
 ```
 
 ### 2.2 Architecture Patterns
@@ -84,7 +88,7 @@ NW/
 
 ```
 Device {
-  type: 'router' | 'switch' | 'pc' | 'firewall'
+  type: 'router' | 'switch' | 'pc' | 'firewall' | 'server'
   hostname: string
   x, y: number (canvas coordinates)
 
@@ -364,24 +368,33 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 ### 6.1 Screen Layout
 
 ```
-┌─── Header ────────────────────────────────────────────────┐
-│ Title | Device Tabs | Toolbar (Save/Load/Export/etc.)      │
-├───────────────────────────────────────────────────────────┤
-│                    │                │                      │
-│   Canvas           │  Design        │   Terminal           │
-│  (Topology         │  Palette       │                      │
-│   Diagram)         │  (in design    │   Output Area        │
-│                    │   mode)        │   Hints Panel        │
-│                    │               │   Input Prompt        │
-│                    │               │                      │
-└────────────────────┴───────────────┴──────────────────────┘
+┌─── Header ──────────────────────────────────────────────────────────┐
+│ Title | Device Tabs |    [File ▾] [Templates] [Design Mode] [Reset] │
+├─────────────────────────────────────────────────────────────────────┤
+│                    │     │       │            │                      │
+│   Canvas           │  P  │  S    │            │   Terminal           │
+│  (Topology         │  a  │  p    │            │                      │
+│   Diagram)         │  l  │  l    │            │   Output Area        │
+│                    │  e  │  i    │            │   Hints Panel        │
+│   Legend (2 rows)  │  t  │  t    │            │   Input Prompt       │
+│   ? Help           │  t  │  t    │            │                      │
+│                    │  e  │  e    │            │                      │
+│                    │     │  r    │            │                      │
+└────────────────────┴─────┴───────┴────────────┴──────────────────────┘
 ```
+
+- **Toolbar**: File dropdown menu (Save/Load/Export JSON/Import JSON/Export Script), Templates, Design Mode, Reset
+- **Splitter**: Draggable boundary between canvas and terminal (position saved in localStorage)
+- **Design Palette**: Shown on left edge when Design Mode is active
 
 ### 6.2 Canvas Display
 
-- **Device icons**: Unique shapes per device type
+- **Device icons**: Unique shapes and type-specific colors per device type
+- **Device type colors**: Router = green, Switch = orange, Firewall = red, Server = purple, PC = blue
+- **Status brightness**: Bright = all interfaces UP, dim = partial UP, dark = all DOWN
 - **Links**: Lines connecting devices, color-coded by VLAN
-- **Status colors**: Green = UP, Red = DOWN, Gray = Unconfigured, Purple = Trunk
+- **Parallel links**: Multiple links between the same device pair are offset perpendicular, with labels spread along link direction
+- **Legend (2 rows)**: Row 1 = device type colors, Row 2 = link status / trunk / VLAN info
 - **Packet animation**: Visual packet movement during ping/traceroute
 
 ### 6.3 Terminal
@@ -390,6 +403,19 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 - **Tab completion**: Auto-complete commands with Tab key
 - **Command history**: Navigate history with up/down arrow keys
 - **Command hints**: Real-time suggestions based on current input
+
+### 6.4 Template Selector
+
+Open via Templates button to choose from pre-configured network templates for instant loading.
+
+| Template | Topology | Learning Focus |
+|----------|----------|---------------|
+| Simple LAN | R1 + SW1 + PC x3 | Basic IP config, ping |
+| Multi-Subnet Routing | R x2 + SW x2 + PC x4 | Inter-subnet routing |
+| DMZ with Firewall | FW + R + SW x2 + SV x2 + PC x2 | Firewall policies, DMZ |
+| VLAN with Inter-VLAN Routing | R1 + SW1(VLAN10/20) + PC x4 | VLAN segregation, inter-VLAN routing |
+| NAT to Internet | R x2 + SW + SV + PC x2 | Dynamic NAT, ACLs |
+| Empty Canvas | None | Build from scratch |
 
 ---
 
@@ -400,17 +426,30 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 | Method | Description |
 |--------|-------------|
 | **Auto-save** | Automatically saves to browser localStorage on configuration changes |
-| **Manual save** | Saves to localStorage with timestamp |
-| **Export** | Downloads configuration as JSON file |
-| **Import** | Loads configuration from JSON file |
-| **Reset** | Restores to initial state with confirmation dialog |
+| **Manual save** | Saves to localStorage with timestamp (File > Save) |
+| **JSON Export** | Downloads configuration as JSON file (File > Export JSON) |
+| **JSON Import** | Loads configuration from JSON file (File > Import JSON) |
+| **Script Export** | Exports all device configs as executable CLI command text file (File > Export Script) |
+| **Templates** | Load from pre-configured network templates (Templates) |
+| **Reset** | Restores to initial state with confirmation dialog (Reset) |
 
 ### 7.2 Data Format
 
-JSON format containing:
+**JSON format** containing:
 - All device configurations (IP addresses, routing, NAT, ACLs, VLANs, firewall policies, etc.)
 - All link connection information
 - Device canvas positions
+
+### 7.3 Script Export Format
+
+Text file (`.txt`) with executable CLI commands for all devices in proper order:
+- Each device: `enable` → `configure terminal` → configurations → `end`
+- ACLs/NAT pools defined before interfaces (to satisfy reference order)
+- Includes VLANs, firewall policies, static routes, default gateways
+
+### 7.4 Splitter Position
+
+Canvas/terminal boundary position saved in localStorage and restored on reload.
 
 ---
 

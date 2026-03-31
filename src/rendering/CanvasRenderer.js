@@ -64,9 +64,20 @@ export class CanvasRenderer {
       ctx.restore();
     }
 
-    // Draw links
+    // Draw links — compute parallel offset for links between the same device pair
+    const pairCount = {};
+    const pairIndex = {};
     for (const link of links) {
-      drawLink(ctx, link, devices, sx, sy);
+      const key = [link.from, link.to].sort().join('::');
+      pairCount[key] = (pairCount[key] || 0) + 1;
+    }
+    for (const link of links) {
+      const key = [link.from, link.to].sort().join('::');
+      const total = pairCount[key];
+      if (!pairIndex[key]) pairIndex[key] = 0;
+      const idx = pairIndex[key]++;
+      const offset = total > 1 ? (idx - (total - 1) / 2) * 10 : 0;
+      drawLink(ctx, link, devices, sx, sy, offset, idx);
     }
 
     // Draw devices

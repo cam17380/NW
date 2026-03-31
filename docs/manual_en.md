@@ -33,26 +33,37 @@ This manual covers how to launch the network simulator and provides step-by-step
 
 Device tabs appear in the header. Click a tab to switch to that device's CLI.
 
-### 3.3 Status Colors
+### 3.3 Device Type Colors
 
-| Color | Meaning |
-|-------|---------|
-| Green | Interface UP |
-| Red | Interface DOWN |
-| Gray | Unconfigured |
-| Purple | Trunk link |
+Each device type has a unique color. Status is indicated by brightness.
 
-### 3.4 Toolbar Buttons
+| Device | Color |
+|--------|-------|
+| Router | Green |
+| Switch | Orange |
+| Firewall | Red |
+| Server | Purple |
+| PC | Blue |
+
+| Brightness | Meaning |
+|------------|---------|
+| Bright | All interfaces UP |
+| Dim | Some UP |
+| Dark | All DOWN |
+
+### 3.4 Toolbar
 
 | Button | Function |
 |--------|----------|
-| **Save** | Save current configuration to browser storage |
-| **Load** | Load saved configuration |
-| **Export** | Download configuration as JSON file |
-| **Import** | Load configuration from JSON file |
-| **Reset** | Reset to initial state |
+| **File ▾** | Dropdown menu (Save/Load/Export JSON/Import JSON/Export Script) |
+| **Templates** | Open template selection screen |
 | **Design Mode** | Toggle design mode |
-| **Help** | Show command reference |
+| **Reset** | Reset to initial state |
+| **? Help** | Show command reference (bottom-left of canvas) |
+
+### 3.5 Splitter
+
+Drag the boundary between canvas and terminal to adjust panel widths. Position is saved in the browser and restored on reload.
 
 ---
 
@@ -64,9 +75,9 @@ Click the "Design Mode" button in the toolbar. A device palette appears on the l
 
 ### 4.2 Adding Devices
 
-1. Drag a device (Router, Switch, Firewall, PC) from the palette
+1. Drag a device (Router, Switch, Firewall, Server, PC) from the palette
 2. Drop it anywhere on the canvas
-3. A name is automatically assigned (R1, SW1, FW1, PC1, etc.)
+3. A name is automatically assigned (R1, SW1, FW1, SV1, PC1, etc.)
 
 ### 4.3 Moving Devices
 
@@ -439,27 +450,63 @@ Router# show packet-flow 10.0.0.1
 
 ## 12. Saving and Loading Configurations
 
+All file operations are accessed from the "**File ▾**" dropdown menu in the toolbar.
+
 ### 12.1 Manual Save
 
-Click the "Save" button in the toolbar to save all current configurations to the browser's localStorage.
+Click "File ▾" > "Save" to save all current configurations to the browser's localStorage.
 
 ### 12.2 Manual Load
 
-Click the "Load" button to restore the last saved configuration.
+Click "File ▾" > "Load" to restore the last saved configuration.
 
 ### 12.3 JSON Export
 
-1. Click the "Export" button in the toolbar
+1. Click "File ▾" > "Export JSON"
 2. A JSON configuration file is automatically downloaded
 3. Keep this file as a backup or for use in other environments
 
 ### 12.4 JSON Import
 
-1. Click the "Import" button in the toolbar
+1. Click "File ▾" > "Import JSON"
 2. Select a JSON file in the file dialog
 3. The configuration is loaded and the topology is restored
 
-### 12.5 Reset
+### 12.5 Command Script Export
+
+1. Click "File ▾" > "Export Script"
+2. A text file with CLI commands for all devices is downloaded
+3. The commands can be used directly on real equipment or test environments
+
+Example output:
+```
+! Device: Router1 (ROUTER) [R1]
+enable
+configure terminal
+hostname Router1
+interface GigabitEthernet0/0
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+ exit
+ip route 10.0.0.0 255.255.255.0 192.168.2.2
+end
+```
+
+### 12.6 Loading from Templates
+
+1. Click the "Templates" button in the toolbar
+2. A template selection screen appears
+3. Click a template to load it instantly (pre-configured with IPs, ready for testing)
+
+Available templates:
+- **Simple LAN** — R1 + SW1 + PC x3
+- **Multi-Subnet Routing** — R x2 + SW x2 + PC x4
+- **DMZ with Firewall** — FW + R + SW x2 + SV x2 + PC x2
+- **VLAN with Inter-VLAN Routing** — R1 + SW1(VLAN10/20) + PC x4
+- **NAT to Internet** — R x2 + SW + SV + PC x2
+- **Empty Canvas** — Start from scratch
+
+### 12.7 Reset
 
 1. Click the "Reset" button in the toolbar
 2. A confirmation dialog appears
