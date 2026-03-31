@@ -70,7 +70,15 @@ function refreshUI() {
 
 // Set CLIEngine callbacks
 cli.setExecPing((targetIP) => {
-  execPing(targetIP, store, terminal, (path, linkHints, success, onComplete) => renderer.animatePing(path, linkHints, success, onComplete));
+  execPing(targetIP, store, terminal, (path, linkHints, success, arpResolutions, onComplete) => {
+    if (arpResolutions && arpResolutions.length > 0) {
+      renderer.animateArpSequence(arpResolutions, () => {
+        renderer.animatePing(path, linkHints, success, onComplete);
+      });
+    } else {
+      renderer.animatePing(path, linkHints, success, onComplete);
+    }
+  });
 });
 cli.setExecTraceroute((targetIP) => {
   execTraceroute(targetIP, store, terminal, (path, linkHints, success, onComplete) => renderer.animateTraceroute(path, linkHints, success, onComplete));

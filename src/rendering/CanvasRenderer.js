@@ -533,6 +533,187 @@ export class CanvasRenderer {
     requestAnimationFrame(frame);
   }
 
+  // ─── ARP animation ───
+  animateArpSequence(arpResolutions, onComplete) {
+    if (!arpResolutions || arpResolutions.length === 0) { onComplete(); return; }
+
+    this.pingAnimId++;
+    this.pingAnimRunning = true;
+    const myId = this.pingAnimId;
+    const self = this;
+    const devices = this.store.getDevices();
+    const links = this.store.getLinks();
+    const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dpr;
+    const sx = v => v * (w / 800), sy = v => v * (h / 560);
+    const ctx = this.ctx;
+
+    function getCenter(devId) {
+      const dv = devices[devId];
+      return dv ? { x: sx(dv.x), y: sy(dv.y) } : { x: 0, y: 0 };
+    }
+
+    // Precompute edge points for a pair (reuse link offset logic)
+    function edgePt(fromId, toId) {
+      const d1 = devices[fromId], d2 = devices[toId];
+      if (!d1 || !d2) return { from: { x: 0, y: 0 }, to: { x: 0, y: 0 } };
+      const bx1 = sx(d1.x), by1 = sy(d1.y), bx2 = sx(d2.x), by2 = sy(d2.y);
+      // Find link between them for parallel offset
+      const pairCount = {};
+      for (const l of links) { const k = [l.from, l.to].sort().join('::'); pairCount[k] = (pairCount[k] || 0) + 1; }
+      const pairIdx = {};
+      let matchOffset = 0;
+      const sk = [fromId, toId].sort().join('::');
+      for (const l of links) {
+        const k = [l.from, l.to].sort().join('::');
+        if (!pairIdx[k]) pairIdx[k] = 0;
+        const idx = pairIdx[k]++;
+        if (k === sk && ((l.from === fromId && l.to === toId) || (l.to === fromId && l.from === toId))) {
+          const total = pairCount[k];
+          matchOffset = total > 1 ? (idx - (total - 1) / 2) * 20 : 0;
+          break;
+        }
+      }
+      const sIds = [fromId, toId].sort();
+      const dA = devices[sIds[0]], dB = devices[sIds[1]];
+      const ldx = sx(dB.x) - sx(dA.x), ldy = sy(dB.y) - sy(dA.y);
+      const llen = Math.sqrt(ldx * ldx + ldy * ldy) || 1;
+      const nx = -ldy / llen, ny = ldx / llen;
+      return {
+        from: getDeviceEdgePoint(d1.type, bx1, by1, bx2, by2, nx, ny, matchOffset),
+        to: getDeviceEdgePoint(d2.type, bx2, by2, bx1, by1, nx, ny, matchOffset)
+      };
+    }
+
+    let resIdx = 0;
+
+    function animateOneResolution() {
+      if (myId !== self.pingAnimId || resIdx >= arpResolutions.length) {
+        self.pingAnimRunning = false;
+        self.draw();
+        onComplete();
+        return;
+      }
+      const res = arpResolutions[resIdx];
+      resIdx++;
+
+      // Phase 1: Request from requester → switch (or directly to target if no switch)
+      // Phase 2: Broadcast flood from switch to all L2 devices simultaneously
+      // Phase 3: Reply from target back to requester
+
+      const hasSwitch = res.switchPath.length > 0;
+      const reqToSwPts = hasSwitch
+        ? edgePt(res.requesterId, res.switchPath[0])
+        : edgePt(res.requesterId, res.targetId);
+
+      // Build broadcast fan-out endpoints (from switch to each device)
+      const floodPts = hasSwitch ? res.broadcastTargets.map(bt => ({
+        ...bt,
+        pts: edgePt(bt.viaSwitch || res.switchPath[0], bt.deviceId),
+        isTarget: bt.deviceId === res.targetId
+      })) : [];
+
+      // Reply path: target → switch → requester
+      const replyPts = hasSwitch
+        ? [edgePt(res.targetId, res.switchPath[0]), edgePt(res.switchPath[0], res.requesterId)]
+        : [edgePt(res.targetId, res.requesterId)];
+
+      const P1_DUR = 200, P2_DUR = 300, P2_HOLD = 200, P3_DUR = 200, GAP = 100;
+      const totalDur = P1_DUR + (hasSwitch ? P2_DUR + P2_HOLD : 0) + P3_DUR + GAP;
+      let startTime = -1;
+
+      function frame(now) {
+        if (myId !== self.pingAnimId || !self.pingAnimRunning) return;
+        if (startTime < 0) startTime = now;
+        const el = now - startTime;
+
+        if (el > totalDur) { animateOneResolution(); return; }
+
+        try {
+          self.draw();
+
+          // Draw ARP label
+          const labelText = `ARP: Who has ${res.targetIP}?`;
+
+          if (el < P1_DUR) {
+            // Phase 1: requester → switch/target
+            const t = el / P1_DUR;
+            const from = reqToSwPts.from, to = reqToSwPts.to;
+            const px = from.x + (to.x - from.x) * t;
+            const py = from.y + (to.y - from.y) * t;
+            drawArpParticle(ctx, px, py, '#ffd740', 1.0);
+            drawArpLabel(ctx, px, py - 20, labelText, 1.0);
+          } else if (hasSwitch && el < P1_DUR + P2_DUR) {
+            // Phase 2: broadcast flood from switch to all L2 devices
+            const t = (el - P1_DUR) / P2_DUR;
+            for (const fp of floodPts) {
+              const from = fp.pts.from, to = fp.pts.to;
+              const px = from.x + (to.x - from.x) * t;
+              const py = from.y + (to.y - from.y) * t;
+              drawArpParticle(ctx, px, py, '#ffd740', 0.8);
+            }
+            // Small label near the switch
+            const swC = getCenter(res.switchPath[0]);
+            drawArpLabel(ctx, swC.x, swC.y - 30, labelText, Math.max(0, 1 - t));
+          } else if (hasSwitch && el < P1_DUR + P2_DUR + P2_HOLD) {
+            // Phase 2 hold: show hit/miss indicators at each target
+            const holdT = (el - P1_DUR - P2_DUR) / P2_HOLD;
+            for (const fp of floodPts) {
+              const to = fp.pts.to;
+              if (fp.isTarget) {
+                // Hit: green check
+                drawArpHitMiss(ctx, to.x, to.y, true, 1 - holdT * 0.5);
+              } else {
+                // Miss: fade out
+                drawArpHitMiss(ctx, to.x, to.y, false, Math.max(0, 1 - holdT * 2));
+              }
+            }
+          } else {
+            // Phase 3: reply from target → requester
+            const p3Start = P1_DUR + (hasSwitch ? P2_DUR + P2_HOLD : 0);
+            const t = Math.min((el - p3Start) / P3_DUR, 1);
+            const replyLabel = `ARP Reply: ${res.targetIP} is at ${res.targetMAC}`;
+
+            if (replyPts.length === 1) {
+              const from = replyPts[0].from, to = replyPts[0].to;
+              const px = from.x + (to.x - from.x) * t;
+              const py = from.y + (to.y - from.y) * t;
+              drawArpParticle(ctx, px, py, '#ffab40', 1.0);
+              drawArpLabel(ctx, px, py - 20, replyLabel, 1.0);
+            } else {
+              // Two segments: target→switch, switch→requester
+              const segT = t * 2; // spread t across two segments
+              if (segT < 1) {
+                const from = replyPts[0].from, to = replyPts[0].to;
+                const px = from.x + (to.x - from.x) * segT;
+                const py = from.y + (to.y - from.y) * segT;
+                drawArpParticle(ctx, px, py, '#ffab40', 1.0);
+                drawArpLabel(ctx, px, py - 20, replyLabel, 1.0);
+              } else {
+                const from = replyPts[1].from, to = replyPts[1].to;
+                const st = segT - 1;
+                const px = from.x + (to.x - from.x) * st;
+                const py = from.y + (to.y - from.y) * st;
+                drawArpParticle(ctx, px, py, '#ffab40', 1.0);
+                drawArpLabel(ctx, px, py - 20, replyLabel, 1.0);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('ARP animation error:', e);
+          self.pingAnimRunning = false;
+          self.draw();
+          onComplete();
+          return;
+        }
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    animateOneResolution();
+  }
+
   // ─── Canvas click handling ───
   setupClickHandler(switchDevice, designController, palette) {
     this.canvas.addEventListener('click', async (e) => {
@@ -606,6 +787,82 @@ function drawPingTrail(ctx, segments, curIdx, curT) {
     } else {
       ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y);
     }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ─── ARP drawing helpers ───
+
+function drawArpParticle(ctx, x, y, color, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+  // Glow
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, 16);
+  grad.addColorStop(0, color);
+  grad.addColorStop(0.5, color + '44');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, 16, 0, Math.PI * 2);
+  ctx.fill();
+  // Diamond shape
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 6);
+  ctx.lineTo(x + 5, y);
+  ctx.lineTo(x, y + 6);
+  ctx.lineTo(x - 5, y);
+  ctx.closePath();
+  ctx.fill();
+  // White center
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.moveTo(x, y - 2.5);
+  ctx.lineTo(x + 2, y);
+  ctx.lineTo(x, y + 2.5);
+  ctx.lineTo(x - 2, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawArpLabel(ctx, x, y, text, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 9px Consolas, monospace';
+  const tw = ctx.measureText(text).width;
+  // Background pill
+  ctx.fillStyle = '#0d1117dd';
+  ctx.beginPath();
+  ctx.roundRect(x - tw / 2 - 5, y - 8, tw + 10, 16, 4);
+  ctx.fill();
+  // Text
+  ctx.fillStyle = '#ffd740';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y + 3);
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+function drawArpHitMiss(ctx, x, y, isHit, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 2.5;
+  if (isHit) {
+    // Green checkmark
+    ctx.strokeStyle = '#69f0ae';
+    ctx.beginPath();
+    ctx.moveTo(x - 7, y); ctx.lineTo(x - 2, y + 5); ctx.lineTo(x + 7, y - 5);
+    ctx.stroke();
+  } else {
+    // Red X
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5);
+    ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5);
     ctx.stroke();
   }
   ctx.restore();

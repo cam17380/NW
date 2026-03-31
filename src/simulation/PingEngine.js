@@ -27,11 +27,21 @@ export function execPing(targetIP, store, terminal, animatePing) {
 
   const { path, linkHints } = buildPingPath(devices, currentDeviceId, targetIP, reachable);
 
+  // Compute ARP resolutions needed BEFORE populating tables
+  const arpResolutions = reachable ? computeArpResolutions(devices, path, linkHints) : [];
+
+  // Show ARP resolution messages in terminal
+  for (const arp of arpResolutions) {
+    const reqDev = devices[arp.requesterId];
+    terminal.write(`ARP: ${reqDev.hostname} — Who has ${arp.targetIP}? Tell ${arp.requesterIP}`, 'info-line');
+    terminal.write(`ARP: ${arp.targetIP} is at ${arp.targetMAC}`, 'info-line');
+  }
+
   // Learn ARP entries along the path
   buildArpAlongPath(devices, path);
 
   if (path.length >= 2) {
-    animatePing(path, linkHints, reachable, () => {
+    animatePing(path, linkHints, reachable, arpResolutions, () => {
       if (reachable) {
         terminal.write('!!!!!', 'success-line');
         terminal.write(`Success rate is 100 percent (5/5)`, 'success-line');
@@ -628,6 +638,131 @@ export function tracePacketFlow(devices, fromId, targetIP) {
   }
 
   return { hops, reachable: false };
+}
+
+// ─── ARP resolution computation (for visualization) ───
+
+// Get all devices on the same L2 broadcast domain reachable from a switch
+function getL2BroadcastDomain(devices, switchId, excludeDeviceId) {
+  const result = [];
+  const visitedSwitches = new Set([switchId]);
+  const queue = [switchId];
+  while (queue.length > 0) {
+    const curSwId = queue.shift();
+    const sw = devices[curSwId];
+    for (const [ifName, iface] of Object.entries(sw.interfaces)) {
+      if (!iface.connected || iface.status !== 'up') continue;
+      const connId = iface.connected.device;
+      if (connId === excludeDeviceId) continue;
+      const connDev = devices[connId];
+      if (!connDev) continue;
+      if (connDev.type === 'switch') {
+        if (!visitedSwitches.has(connId)) {
+          visitedSwitches.add(connId);
+          queue.push(connId);
+        }
+      } else {
+        // Non-switch device on this L2 segment
+        if (!result.find(r => r.deviceId === connId)) {
+          result.push({ deviceId: connId, viaSwitch: curSwId, switchIf: ifName, deviceIf: iface.connected.iface });
+        }
+      }
+    }
+  }
+  return result;
+}
+
+// Compute ARP resolutions needed along a ping path (before ARP table is populated)
+export function computeArpResolutions(devices, path, linkHints) {
+  const resolutions = [];
+
+  for (let i = 0; i < path.length; i++) {
+    const dv = devices[path[i]];
+    if (dv.type === 'switch') continue;
+
+    // Look at the next L3 device in the forward direction
+    let j = i + 1;
+    while (j < path.length && devices[path[j]].type === 'switch') j++;
+    if (j >= path.length) continue;
+    const peer = devices[path[j]];
+    if (peer.type === 'switch') continue;
+
+    // Find the egress interface on dv toward peer (using linkHints if available)
+    let egressIfName = null;
+    let egressIface = null;
+    const hint = linkHints[i];
+    if (hint && hint.fromIf && dv.interfaces[hint.fromIf]) {
+      egressIfName = hint.fromIf;
+      egressIface = dv.interfaces[hint.fromIf];
+    } else {
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!iface.connected || iface.status !== 'up' || !iface.ip) continue;
+        const connDev = devices[iface.connected.device];
+        let reaches = iface.connected.device === path[j];
+        if (!reaches && connDev && connDev.type === 'switch') {
+          reaches = isReachableViaSwitch(devices, iface.connected.device, path[j]);
+        }
+        if (reaches) { egressIfName = ifName; egressIface = iface; break; }
+      }
+    }
+    if (!egressIfName || !egressIface) continue;
+
+    // Find peer's ingress interface IP (the IP we need to ARP for)
+    // Use linkHint for the segment arriving at peer
+    let peerIfName = null;
+    let peerIface = null;
+    const peerHint = linkHints[j - 1];
+    if (peerHint && peerHint.toIf && peer.interfaces[peerHint.toIf]) {
+      peerIfName = peerHint.toIf;
+      peerIface = peer.interfaces[peerIfName];
+    } else {
+      for (const [pifName, pif] of Object.entries(peer.interfaces)) {
+        if (!pif.ip || pif.status !== 'up' || !pif.connected) continue;
+        let connects = pif.connected.device === path[i];
+        if (!connects) {
+          const pc = devices[pif.connected.device];
+          if (pc && pc.type === 'switch') connects = isReachableViaSwitch(devices, pif.connected.device, path[i]);
+        }
+        if (connects && getNetwork(egressIface.ip, egressIface.mask) === getNetwork(pif.ip, pif.mask)) {
+          peerIfName = pifName; peerIface = pif; break;
+        }
+      }
+    }
+    if (!peerIfName || !peerIface || !peerIface.ip) continue;
+
+    const targetIP = peerIface.ip;
+
+    // Check if ARP entry already exists
+    if (dv.arpTable && dv.arpTable.find(e => e.ip === targetIP && e.iface === egressIfName)) continue;
+
+    // Build the ARP resolution data
+    const resolution = {
+      requesterId: path[i],
+      requesterIf: egressIfName,
+      requesterIP: egressIface.ip,
+      targetIP: targetIP,
+      targetId: path[j],
+      targetIf: peerIfName,
+      targetMAC: generateMAC(path[j], peerIfName),
+      // Broadcast domain info
+      broadcastTargets: [],  // all L2 devices that receive the broadcast
+      switchPath: [],        // switches between requester and the L2 segment
+    };
+
+    // Determine if there's a switch between requester and peer
+    const connDev = devices[egressIface.connected.device];
+    if (connDev && connDev.type === 'switch') {
+      const switchId = egressIface.connected.device;
+      resolution.switchPath = [switchId];
+      resolution.broadcastTargets = getL2BroadcastDomain(devices, switchId, path[i]);
+    } else {
+      // Direct connection (point-to-point) — only the peer receives
+      resolution.broadcastTargets = [{ deviceId: path[j], viaSwitch: null, switchIf: null, deviceIf: peerIfName }];
+    }
+
+    resolutions.push(resolution);
+  }
+  return resolutions;
 }
 
 // ─── ARP table building ───
