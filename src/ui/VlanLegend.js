@@ -11,16 +11,17 @@ export function updateVlanLegend(store) {
       }
     }
   }
-  const legend = document.getElementById('legendArea');
-  legend.querySelectorAll('.vlan-legend').forEach(el => el.remove());
+  const row = document.getElementById('legendRowLinks');
+  if (!row) return;
+  row.querySelectorAll('.vlan-legend').forEach(el => el.remove());
   for (const [vid, name] of usedVlans) {
     const item = document.createElement('div');
     item.className = 'legend-item vlan-legend';
-    const dot = document.createElement('div');
-    dot.className = 'legend-dot';
-    dot.style.background = getVlanColor(vid);
-    item.appendChild(dot);
+    const line = document.createElement('div');
+    line.className = 'legend-line';
+    line.style.background = getVlanColor(vid);
+    item.appendChild(line);
     item.appendChild(document.createTextNode(` VLAN${vid} (${name})`));
-    legend.appendChild(item);
+    row.appendChild(item);
   }
 }

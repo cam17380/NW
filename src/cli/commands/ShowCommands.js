@@ -43,13 +43,51 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'show access-lists' || lower === 'show ip access-lists') {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ACLs are not available on this device', 'error-line'); return; }
+    if (!dev.accessLists || Object.keys(dev.accessLists).length === 0) {
+      termWrite('  (no access lists configured)');
+      return;
+    }
+    for (const [num, entries] of Object.entries(dev.accessLists).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))) {
+      const aclType = parseInt(num) <= 99 ? 'Standard' : 'Extended';
+      termWrite(`${aclType} IP access list ${num}`);
+      for (const entry of entries) {
+        if (entry.protocol) {
+          // Extended ACL entry
+          const srcStr = entry.src === 'any' ? 'any' : (entry.srcWildcard === '0.0.0.0' ? `host ${entry.src}` : `${entry.src} ${entry.srcWildcard}`);
+          const dstStr = entry.dst === 'any' ? 'any' : (entry.dstWildcard === '0.0.0.0' ? `host ${entry.dst}` : `${entry.dst} ${entry.dstWildcard}`);
+          const portStr = entry.port ? ` eq ${entry.port}` : '';
+          termWrite(`    ${entry.action} ${entry.protocol} ${srcStr} ${dstStr}${portStr}`);
+        } else {
+          // Standard ACL entry
+          const srcStr = entry.wildcard === '0.0.0.0' ? `host ${entry.network}` : `${entry.network} ${entry.wildcard}`;
+          termWrite(`    ${entry.action} ${srcStr}`);
+        }
+      }
+    }
+    // Show interface applications
+    let hasApp = false;
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (!iface.accessGroup) continue;
+      if (iface.accessGroup.in) {
+        if (!hasApp) { termWrite(''); hasApp = true; }
+        termWrite(`  ACL ${iface.accessGroup.in} applied inbound on ${ifName}`);
+      }
+      if (iface.accessGroup.out) {
+        if (!hasApp) { termWrite(''); hasApp = true; }
+        termWrite(`  ACL ${iface.accessGroup.out} applied outbound on ${ifName}`);
+      }
+    }
+    return;
+  }
+
   if (lower === 'show ip route') {
     if (dev.type === 'switch') { termWrite('% Routing table is not available on switches', 'error-line'); return; }
     termWrite('Codes: C - connected, S - static, * - candidate default\n');
-    termWrite('Gateway of last resort is ' +
-      (dev.type === 'pc' ? (dev.defaultGateway || 'not set') :
-       (dev.routes.find(r => r.network === '0.0.0.0') ? dev.routes.find(r => r.network === '0.0.0.0').nextHop : 'not set'))
-    );
+    const defaultRoute = dev.routes ? dev.routes.find(r => r.network === '0.0.0.0') : null;
+    const gwLastResort = defaultRoute ? defaultRoute.nextHop : (dev.defaultGateway || 'not set');
+    termWrite('Gateway of last resort is ' + gwLastResort);
     termWrite('');
 
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
@@ -69,7 +107,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       }
     }
 
-    if (dev.type === 'pc' && dev.defaultGateway) {
+    if ((dev.type === 'pc' || dev.type === 'server') && dev.defaultGateway) {
       termWrite(`S*   0.0.0.0/0 via ${dev.defaultGateway}`);
     }
     return;
@@ -208,6 +246,10 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         }
       }
       if (iface.natRole) termWrite(` ip nat ${iface.natRole}`);
+      if (iface.accessGroup) {
+        if (iface.accessGroup.in) termWrite(` ip access-group ${iface.accessGroup.in} in`);
+        if (iface.accessGroup.out) termWrite(` ip access-group ${iface.accessGroup.out} out`);
+      }
       if (iface.status === 'down') termWrite(' shutdown');
       else termWrite(' no shutdown');
       termWrite('!');
@@ -216,7 +258,16 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     if (dev.accessLists) {
       for (const [num, entries] of Object.entries(dev.accessLists)) {
         for (const entry of entries) {
-          termWrite(`access-list ${num} ${entry.action} ${entry.network} ${entry.wildcard}`);
+          if (entry.protocol) {
+            // Extended ACL entry
+            const srcStr = entry.src === 'any' ? 'any' : (entry.srcWildcard === '0.0.0.0' ? `host ${entry.src}` : `${entry.src} ${entry.srcWildcard}`);
+            const dstStr = entry.dst === 'any' ? 'any' : (entry.dstWildcard === '0.0.0.0' ? `host ${entry.dst}` : `${entry.dst} ${entry.dstWildcard}`);
+            const portStr = entry.port ? ` eq ${entry.port}` : '';
+            termWrite(`access-list ${num} ${entry.action} ${entry.protocol} ${srcStr} ${dstStr}${portStr}`);
+          } else {
+            // Standard ACL entry
+            termWrite(`access-list ${num} ${entry.action} ${entry.network} ${entry.wildcard}`);
+          }
         }
       }
     }
@@ -250,7 +301,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       }
       termWrite('!');
     }
-    if (dev.type === 'pc' && dev.defaultGateway) {
+    if ((dev.type === 'pc' || dev.type === 'server') && dev.defaultGateway) {
       termWrite(`ip default-gateway ${dev.defaultGateway}`);
       termWrite('!');
     }
@@ -319,9 +370,11 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         const prefix = d.type === 'error' ? '  ✗ ' :
                        d.type === 'forward' ? '  └ ' :
                        d.type === 'firewall' ? '  ├ ' :
+                       d.type === 'acl' ? '  ├ ' :
                        d.type === 'l2-switch' ? '  ~ ' : '  ├ ';
         const cls = d.type === 'error' ? 'error-line' :
                     d.type === 'firewall' && d.text.includes('DENY') ? 'error-line' :
+                    d.type === 'acl' && d.text.includes('DENY') ? 'error-line' :
                     d.type === 'forward' ? 'success-line' :
                     d.type === 'local-check' && d.text.includes('REACHED') ? 'success-line' : '';
         termWrite(`${prefix}${d.text}`, cls);

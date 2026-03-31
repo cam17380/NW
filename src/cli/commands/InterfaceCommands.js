@@ -88,6 +88,32 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     return;
   }
 
+  // ── ACL on interface (router/firewall only) ──
+  if (lower.startsWith('ip access-group')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip access-group is only available on routers/firewalls', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: ip access-group <acl-num> in|out', 'error-line'); return; }
+    const aclNum = parseInt(args[2]);
+    if (isNaN(aclNum) || aclNum < 1 || aclNum > 199) { termWrite('% Invalid ACL number (1-199)', 'error-line'); return; }
+    const dir = args[3].toLowerCase();
+    if (dir !== 'in' && dir !== 'out') { termWrite('% Direction must be "in" or "out"', 'error-line'); return; }
+    if (!dev.accessLists[aclNum]) { termWrite(`% ACL ${aclNum} does not exist — define it first with: access-list ${aclNum} ...`, 'error-line'); return; }
+    if (!iface.accessGroup) iface.accessGroup = { in: null, out: null };
+    iface.accessGroup[dir] = aclNum;
+    termWrite(`% ACL ${aclNum} applied ${dir}bound on ${currentInterface}`, 'success-line');
+    return;
+  }
+  if (lower.startsWith('no ip access-group')) {
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Usage: no ip access-group <acl-num> in|out', 'error-line'); return; }
+    const aclNum = parseInt(args[3]);
+    const dir = (args[4] || '').toLowerCase();
+    if (dir !== 'in' && dir !== 'out') { termWrite('% Direction must be "in" or "out"', 'error-line'); return; }
+    if (iface.accessGroup) iface.accessGroup[dir] = null;
+    termWrite(`% ACL removed from ${currentInterface} ${dir}bound`, 'success-line');
+    return;
+  }
+
   // ── NAT interface role (router only) ──
   if (lower === 'ip nat inside') {
     if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }

@@ -25,9 +25,11 @@ header h1 { font-size: 16px; color: #4fc3f7; font-weight: 600; }
 .device-tab:hover { background: #223344; color: #aabbcc; }
 .device-tab.active { background: #1a3a5c; border-color: #4fc3f7; color: #4fc3f7; }
 .main-container { display: flex; flex: 1; overflow: hidden; }
-.diagram-panel { flex: 1; position: relative; background: #0d1117; border-right: 1px solid #1e2a3a; }
+.diagram-panel { flex: 1; min-width: 0; overflow: hidden; position: relative; background: #0d1117; }
 canvas { display: block; width: 100%; height: 100%; }
-.terminal-panel { width: 540px; display: flex; flex-direction: column; background: #0c0c0c; }
+.splitter { width: 5px; cursor: col-resize; background: #1e2a3a; flex-shrink: 0; transition: background 0.15s; z-index: 10; }
+.splitter:hover, .splitter.active { background: #4fc3f7; }
+.terminal-panel { width: 540px; flex-shrink: 0; display: flex; flex-direction: column; background: #0c0c0c; }
 .terminal-header {
   padding: 6px 12px; background: #1a1a2e; border-bottom: 1px solid #2a2a3e;
   font-size: 11px; color: #888; display: flex; justify-content: space-between;
@@ -75,9 +77,10 @@ canvas { display: block; width: 100%; height: 100%; }
 }
 .help-close:hover { background: #333; color: #fff; }
 .legend {
-  position: absolute; top: 8px; left: 12px; display: flex; gap: 14px; flex-wrap: wrap;
+  position: absolute; top: 8px; left: 12px; display: flex; flex-direction: column; gap: 4px;
   font-size: 11px; color: #667; z-index: 5;
 }
+.legend-row { display: flex; gap: 14px; align-items: center; }
 .legend-item { display: flex; align-items: center; gap: 4px; }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 .legend-line { width: 18px; height: 3px; border-radius: 2px; }
@@ -196,9 +199,10 @@ canvas { display: block; width: 100%; height: 100%; }
   border: 2px solid #2a3a4a; background: #1a2332;
 }
 .palette-icon-router { border-color: #69f0ae; color: #69f0ae; border-radius: 50%; }
-.palette-icon-switch { border-color: #4fc3f7; color: #4fc3f7; border-radius: 6px; }
+.palette-icon-switch { border-color: #ffa726; color: #ffa726; border-radius: 6px; }
 .palette-icon-firewall { border-color: #ef5350; color: #ef5350; border-radius: 4px; font-size: 11px; }
-.palette-icon-pc { border-color: #ffa726; color: #ffa726; border-radius: 4px; }
+.palette-icon-server { border-color: #7e57c2; color: #7e57c2; border-radius: 4px; font-size: 11px; }
+.palette-icon-pc { border-color: #4fc3f7; color: #4fc3f7; border-radius: 4px; }
 .palette-icon-link { border-color: #ab47bc; color: #ab47bc; font-size: 18px; }
 .palette-label { font-size: 10px; color: #8899aa; }
 .palette-separator {

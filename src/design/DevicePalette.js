@@ -32,6 +32,7 @@ export class DevicePalette {
       { type: 'router', label: 'Router', icon: 'R' },
       { type: 'switch', label: 'Switch', icon: 'S' },
       { type: 'firewall', label: 'Firewall', icon: 'FW' },
+      { type: 'server', label: 'Server', icon: 'SV' },
       { type: 'pc', label: 'PC', icon: 'PC' },
     ];
 

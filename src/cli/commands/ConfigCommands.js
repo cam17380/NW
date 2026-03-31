@@ -25,9 +25,9 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
-  // ip route <network> <mask> <next-hop> — router/firewall only
+  // ip route <network> <mask> <next-hop> — router/firewall/server
   if (lower.startsWith('ip route ')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip route is only available on routers/firewalls', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server') { termWrite('% ip route is only available on routers/firewalls/servers', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[2], mask = args[3], nextHop = args[4];
@@ -44,7 +44,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip route <network> <mask> <next-hop>
   if (lower.startsWith('no ip route')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip route is only available on routers/firewalls', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server') { termWrite('% ip route is only available on routers/firewalls/servers', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 6) { termWrite('% Incomplete command — usage: no ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[3], mask = args[4], nextHop = args[5];
@@ -55,9 +55,9 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
-  // ip default-gateway <ip> — PC only
+  // ip default-gateway <ip> — PC/Server
   if (lower.startsWith('ip default-gateway')) {
-    if (dev.type !== 'pc') { termWrite('% ip default-gateway is for PCs. On routers, use: ip route 0.0.0.0 0.0.0.0 <next-hop>', 'error-line'); return; }
+    if (dev.type !== 'pc' && dev.type !== 'server') { termWrite('% ip default-gateway is for PCs/servers. On routers, use: ip route 0.0.0.0 0.0.0.0 <next-hop>', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 3) { termWrite('% Incomplete command — usage: ip default-gateway <ip>', 'error-line'); return; }
     if (!isValidIP(args[2])) { termWrite('% Invalid IP address', 'error-line'); return; }
@@ -190,21 +190,87 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
-  // access-list <num> permit <network> <wildcard>
+  // access-list <num> permit|deny ...
+  // Standard ACL (1-99):   access-list <num> permit|deny <network> [wildcard]
+  // Extended ACL (100-199): access-list <num> permit|deny <proto> <src> <srcWC> <dst> <dstWC> [eq <port>]
+  //                         supports "any" and "host <ip>" keywords for src/dst
   if (cmd === 'access-list') {
     if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% access-list is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
-    if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit <network> <wildcard>', 'error-line'); return; }
+    if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit|deny ...', 'error-line'); return; }
     const aclNum = parseInt(args[1]);
-    if (isNaN(aclNum) || aclNum < 1 || aclNum > 99) { termWrite('% Invalid ACL number (1-99 for standard)', 'error-line'); return; }
+    if (isNaN(aclNum) || aclNum < 1 || aclNum > 199) { termWrite('% Invalid ACL number (1-99 standard, 100-199 extended)', 'error-line'); return; }
     const action = args[2].toLowerCase();
     if (action !== 'permit' && action !== 'deny') { termWrite('% Invalid action — use "permit" or "deny"', 'error-line'); return; }
-    const network = args[3];
-    const wildcard = args.length >= 5 ? args[4] : '0.0.0.0';
-    if (!isValidIP(network) || !isValidIP(wildcard)) { termWrite('% Invalid IP address or wildcard', 'error-line'); return; }
-    if (!dev.accessLists[aclNum]) dev.accessLists[aclNum] = [];
-    dev.accessLists[aclNum].push({ action, network, wildcard });
-    termWrite(`% ACL ${aclNum}: ${action} ${network} ${wildcard}`, 'success-line');
+
+    if (aclNum <= 99) {
+      // Standard ACL: access-list <num> permit|deny <network> [wildcard]
+      const network = args[3];
+      const wildcard = args.length >= 5 ? args[4] : '0.0.0.0';
+      if (!isValidIP(network) || !isValidIP(wildcard)) { termWrite('% Invalid IP address or wildcard', 'error-line'); return; }
+      if (!dev.accessLists[aclNum]) dev.accessLists[aclNum] = [];
+      dev.accessLists[aclNum].push({ action, network, wildcard });
+      termWrite(`% ACL ${aclNum}: ${action} ${network} ${wildcard}`, 'success-line');
+    } else {
+      // Extended ACL: access-list <num> permit|deny <proto> <src> <srcWC> <dst> <dstWC> [eq <port>]
+      if (args.length < 5) {
+        termWrite('% Usage: access-list <100-199> permit|deny <protocol> <src> <srcWC> <dst> <dstWC> [eq <port>]', 'error-line');
+        termWrite('  protocol: ip, tcp, udp, icmp  |  src/dst: IP wildcard, "any", or "host <ip>"', 'error-line');
+        return;
+      }
+      const protocol = args[3].toLowerCase();
+      if (!['ip', 'tcp', 'udp', 'icmp'].includes(protocol)) { termWrite('% Invalid protocol — use ip, tcp, udp, or icmp', 'error-line'); return; }
+
+      let idx = 4;
+      // Parse source
+      let parsedSrc, parsedSrcWC;
+      if ((args[idx] || '').toLowerCase() === 'any') {
+        parsedSrc = 'any'; parsedSrcWC = '255.255.255.255'; idx++;
+      } else if ((args[idx] || '').toLowerCase() === 'host') {
+        idx++;
+        if (!args[idx] || !isValidIP(args[idx])) { termWrite('% Invalid host IP address', 'error-line'); return; }
+        parsedSrc = args[idx]; parsedSrcWC = '0.0.0.0'; idx++;
+      } else {
+        parsedSrc = args[idx]; idx++;
+        parsedSrcWC = args[idx] || '0.0.0.0'; idx++;
+        if (!isValidIP(parsedSrc) || !isValidIP(parsedSrcWC)) { termWrite('% Invalid source address or wildcard', 'error-line'); return; }
+      }
+
+      // Parse destination
+      let parsedDst, parsedDstWC;
+      if (!args[idx]) {
+        termWrite('% Incomplete command — destination required', 'error-line'); return;
+      }
+      if (args[idx].toLowerCase() === 'any') {
+        parsedDst = 'any'; parsedDstWC = '255.255.255.255'; idx++;
+      } else if (args[idx].toLowerCase() === 'host') {
+        idx++;
+        if (!args[idx] || !isValidIP(args[idx])) { termWrite('% Invalid host IP address', 'error-line'); return; }
+        parsedDst = args[idx]; parsedDstWC = '0.0.0.0'; idx++;
+      } else {
+        parsedDst = args[idx]; idx++;
+        parsedDstWC = args[idx] || '0.0.0.0'; idx++;
+        if (!isValidIP(parsedDst) || !isValidIP(parsedDstWC)) { termWrite('% Invalid destination address or wildcard', 'error-line'); return; }
+      }
+
+      // Parse optional "eq <port>"
+      let port = null;
+      if (args[idx] && args[idx].toLowerCase() === 'eq') {
+        idx++;
+        if ((protocol === 'tcp' || protocol === 'udp') && args[idx]) {
+          port = parseInt(args[idx]);
+          if (isNaN(port) || port < 1 || port > 65535) { termWrite('% Invalid port number (1-65535)', 'error-line'); return; }
+        } else {
+          termWrite('% "eq <port>" is only valid with tcp or udp', 'error-line'); return;
+        }
+      }
+
+      if (!dev.accessLists[aclNum]) dev.accessLists[aclNum] = [];
+      dev.accessLists[aclNum].push({ action, protocol, src: parsedSrc, srcWildcard: parsedSrcWC, dst: parsedDst, dstWildcard: parsedDstWC, port });
+      const srcStr = parsedSrc === 'any' ? 'any' : `${parsedSrc} ${parsedSrcWC}`;
+      const dstStr = parsedDst === 'any' ? 'any' : `${parsedDst} ${parsedDstWC}`;
+      termWrite(`% ACL ${aclNum}: ${action} ${protocol} ${srcStr} -> ${dstStr}${port ? ' eq ' + port : ''}`, 'success-line');
+    }
     return;
   }
 
@@ -215,6 +281,13 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     const aclNum = parseInt(args[2]);
     if (isNaN(aclNum)) { termWrite('% Incomplete command — usage: no access-list <num>', 'error-line'); return; }
     if (!dev.accessLists[aclNum]) { termWrite(`% ACL ${aclNum} not found`, 'error-line'); return; }
+    // Also remove any interface references to this ACL
+    for (const iface of Object.values(dev.interfaces)) {
+      if (iface.accessGroup) {
+        if (iface.accessGroup.in === aclNum) iface.accessGroup.in = null;
+        if (iface.accessGroup.out === aclNum) iface.accessGroup.out = null;
+      }
+    }
     delete dev.accessLists[aclNum];
     termWrite(`% ACL ${aclNum} removed`, 'success-line');
     return;

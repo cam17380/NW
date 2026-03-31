@@ -1,5 +1,5 @@
 // ─── Canvas Renderer: Main drawing orchestrator ───
-import { drawRouter, drawSwitch, drawPC, drawFirewall } from './DeviceRenderer.js';
+import { drawRouter, drawSwitch, drawPC, drawFirewall, drawServer } from './DeviceRenderer.js';
 import { drawLink } from './LinkRenderer.js';
 
 export class CanvasRenderer {
@@ -80,6 +80,7 @@ export class CanvasRenderer {
       if (dv.type === 'router') drawRouter(ctx, x, y, dv, isSelected);
       else if (dv.type === 'switch') drawSwitch(ctx, x, y, dv, isSelected);
       else if (dv.type === 'firewall') drawFirewall(ctx, x, y, dv, isSelected);
+      else if (dv.type === 'server') drawServer(ctx, x, y, dv, isSelected);
       else drawPC(ctx, x, y, dv, isSelected);
 
       ctx.shadowBlur = 0;
@@ -88,36 +89,42 @@ export class CanvasRenderer {
       ctx.font = 'bold 13px Segoe UI, sans-serif';
       ctx.fillStyle = isSelected ? '#4fc3f7' : '#aab';
       ctx.textAlign = 'center';
-      ctx.fillText(dv.hostname, x, y + (dv.type === 'pc' ? 40 : 35));
+      ctx.fillText(dv.hostname, x, y + (dv.type === 'pc' ? 40 : dv.type === 'server' ? 28 : 35));
 
-      // Show VLAN count on switch
+      // Device-type info display
+      ctx.font = '10px Consolas, monospace';
       if (dv.type === 'switch' && dv.vlans) {
         const count = Object.keys(dv.vlans).length;
-        ctx.font = '10px Consolas, monospace';
-        ctx.fillStyle = '#ab47bc';
+        ctx.fillStyle = '#ffa72680';
         ctx.fillText(count + ' VLANs', x, y + 47);
       }
-      // Show route count on router
       if (dv.type === 'router' && dv.routes && dv.routes.length > 0) {
-        ctx.font = '10px Consolas, monospace';
-        ctx.fillStyle = '#ffa726';
+        ctx.fillStyle = '#69f0ae80';
         ctx.fillText(dv.routes.length + ' route' + (dv.routes.length > 1 ? 's' : ''), x, y + 47);
       }
-      // Show policy/route count on firewall
       if (dv.type === 'firewall') {
         const pCount = dv.policies ? dv.policies.length : 0;
-        ctx.font = '10px Consolas, monospace';
-        ctx.fillStyle = '#ef5350';
+        ctx.fillStyle = '#ef535080';
         ctx.fillText(pCount + ' polic' + (pCount === 1 ? 'y' : 'ies'), x, y + 47);
         if (dv.routes && dv.routes.length > 0) {
-          ctx.fillStyle = '#ffa726';
+          ctx.fillStyle = '#ef535060';
           ctx.fillText(dv.routes.length + ' route' + (dv.routes.length > 1 ? 's' : ''), x, y + 59);
         }
       }
-      // Show default gateway on PC
+      if (dv.type === 'server') {
+        let serverInfoY = 40;
+        if (dv.routes && dv.routes.length > 0) {
+          ctx.fillStyle = '#7e57c280';
+          ctx.fillText(dv.routes.length + ' route' + (dv.routes.length > 1 ? 's' : ''), x, y + serverInfoY);
+          serverInfoY += 12;
+        }
+        if (dv.defaultGateway) {
+          ctx.fillStyle = '#7e57c280';
+          ctx.fillText('GW: ' + dv.defaultGateway, x, y + serverInfoY);
+        }
+      }
       if (dv.type === 'pc' && dv.defaultGateway) {
-        ctx.font = '10px Consolas, monospace';
-        ctx.fillStyle = '#ffa726';
+        ctx.fillStyle = '#4fc3f780';
         ctx.fillText('GW: ' + dv.defaultGateway, x, y + 52);
       }
       ctx.textAlign = 'left';

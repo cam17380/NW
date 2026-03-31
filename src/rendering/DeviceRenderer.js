@@ -85,6 +85,37 @@ export function drawFirewall(ctx, x, y, dv, selected) {
   ctx.stroke();
 }
 
+export function drawServer(ctx, x, y, dv, selected) {
+  // Tower server shape (tall rectangle with rack lines)
+  const w = 24, h = 34;
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - h / 2, w, h, 3);
+  ctx.fillStyle = selected ? '#1a3a5c' : '#1a2332';
+  ctx.fill();
+  ctx.strokeStyle = getDeviceBorderColor(dv);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Rack slots
+  ctx.strokeStyle = getDeviceBorderColor(dv);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2 + 4, y - h / 2 + 8); ctx.lineTo(x + w / 2 - 4, y - h / 2 + 8);
+  ctx.moveTo(x - w / 2 + 4, y - h / 2 + 15); ctx.lineTo(x + w / 2 - 4, y - h / 2 + 15);
+  ctx.moveTo(x - w / 2 + 4, y - h / 2 + 22); ctx.lineTo(x + w / 2 - 4, y - h / 2 + 22);
+  ctx.stroke();
+  // Small LED indicator dots
+  ctx.fillStyle = getDeviceBorderColor(dv);
+  ctx.beginPath();
+  ctx.arc(x + w / 2 - 7, y - h / 2 + 5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + w / 2 - 7, y - h / 2 + 12, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + w / 2 - 7, y - h / 2 + 19, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawArrowHead(ctx, x, y, angle) {
   const size = 5;
   ctx.beginPath();
@@ -95,10 +126,20 @@ export function drawArrowHead(ctx, x, y, angle) {
   ctx.stroke();
 }
 
+// ─── Device type base colors ───
+const DEVICE_COLORS = {
+  router:   { active: '#69f0ae', partial: '#3a8c64', inactive: '#2a4a38' },
+  switch:   { active: '#ffa726', partial: '#9c6618', inactive: '#4e3a18' },
+  firewall: { active: '#ef5350', partial: '#9c3533', inactive: '#4e2828' },
+  server:   { active: '#7e57c2', partial: '#5a3e8c', inactive: '#2e2446' },
+  pc:       { active: '#4fc3f7', partial: '#2e7a9c', inactive: '#1e3a4e' },
+};
+
 export function getDeviceBorderColor(dv) {
+  const colors = DEVICE_COLORS[dv.type] || DEVICE_COLORS.pc;
   const anyUp = Object.values(dv.interfaces).some(i => i.status === 'up');
   const allUp = Object.values(dv.interfaces).every(i => i.status === 'up');
-  if (allUp) return '#69f0ae';
-  if (anyUp) return '#ffa726';
-  return '#555';
+  if (allUp) return colors.active;
+  if (anyUp) return colors.partial;
+  return colors.inactive;
 }

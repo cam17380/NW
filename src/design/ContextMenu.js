@@ -83,7 +83,7 @@ export class ContextMenu {
       }
     } else {
       // Empty area — quick add
-      for (const type of ['router', 'switch', 'firewall', 'pc']) {
+      for (const type of ['router', 'switch', 'firewall', 'server', 'pc']) {
         items.push({
           label: `Add ${type.charAt(0).toUpperCase() + type.slice(1)} here`,
           action: () => {

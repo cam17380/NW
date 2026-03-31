@@ -18,6 +18,7 @@ import { DesignController } from './design/DesignController.js';
 import { DevicePalette } from './design/DevicePalette.js';
 import { InterfacePicker } from './design/InterfacePicker.js';
 import { ContextMenu } from './design/ContextMenu.js';
+import { initSplitter } from './ui/Splitter.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -147,6 +148,14 @@ window.toggleHelp = toggleHelp;
 // ─── Setup ───
 setupImport(store, refreshUI);
 renderer.setupClickHandler(switchDevice, designController, palette);
+
+// ─── Panel splitter ───
+initSplitter(
+  document.getElementById('panelSplitter'),
+  document.querySelector('.terminal-panel'),
+  document.querySelector('.diagram-panel'),
+  () => renderer.resize()
+);
 
 // ─── Initial render ───
 renderer.resize();

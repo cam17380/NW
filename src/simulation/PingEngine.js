@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, describeRouteLookup, describeFirewallCheck, describeNAT } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -114,6 +114,23 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       }
     }
 
+    // Inbound ACL check on ingress interface
+    if ((dv.type === 'router' || dv.type === 'firewall') && step > 0) {
+      const prevDevId = path[path.length - 2] || null;
+      if (prevDevId) {
+        let aclIngressIf = null;
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (!iface.connected || iface.status !== 'up') continue;
+          if (iface.connected.device === prevDevId) { aclIngressIf = ifName; break; }
+          const connDev = devices[iface.connected.device];
+          if (connDev && connDev.type === 'switch') {
+            if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) { aclIngressIf = ifName; break; }
+          }
+        }
+        if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP)) break;
+      }
+    }
+
     // Firewall policy check — if denied, stop path here
     if (dv.type === 'firewall' && step > 0) {
       if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) break;
@@ -135,14 +152,21 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     if (!nextHopIP) break;
 
     let exitIf = null;
+    let exitIfName = null;
     for (const [ifName, iface] of Object.entries(dv.interfaces)) {
       if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
       if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHopIP, iface.mask)) {
         exitIf = iface;
+        exitIfName = ifName;
         break;
       }
     }
     if (!exitIf) break;
+
+    // Outbound ACL check
+    if ((dv.type === 'router' || dv.type === 'firewall') && exitIfName) {
+      if (!checkInterfaceACL(dv, exitIfName, 'out', curSrcIP, curTargetIP)) break;
+    }
 
     const neighbor = exitIf.connected;
     const neighborDev = devices[neighbor.device];
@@ -413,6 +437,19 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       }
     }
 
+    // Inbound ACL check on ingress interface
+    if ((dv.type === 'router' || dv.type === 'firewall') && step > 0 && hop.ingressIf) {
+      const aclInInfo = describeInterfaceACL(dv, hop.ingressIf, 'in', curSrcIP, curTargetIP);
+      if (aclInInfo.description) {
+        hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+      }
+      if (!aclInInfo.allowed) {
+        hop.result = 'dropped';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
+    }
+
     // Firewall policy check
     if (dv.type === 'firewall' && step > 0) {
       const fwInfo = describeFirewallCheck(dv, curSrcIP, curTargetIP);
@@ -446,6 +483,18 @@ export function tracePacketFlow(devices, fromId, targetIP) {
         hop.result = 'no-route';
         hops.push(hop);
         return { hops, reachable: false };
+      }
+      // Outbound ACL check
+      if (dv.type === 'router' || dv.type === 'firewall') {
+        const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP);
+        if (aclOutInfo.description) {
+          hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+        }
+        if (!aclOutInfo.allowed) {
+          hop.result = 'dropped';
+          hops.push(hop);
+          return { hops, reachable: false };
+        }
       }
       hop.decisions.push({ type: 'forward', text: `Exit ${egressIf} -> L2 delivery to ${curTargetIP}` });
       hops.push(hop);
@@ -484,6 +533,18 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       hop.result = 'no-route';
       hops.push(hop);
       return { hops, reachable: false };
+    }
+    // Outbound ACL check
+    if (dv.type === 'router' || dv.type === 'firewall') {
+      const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP);
+      if (aclOutInfo.description) {
+        hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+      }
+      if (!aclOutInfo.allowed) {
+        hop.result = 'dropped';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
     }
     hop.decisions.push({ type: 'forward', text: `Exit ${egressIf} -> next hop ${nextHop}` });
     hops.push(hop);

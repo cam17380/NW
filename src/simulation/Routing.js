@@ -67,7 +67,37 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     }
   }
 
-  // 1c. Firewall policy check
+  // 1c. Inbound ACL check on ingress interface
+  if (prevDevId !== null && (dv.type === 'router' || dv.type === 'firewall')) {
+    let ingressIfName = null;
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.connected || iface.status !== 'up') continue;
+      if (iface.connected.device === prevDevId) { ingressIfName = ifName; break; }
+      const connDev = devices[iface.connected.device];
+      if (connDev && connDev.type === 'switch') {
+        const swVisited = new Set([iface.connected.device]);
+        const queue = [iface.connected.device];
+        while (queue.length > 0) {
+          const swId = queue.shift();
+          const sw = devices[swId];
+          for (const swIf of Object.values(sw.interfaces)) {
+            if (!swIf.connected || swIf.status !== 'up') continue;
+            if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
+            const cd = devices[swIf.connected.device];
+            if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
+              swVisited.add(swIf.connected.device);
+              queue.push(swIf.connected.device);
+            }
+          }
+          if (ingressIfName) break;
+        }
+      }
+      if (ingressIfName) break;
+    }
+    if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP)) return false;
+  }
+
+  // 1d. Firewall policy check
   if (dv.type === 'firewall' && prevDevId !== null) {
     if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) return false;
   }
@@ -82,6 +112,8 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       const net = getNetwork(iface.ip, iface.mask);
       const targetNet = getNetwork(curTargetIP, iface.mask);
       if (net === targetNet) {
+        // Outbound ACL check
+        if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
         return canReachL2(devices, devId, ifName, curTargetIP);
       }
     }
@@ -94,6 +126,8 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     const net = getNetwork(iface.ip, iface.mask);
     const hopNet = getNetwork(nextHop, iface.mask);
     if (net === hopNet) {
+      // Outbound ACL check
+      if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
       const nextDevId = findDeviceByIP(devices, nextHop);
       if (!nextDevId) return false;
       if (!canReachL2(devices, devId, ifName, nextHop)) return false;
@@ -109,6 +143,26 @@ export function lookupRoute(dv, targetIP) {
     for (const iface of Object.values(dv.interfaces)) {
       if (!iface.ip || iface.status !== 'up') continue;
       if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    }
+    return dv.defaultGateway || null;
+  }
+  // Server: check routes first, then fall back to default gateway
+  if (dv.type === 'server') {
+    for (const iface of Object.values(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    }
+    if (dv.routes && dv.routes.length > 0) {
+      let bestRoute = null, bestCIDR = -1;
+      for (const r of dv.routes) {
+        const routeNet = getNetwork(r.network, r.mask);
+        const targetNet = getNetwork(targetIP, r.mask);
+        if (routeNet === targetNet) {
+          const cidr = maskToCIDR(r.mask);
+          if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+        }
+      }
+      if (bestRoute) return bestRoute.nextHop;
     }
     return dv.defaultGateway || null;
   }
@@ -233,6 +287,7 @@ function matchesProtocolField(protocol) {
 
 // ─── NAT logic ──────────────────────────────────────────
 
+// Standard ACL match (used by NAT): only checks permit entries against source IP
 export function matchesACL(aclEntries, ip) {
   if (!aclEntries) return false;
   const ipN = ipToInt(ip);
@@ -243,6 +298,67 @@ export function matchesACL(aclEntries, ip) {
     if ((ipN & ~wcN) === (netN & ~wcN)) return true;
   }
   return false;
+}
+
+// Extended ACL evaluation: returns { matched, action, entry } for the first matching entry
+export function evaluateExtendedACL(aclEntries, srcIP, dstIP) {
+  if (!aclEntries || aclEntries.length === 0) return { matched: false, action: 'permit', entry: null };
+  for (const entry of aclEntries) {
+    // Extended entries have a 'protocol' field; standard entries do not
+    if (!entry.protocol) {
+      // Standard ACL entry — match by source only
+      if (matchesWildcard(srcIP, entry.network, entry.wildcard)) {
+        return { matched: true, action: entry.action, entry };
+      }
+    } else {
+      // Extended ACL entry — match source, destination, protocol
+      const srcMatch = matchesWildcard(srcIP, entry.src, entry.srcWildcard);
+      const dstMatch = matchesWildcard(dstIP, entry.dst, entry.dstWildcard);
+      const protoMatch = entry.protocol === 'ip' || entry.protocol === 'icmp'; // simulation uses ICMP
+      if (srcMatch && dstMatch && protoMatch) {
+        return { matched: true, action: entry.action, entry };
+      }
+    }
+  }
+  // Implicit deny at end of ACL
+  return { matched: true, action: 'deny', entry: null };
+}
+
+// Check interface ACL (ip access-group): returns true if packet is permitted
+export function checkInterfaceACL(dv, ifName, direction, srcIP, dstIP) {
+  const iface = dv.interfaces[ifName];
+  if (!iface || !iface.accessGroup) return true;
+  const aclNum = iface.accessGroup[direction];
+  if (!aclNum) return true;
+  const aclEntries = dv.accessLists[aclNum];
+  if (!aclEntries || aclEntries.length === 0) return true;
+  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP);
+  return result.action === 'permit';
+}
+
+// Describe interface ACL check for diagnostics
+export function describeInterfaceACL(dv, ifName, direction, srcIP, dstIP) {
+  const iface = dv.interfaces[ifName];
+  if (!iface || !iface.accessGroup) return { allowed: true, description: null };
+  const aclNum = iface.accessGroup[direction];
+  if (!aclNum) return { allowed: true, description: null };
+  const aclEntries = dv.accessLists[aclNum];
+  if (!aclEntries || aclEntries.length === 0) return { allowed: true, description: null };
+  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP);
+  const dirLabel = direction === 'in' ? 'inbound' : 'outbound';
+  if (result.entry) {
+    const e = result.entry;
+    let desc;
+    if (e.protocol) {
+      const srcStr = e.src === 'any' ? 'any' : `${e.src} ${e.srcWildcard}`;
+      const dstStr = e.dst === 'any' ? 'any' : `${e.dst} ${e.dstWildcard}`;
+      desc = `ACL ${aclNum} ${dirLabel} on ${ifName}: ${e.action} ${e.protocol} ${srcStr} -> ${dstStr}`;
+    } else {
+      desc = `ACL ${aclNum} ${dirLabel} on ${ifName}: ${e.action} ${e.network} ${e.wildcard}`;
+    }
+    return { allowed: result.action === 'permit', description: desc };
+  }
+  return { allowed: false, description: `ACL ${aclNum} ${dirLabel} on ${ifName}: implicit deny` };
 }
 
 export function allocateFromPool(pool, translations) {
@@ -341,6 +457,33 @@ export function describeRouteLookup(dv, targetIP) {
       return { nextHop: dv.defaultGateway, description: `Using default gateway ${dv.defaultGateway}` };
     }
     return { nextHop: null, description: 'No default gateway configured' };
+  }
+  if (dv.type === 'server') {
+    // Server: check directly connected, then routes, then default gateway
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+        return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
+      }
+    }
+    if (dv.routes && dv.routes.length > 0) {
+      let bestRoute = null, bestCIDR = -1;
+      for (const r of dv.routes) {
+        if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
+          const cidr = maskToCIDR(r.mask);
+          if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+        }
+      }
+      if (bestRoute) {
+        const isDefault = bestRoute.network === '0.0.0.0' && bestRoute.mask === '0.0.0.0';
+        const prefix = isDefault ? 'default route' : `static route ${bestRoute.network}/${maskToCIDR(bestRoute.mask)}`;
+        return { nextHop: bestRoute.nextHop, description: `Matched ${prefix} via ${bestRoute.nextHop}` };
+      }
+    }
+    if (dv.defaultGateway) {
+      return { nextHop: dv.defaultGateway, description: `Using default gateway ${dv.defaultGateway}` };
+    }
+    return { nextHop: null, description: 'No route or default gateway configured' };
   }
   if (!dv.routes || dv.routes.length === 0) {
     // Check directly connected

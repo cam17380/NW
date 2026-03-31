@@ -53,6 +53,16 @@ const abbreviations = {
   'ip nat in': 'ip nat inside',
   'ip nat out': 'ip nat outside',
   'acc': 'access-list',
+  // ACL on interface
+  'ip acc': 'ip access-group',
+  'ip access': 'ip access-group',
+  'no ip acc': 'no ip access-group',
+  'no ip access': 'no ip access-group',
+  // Show ACLs
+  'sh acc': 'show access-lists',
+  'sh access': 'show access-lists',
+  'show acc': 'show access-lists',
+  'show access': 'show access-lists',
   // Packet flow
   'sh pf': 'show packet-flow',
   'show pf': 'show packet-flow',

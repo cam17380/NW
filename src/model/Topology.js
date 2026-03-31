@@ -40,6 +40,17 @@ export function createDevice(type, id, x, y) {
       }
     };
   }
+  if (type === 'server') {
+    return {
+      ...base,
+      routes: [],
+      defaultGateway: '',
+      interfaces: {
+        'Ethernet0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+        'Ethernet1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
+      }
+    };
+  }
   // pc
   return {
     ...base,
@@ -51,7 +62,7 @@ export function createDevice(type, id, x, y) {
 }
 
 export function generateDeviceId(type, existingDevices) {
-  const prefixMap = { router: 'R', switch: 'SW', pc: 'PC', firewall: 'FW' };
+  const prefixMap = { router: 'R', switch: 'SW', pc: 'PC', firewall: 'FW', server: 'SV' };
   const prefix = prefixMap[type] || type.toUpperCase();
   const pattern = new RegExp(`^${prefix}(\\d+)$`);
   let max = 0;
@@ -64,7 +75,7 @@ export function generateDeviceId(type, existingDevices) {
 
 export function generateInterfaceName(device) {
   const ifaces = Object.keys(device.interfaces);
-  if (device.type === 'pc') {
+  if (device.type === 'pc' || device.type === 'server') {
     // Ethernet0, Ethernet1, ...
     let max = -1;
     for (const name of ifaces) {
