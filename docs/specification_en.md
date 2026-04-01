@@ -1,6 +1,6 @@
 # Network Simulator Specification Document
 
-**Version:** 1.1
+**Version:** 1.2
 **Last Updated:** 2026-04-01
 
 ---
@@ -14,6 +14,8 @@ This application is a Cisco IOS-style network simulator that runs in a web brows
 - Provide a learning and practice environment for network configuration
 - Support Cisco IOS command syntax training
 - Enable understanding of routing, NAT, firewall, and VLAN operations
+- Learn inter-VLAN routing via L3 switches (SVI)
+- Understand link redundancy with LACP/Bond
 
 ### 1.2 System Requirements
 
@@ -37,10 +39,10 @@ NW/
 ├── src/
 │   ├── main.js             # Application initialization
 │   ├── core/
-│   │   ├── Store.js        # Centralized state management
+│   │   ├── Store.js        # Centralized state management (incl. zoom/pan state)
 │   │   └── EventBus.js     # Pub/Sub event system
 │   ├── model/
-│   │   └── Topology.js     # Device/link data models and factories
+│   │   └── Topology.js     # Device/link data models and factories (incl. SVI support)
 │   ├── cli/
 │   │   ├── CLIEngine.js    # Command parser and mode dispatcher
 │   │   ├── CommandRegistry.js # Command tree and hint data structure
@@ -48,11 +50,11 @@ NW/
 │   │   ├── Abbreviations.js # Command abbreviation expansion
 │   │   └── commands/       # Command implementations (Show, Config, Interface, etc.)
 │   ├── simulation/
-│   │   ├── PingEngine.js   # Ping/Traceroute/ARP resolution engine
-│   │   ├── Routing.js      # Routing, NAT, firewall, and L2 reachability logic
+│   │   ├── PingEngine.js   # Ping/Traceroute/ARP resolution engine (incl. bond-aware)
+│   │   ├── Routing.js      # Routing, NAT, firewall, L2 reachability, SVI, and bond logic
 │   │   └── NetworkUtils.js # IP address utilities
 │   ├── rendering/
-│   │   ├── CanvasRenderer.js # Canvas rendering and animation orchestrator
+│   │   ├── CanvasRenderer.js # Canvas rendering, animation, zoom/pan
 │   │   ├── DeviceRenderer.js # Device icon rendering
 │   │   └── LinkRenderer.js # Link rendering and edge point calculation
 │   ├── ui/
@@ -62,13 +64,13 @@ NW/
 │   │   ├── VlanLegend.js   # VLAN legend display
 │   │   └── Toast.js        # Toast notifications
 │   ├── design/
-│   │   ├── DesignController.js # Design mode canvas interactions
+│   │   ├── DesignController.js # Design mode canvas interactions (incl. pan support)
 │   │   ├── DevicePalette.js # Device palette
 │   │   ├── InterfacePicker.js # Interface selection dialog
 │   │   └── ContextMenu.js  # Right-click context menus
 │   └── persistence/
 │       ├── LocalStorage.js # Browser storage persistence
-│       ├── Snapshot.js     # Serialization/deserialization
+│       ├── Snapshot.js     # Serialization/deserialization (incl. bond state)
 │       ├── Templates.js    # Network topology template data
 │       ├── ConfigExport.js # CLI command script generator
 │       ├── Splitter.js     # Panel splitter
@@ -90,7 +92,7 @@ NW/
 | Device | Abbreviation | Interfaces | Key Features |
 |--------|-------------|------------|--------------|
 | **Router** | R1, R2, ... | GigabitEthernet0/0–0/3 | Static routing, NAT, standard/extended ACLs |
-| **Switch** | SW1, SW2, ... | FastEthernet0/1–0/24 | VLANs, access/trunk ports |
+| **Switch** | SW1, SW2, ... | FastEthernet0/1–0/24 | VLANs, access/trunk ports, SVI (L3 switch capability) |
 | **Firewall** | FW1, FW2, ... | GigabitEthernet0/0–0/3 | Firewall policies, NAT, standard/extended ACLs |
 | **Server** | SV1, SV2, ... | Ethernet0– (multiple) | Multiple interfaces, static routing, default gateway |
 | **PC** | PC1, PC2, ... | Ethernet0 | Single interface, default gateway |
@@ -114,10 +116,11 @@ Device {
       natRole: 'inside' | 'outside' | null
       accessGroup: { in: number | null, out: number | null }  // R/FW only
       switchport: { mode, accessVlan, trunkAllowed }  // switch only
+      bondGroup: string | null                         // Bond group name (LACP/active-backup)
     }
   }
 
-  routes: [{ network, mask, nextHop }]              // router/firewall/server
+  routes: [{ network, mask, nextHop }]              // router/firewall/server/L3 switch
   nat: { staticEntries, pools, dynamicRules, translations, stats }
   accessLists: {
     [1-99]:   [{ action, network, wildcard }]                                            // standard ACL
@@ -268,7 +271,30 @@ interface GigabitEthernet0/0
 | `name <vlan-name>` | Set VLAN name |
 | `no vlan <id>` | Delete VLAN |
 
-#### 4.2.8 Show Commands
+#### 4.2.8 SVI / L3 Switch Commands (Switch Only)
+
+| Command | Action |
+|---------|--------|
+| `interface vlan <id>` | Create SVI (Switch Virtual Interface) and enter Interface Config |
+| `ip address <ip> <mask>` | Set IP address on SVI |
+| `no shutdown` | Enable SVI |
+| `ip access-group <acl-num> in\|out` | Apply ACL to SVI |
+
+- A switch with SVIs configured automatically operates as an L3 switch
+- Inter-VLAN static routing is possible via SVIs
+- Static routes can be added using the `ip route` command
+
+#### 4.2.9 LACP / Bond Commands
+
+| Command | Action | Applicable Devices |
+|---------|--------|-------------------|
+| `bond-group <name>` | Add interface to bond group (active-backup) | All |
+| `show etherchannel summary` | Display bond group status summary | All |
+
+- **Active-backup mode**: When the primary NIC goes down, the bond partner in the same group automatically takes over traffic
+- Only one interface in a bond group actively forwards traffic at a time
+
+#### 4.2.10 Show Commands
 
 | Command | Description |
 |---------|------------|
@@ -285,8 +311,9 @@ interface GigabitEthernet0/0
 | `show vlan brief` | VLAN summary (switch only) |
 | `show interfaces trunk` | Trunk port information (switch only) |
 | `show interfaces switchport` | Switchport configuration (switch only) |
+| `show etherchannel summary` | Bond group status summary |
 
-#### 4.2.9 Diagnostic Commands
+#### 4.2.11 Diagnostic Commands
 
 | Command | Action |
 |---------|--------|
@@ -312,6 +339,21 @@ interface GigabitEthernet0/0
 - **All BFS functions are VLAN-aware**: `isReachableViaSwitch`, `bfsSwitchPath`, `getL2BroadcastDomain`, and `canReachL2` all use a VLAN parameter
 - **portCarriesVlan()**: Determines whether a switch port carries a given VLAN based on access/trunk mode
 - **canReachL2()**: When reaching an L3 device through a switch, only checks the connected interface's IP (not all device interfaces)
+
+### 5.2.1 L3 Switching (SVI)
+
+- **SVI (Switch Virtual Interface)**: `interface vlan <id>` creates an L3 interface on a switch
+- A switch with one or more SVIs automatically operates as an L3 switch with a routing table
+- Inter-VLAN static routing is performed via SVIs
+- ACLs can be applied to SVI interfaces
+- L3 switches participate in routing engine path resolution like routers
+
+### 5.2.2 LACP / Bond (active-backup)
+
+- **Bond groups**: Multiple interfaces grouped as a single logical link
+- **Active-backup mode**: When the active interface goes down, a partner interface in the same bond group automatically takes over traffic forwarding
+- Bond-aware routing and packet forwarding (Routing.js, PingEngine.js)
+- Bond group state is saved and restored in snapshots
 
 ### 5.3 NAT Processing
 
@@ -443,6 +485,14 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 - **Packet animation**: Visual packet movement along link lines during ping/traceroute (linkHints ensure correct link tracking)
 - **ARP resolution animation**: Visualizes ARP Request broadcasts (gold diamond) and ARP Reply unicasts (orange) before ICMP ping
 
+### 6.2.1 Canvas Zoom / Pan
+
+- **Mouse wheel zoom**: Cursor-centered zoom in/out (20%–400%)
+- **Pan drag**: Drag empty canvas area to pan the viewport (works in both design and normal modes)
+- **Middle mouse button pan**: Pan by dragging with the middle mouse button
+- **Double-click fit**: Double-click empty canvas area to fit all devices in view
+- **Zoom indicator**: Displays current zoom level at bottom-left corner
+
 ### 6.3 Terminal
 
 - **Color output**: Commands (cyan), success (green), errors (red), ARP info (gold)
@@ -506,7 +556,8 @@ Canvas/terminal boundary position saved in localStorage and restored on reload.
 | IP Version | IPv4 only | IPv4/IPv6 |
 | Routing Protocols | Static routes only | OSPF, BGP, EIGRP, etc. |
 | Firewall | Stateless (no connection tracking) | Stateful |
-| L2 Protocols | VLANs, basic switching | STP, LACP, LLDP, etc. |
+| L2 Protocols | VLANs, basic switching, LACP/Bond (active-backup) | STP, LACP, LLDP, etc. |
+| L3 Switch | SVI (Light L3), inter-VLAN static routing | Full L3 switching, dynamic routing |
 | NAT | Static, dynamic (basic) | PAT, NAT-T, advanced features |
 | ACLs | Standard ACLs (1-99), Extended ACLs (100-199) | Standard/extended/named ACLs |
 | QoS | None | Various QoS features |

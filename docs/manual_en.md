@@ -1,6 +1,6 @@
 # Network Simulator Operation Manual
 
-**Version:** 1.1
+**Version:** 1.2
 **Last Updated:** 2026-04-01
 
 ---
@@ -171,6 +171,8 @@ PC(config)# end
 ```
 
 ### 6.3 Adding a Static Route
+
+Static routes can be configured on Router, Firewall, Server, and L3 Switch devices.
 
 ```
 Router# configure terminal
@@ -374,7 +376,7 @@ Router(config)# access-list 100 permit ip any any
 
 ### 10.3 Applying ACLs to Interfaces
 
-After defining an ACL, you must apply it to an interface for filtering to take effect.
+After defining an ACL, you must apply it to an interface for filtering to take effect. ACLs can be applied on Router, Firewall, and L3 Switch (SVI) interfaces.
 
 ```
 Router(config)# interface GigabitEthernet0/0
@@ -409,6 +411,7 @@ Router(config-if)# no ip access-group 100 in    # Remove inbound ACL
 - The first matching entry determines the action (subsequent entries are not checked)
 - **Implicit deny all**: Packets not matching any entry are dropped
 - An ACL has no effect until applied to an interface with `ip access-group`
+- ACLs are supported on Router, Firewall, and L3 Switch (SVI interfaces)
 - Standard ACLs can also be used for NAT condition matching (`ip nat inside source list`)
 
 ---
@@ -498,31 +501,164 @@ ARP: 172.16.0.11 is at 00:50:56:b3:00:72
 
 ---
 
-## 13. Saving and Loading Configurations
+## 13. L3 Switch (SVI / Inter-VLAN Routing) Configuration Guide
+
+A standard Switch becomes L3-capable when SVI (Switch Virtual Interface) is configured. There is no separate "L3 Switch" device type — any switch with SVIs can perform inter-VLAN routing.
+
+### 13.1 Creating VLANs and Assigning SVIs
+
+```
+Switch> enable
+Switch# configure terminal
+Switch(config)# vlan 10
+Switch(config-vlan)# name Sales
+Switch(config-vlan)# exit
+Switch(config)# vlan 20
+Switch(config-vlan)# name Engineering
+Switch(config-vlan)# exit
+Switch(config)# interface vlan 10
+Switch(config-if)# ip address 192.168.10.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# exit
+Switch(config)# interface vlan 20
+Switch(config-if)# ip address 192.168.20.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# end
+```
+
+### 13.2 Adding a Default Route on L3 Switch
+
+```
+Switch(config)# ip route 0.0.0.0 0.0.0.0 10.0.0.1
+```
+
+### 13.3 Applying ACLs on SVI Interfaces
+
+ACLs can be applied to SVI interfaces just like physical interfaces:
+
+```
+Switch(config)# access-list 100 deny icmp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255
+Switch(config)# access-list 100 permit ip any any
+Switch(config)# interface vlan 10
+Switch(config-if)# ip access-group 100 in
+```
+
+### 13.4 Verification Commands
+
+```
+Switch# show ip route                  # View the L3 routing table
+Switch# show access-lists              # View ACLs and hit counts
+Switch# show ip interface brief        # View SVI interface status
+Switch# show vlan brief                # Confirm VLAN-to-SVI mapping
+```
+
+### 13.5 Important Notes
+
+- A switch with at least one SVI is treated as an L3 switch and participates in IP routing
+- SVIs act as the default gateway for hosts in each VLAN
+- Static routes and ACLs work the same way as on routers
+- Inter-VLAN traffic is routed through the switch without needing an external router
+
+---
+
+## 14. LACP / Bonding Configuration Guide
+
+Servers and PCs support active-backup bonding for redundant NIC connections. When the primary NIC goes down, traffic automatically fails over to the partner NIC.
+
+### 14.1 Creating a Bond Group
+
+```
+Server> enable
+Server# configure terminal
+Server(config)# interface Ethernet0
+Server(config-if)# bond-group BOND1
+Server(config-if)# exit
+Server(config)# interface Ethernet1
+Server(config-if)# bond-group BOND1
+Server(config-if)# end
+```
+
+The first interface added becomes the **primary** (active) NIC. The second becomes the **backup** (standby) NIC.
+
+### 14.2 Removing a Bond Group
+
+```
+Server(config)# interface Ethernet0
+Server(config-if)# no bond-group
+Server(config-if)# exit
+Server(config)# interface Ethernet1
+Server(config-if)# no bond-group
+```
+
+### 14.3 Verifying Bond Status
+
+```
+Server# show etherchannel summary
+```
+
+This displays the bond group name, member interfaces, and which NIC is currently active.
+
+### 14.4 Failover Behavior
+
+1. Under normal operation, traffic flows through the primary NIC
+2. When the primary NIC link goes down (e.g., cable disconnected, partner interface shutdown), the backup NIC takes over automatically
+3. When the primary NIC comes back up, traffic reverts to the primary NIC
+
+### 14.5 Example Workflow
+
+1. Create a Server with two Ethernet interfaces
+2. Connect Ethernet0 to SW1 and Ethernet1 to SW2
+3. Configure bond group on both interfaces
+4. Shut down SW1's port — traffic automatically fails over to Ethernet1 via SW2
+5. Bring SW1's port back up — traffic returns to Ethernet0
+
+---
+
+## 15. Canvas Zoom / Pan
+
+### 15.1 Zoom
+
+- **Mouse wheel up**: Zoom in (centered on cursor position)
+- **Mouse wheel down**: Zoom out (centered on cursor position)
+- Zoom range: **20% to 400%**
+- Current zoom percentage is displayed at the **bottom-left** of the canvas
+
+### 15.2 Pan
+
+- **Drag on empty canvas area**: Pan the view
+- **Middle mouse button drag**: Pan the view (works anywhere, even over devices)
+
+### 15.3 Fit View
+
+- **Double-click on empty canvas area**: Automatically adjusts zoom and pan to fit all devices in view
+
+---
+
+## 16. Saving and Loading Configurations
 
 All file operations are accessed from the "**File ▾**" dropdown menu in the toolbar.
 
-### 12.1 Manual Save
+### 16.1 Manual Save
 
 Click "File ▾" > "Save" to save all current configurations to the browser's localStorage.
 
-### 12.2 Manual Load
+### 16.2 Manual Load
 
 Click "File ▾" > "Load" to restore the last saved configuration.
 
-### 12.3 JSON Export
+### 16.3 JSON Export
 
 1. Click "File ▾" > "Export JSON"
 2. A JSON configuration file is automatically downloaded
 3. Keep this file as a backup or for use in other environments
 
-### 12.4 JSON Import
+### 16.4 JSON Import
 
 1. Click "File ▾" > "Import JSON"
 2. Select a JSON file in the file dialog
 3. The configuration is loaded and the topology is restored
 
-### 12.5 Command Script Export
+### 16.5 Command Script Export
 
 1. Click "File ▾" > "Export Script"
 2. A text file with CLI commands for all devices is downloaded
@@ -542,7 +678,7 @@ ip route 10.0.0.0 255.255.255.0 192.168.2.2
 end
 ```
 
-### 12.6 Loading from Templates
+### 16.6 Loading from Templates
 
 1. Click the "Templates" button in the toolbar
 2. A template selection screen appears
@@ -556,7 +692,7 @@ Available templates:
 - **NAT to Internet** — R x2 + SW + SV + PC x2
 - **Empty Canvas** — Start from scratch
 
-### 12.7 Reset
+### 16.7 Reset
 
 1. Click the "Reset" button in the toolbar
 2. A confirmation dialog appears
@@ -564,9 +700,9 @@ Available templates:
 
 ---
 
-## 14. Troubleshooting
+## 17. Troubleshooting
 
-### 14.1 Ping Fails
+### 17.1 Ping Fails
 
 | Check | Command |
 |-------|---------|
@@ -579,7 +715,7 @@ Available templates:
 | Is NAT configured correctly? | `show ip nat translations` |
 | Identify the cause with packet flow diagnostics | `show packet-flow <destination-ip>` |
 
-### 14.2 VLAN Not Working
+### 17.2 VLAN Not Working
 
 | Check | Command |
 |-------|---------|
@@ -589,7 +725,7 @@ Available templates:
 | Are both ports in the same VLAN? | `show vlan brief` on both switches |
 | Is ARP crossing a VLAN boundary? | `clear arp` then `ping` to observe ARP visualization |
 
-### 14.3 NAT Not Working
+### 17.3 NAT Not Working
 
 | Check | Command |
 |-------|---------|
@@ -598,7 +734,7 @@ Available templates:
 | Are IPs available in the NAT pool? | `show ip nat statistics` |
 | Are static NAT entries correct? | `show ip nat translations` |
 
-### 14.4 ACL Blocking Traffic
+### 17.4 ACL Blocking Traffic
 
 | Check | Command |
 |-------|---------|
@@ -609,7 +745,7 @@ Available templates:
 
 ---
 
-## 15. Keyboard Shortcuts
+## 18. Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -620,7 +756,7 @@ Available templates:
 
 ---
 
-## 16. Frequently Asked Questions (FAQ)
+## 19. Frequently Asked Questions (FAQ)
 
 **Q: Will my configuration be lost if I close the browser?**
 A: The auto-save feature preserves your configuration in localStorage. However, clearing browser data will erase it. Use JSON export to back up important configurations.

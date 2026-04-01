@@ -100,11 +100,33 @@
       <h3>Routing Commands</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV)</td><td>Add static route</td></tr>
-        <tr><td><code>no ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV)</td><td>Remove static route</td></tr>
+        <tr><td><code>ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV/L3SW)</td><td>Add static route</td></tr>
+        <tr><td><code>no ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV/L3SW)</td><td>Remove static route</td></tr>
         <tr><td><code>ip default-gateway &lt;ip&gt;</code></td><td>config (PC/SV)</td><td>Set default gateway</td></tr>
         <tr><td><code>show ip route</code></td><td>EXEC</td><td>Show routing table</td></tr>
       </table>
+      <h3>L3 Switch Commands (SVI / Inter-VLAN Routing)</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td><code>interface vlan &lt;id&gt;</code></td><td>config (SW)</td><td>Create SVI and enter config (auto-creates VLAN)</td></tr>
+        <tr><td><code>ip address &lt;ip&gt; &lt;mask&gt;</code></td><td>config-if (SVI)</td><td>Set IP on SVI for inter-VLAN routing</td></tr>
+        <tr><td><code>ip route &lt;net&gt; &lt;mask&gt; &lt;hop&gt;</code></td><td>config (L3 SW)</td><td>Add static route on L3 switch</td></tr>
+        <tr><td><code>access-list / ip access-group</code></td><td>config / config-if</td><td>ACL on SVI interfaces (same syntax as router)</td></tr>
+      </table>
+      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
+        Switch becomes L3-capable when SVIs are configured. No separate device type needed.<br>
+        <b>Example:</b> <code>int vlan 10</code> &rarr; <code>ip address 192.168.10.1 255.255.255.0</code> &rarr; <code>no shut</code>
+      </p>
+      <h3>LACP / Bond Commands (Server / PC)</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td><code>bond-group &lt;name&gt;</code></td><td>config-if</td><td>Add interface to bond group (active-backup)</td></tr>
+        <tr><td><code>no bond-group</code></td><td>config-if</td><td>Remove from bond group</td></tr>
+        <tr><td><code>show etherchannel summary</code></td><td>EXEC</td><td>Show bond group status</td></tr>
+      </table>
+      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
+        Interfaces in the same bond group act as active-backup. If the primary (IP-holding) interface goes down, traffic automatically fails over to the partner.
+      </p>
       <h3>NAT Commands (Router / Firewall)</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
@@ -116,7 +138,7 @@
         <tr><td><code>show ip nat translations</code></td><td>EXEC</td><td>Show NAT translation table</td></tr>
         <tr><td><code>show ip nat statistics</code></td><td>EXEC</td><td>Show NAT statistics and config</td></tr>
       </table>
-      <h3>ACL Commands (Router / Firewall)</h3>
+      <h3>ACL Commands (Router / Firewall / L3 Switch)</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
         <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Standard ACL (1–99) — source IP only</td></tr>
@@ -161,12 +183,13 @@
         <tr><td><code>show ip interface brief</code></td><td>Show all interfaces summary</td></tr>
         <tr><td><code>show running-config</code></td><td>Show current configuration</td></tr>
         <tr><td><code>show interfaces</code></td><td>Show detailed interface info</td></tr>
-        <tr><td><code>show ip route</code></td><td>Show routing table (routers/PCs)</td></tr>
+        <tr><td><code>show ip route</code></td><td>Show routing table (routers/PCs/L3 switches)</td></tr>
         <tr><td><code>show ip nat translations</code></td><td>Show NAT translation table</td></tr>
         <tr><td><code>show ip nat statistics</code></td><td>Show NAT statistics</td></tr>
         <tr><td><code>show firewall policy</code></td><td>Show firewall policy table (Firewall only)</td></tr>
-        <tr><td><code>show access-lists</code></td><td>Show all ACLs and applied interfaces (Router/FW)</td></tr>
+        <tr><td><code>show access-lists</code></td><td>Show all ACLs and applied interfaces (R/FW/L3SW)</td></tr>
         <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
+        <tr><td><code>show etherchannel summary</code></td><td>Show LACP bond group status (Server/PC)</td></tr>
         <tr><td><code>show packet-flow &lt;ip&gt;</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
         <tr><td><code>clear arp</code></td><td>Clear ARP cache (privileged mode)</td></tr>
         <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT + FW aware)</td></tr>
@@ -183,6 +206,9 @@
         <tr><td>Firewalls have an implicit <b>deny all</b> — add <code>firewall policy</code> to permit traffic</td></tr>
         <tr><td>ACLs need <code>ip access-group &lt;num&gt; in|out</code> on an interface to take effect</td></tr>
         <tr><td>Extended ACLs (100-199) filter by source, destination, protocol, and port</td></tr>
+        <tr><td>Switches become L3 when SVIs are configured: <code>interface vlan 10</code></td></tr>
+        <tr><td>LACP bond: <code>bond-group Bond0</code> on paired interfaces for failover</td></tr>
+        <tr><td><b>Zoom:</b> Mouse wheel &nbsp; <b>Pan:</b> Drag empty area &nbsp; <b>Fit:</b> Double-click empty area</td></tr>
       </table>
     </div>
   </div>

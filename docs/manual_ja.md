@@ -1,6 +1,6 @@
 # ネットワークシミュレータ 操作マニュアル
 
-**バージョン:** 1.1
+**バージョン:** 1.2
 **最終更新日:** 2026-04-01
 
 ---
@@ -337,6 +337,8 @@ FW(config)# no firewall policy all       # 全ポリシーを削除
 
 ## 10. ACL（アクセス制御リスト）設定ガイド
 
+ACLはルーター、ファイアウォール、およびL3スイッチ（SVI付きスイッチ）のインターフェースに適用できます。
+
 ### 10.1 標準ACLの作成
 
 送信元IPアドレスでフィルタリングする標準ACL（番号1〜99）:
@@ -411,6 +413,7 @@ Router(config-if)# no ip access-group 100 in    # inbound ACLを解除
 - **暗黙のdeny all**: どのエントリにもマッチしない場合、パケットは破棄されます
 - ACLを定義しても、`ip access-group` でインターフェースに適用しないとフィルタリングは行われません
 - 標準ACLはNATの条件定義（`ip nat inside source list`）にも使用できます
+- L3スイッチではSVI（`interface vlan`）に対して `ip access-group` を適用できます
 
 ---
 
@@ -499,31 +502,204 @@ ARP: 172.16.0.11 is at 00:50:56:b3:00:72
 
 ---
 
-## 13. 設定の保存と読み込み
+## 13. L3スイッチ（SVI / VLAN間ルーティング）設定ガイド
+
+### 13.1 概要
+
+スイッチにSVI（Switch Virtual Interface）を設定すると、L3スイッチとして動作し、VLAN間ルーティングが可能になります。専用のデバイスタイプは不要で、通常のスイッチにSVIを追加するだけでL3機能が有効になります。
+
+### 13.2 SVIの設定コマンド
+
+```
+Switch> enable
+Switch# configure terminal
+Switch(config)# vlan 10
+Switch(config-vlan)# name Sales
+Switch(config-vlan)# exit
+Switch(config)# vlan 20
+Switch(config-vlan)# name Engineering
+Switch(config-vlan)# exit
+Switch(config)# interface vlan 10
+Switch(config-if)# ip address 192.168.10.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# exit
+Switch(config)# interface vlan 20
+Switch(config-if)# ip address 192.168.20.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# exit
+```
+
+### 13.3 スタティックルートの追加
+
+```
+Switch(config)# ip route 0.0.0.0 0.0.0.0 192.168.10.254
+Switch(config)# end
+```
+
+### 13.4 SVIへのACL適用
+
+```
+Switch(config)# access-list 100 permit tcp 192.168.10.0 0.0.0.255 192.168.20.0 0.0.0.255 eq 80
+Switch(config)# access-list 100 deny ip any any
+Switch(config)# interface vlan 10
+Switch(config-if)# ip access-group 100 in
+Switch(config-if)# end
+```
+
+### 13.5 確認コマンド
+
+```
+Switch# show ip route
+Switch# show access-lists
+Switch# show ip interface brief
+```
+
+### 13.6 設定例: VLAN間ルーティング
+
+VLAN 10（192.168.10.0/24）とVLAN 20（192.168.20.0/24）間の通信を可能にし、デフォルトルートを設定する例:
+
+```
+Switch# configure terminal
+Switch(config)# vlan 10
+Switch(config-vlan)# exit
+Switch(config)# vlan 20
+Switch(config-vlan)# exit
+Switch(config)# interface vlan 10
+Switch(config-if)# ip address 192.168.10.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# exit
+Switch(config)# interface vlan 20
+Switch(config-if)# ip address 192.168.20.1 255.255.255.0
+Switch(config-if)# no shutdown
+Switch(config-if)# exit
+Switch(config)# ip route 0.0.0.0 0.0.0.0 192.168.10.254
+Switch(config)# end
+```
+
+PCからの疎通確認:
+
+```
+PC1# ping 192.168.20.1
+PC2# ping 192.168.10.1
+```
+
+---
+
+## 14. LACP / ボンディング設定ガイド
+
+### 14.1 概要
+
+サーバーやPCの複数NICをボンディング（active-backup モード）で束ねることで、冗長性を確保できます。プライマリNIC（IPアドレスを保持するインターフェース）がダウンした場合、パートナーNICが自動的に引き継ぎます。
+
+### 14.2 ボンドグループの設定
+
+```
+Server> enable
+Server# configure terminal
+Server(config)# interface Ethernet0
+Server(config-if)# bond-group Bond0
+Server(config-if)# exit
+Server(config)# interface Ethernet1
+Server(config-if)# bond-group Bond0
+Server(config-if)# exit
+Server(config)# end
+```
+
+### 14.3 ボンドグループの解除
+
+```
+Server(config)# interface Ethernet0
+Server(config-if)# no bond-group
+Server(config-if)# exit
+Server(config)# interface Ethernet1
+Server(config-if)# no bond-group
+Server(config-if)# exit
+```
+
+### 14.4 確認コマンド
+
+```
+Server# show etherchannel summary
+```
+
+### 14.5 フェイルオーバーの動作
+
+IPアドレスを持つプライマリNIC（例: Ethernet0）がダウンすると、同じボンドグループ内のパートナーNIC（例: Ethernet1）が自動的にIPアドレスとMACアドレスを引き継ぎ、通信を継続します。
+
+### 14.6 設定例: フェイルオーバー検証
+
+Ethernet0とEthernet1でBond0を構成し、フェイルオーバーを確認する例:
+
+```
+Server# configure terminal
+Server(config)# interface Ethernet0
+Server(config-if)# ip address 192.168.1.100 255.255.255.0
+Server(config-if)# no shutdown
+Server(config-if)# bond-group Bond0
+Server(config-if)# exit
+Server(config)# interface Ethernet1
+Server(config-if)# no shutdown
+Server(config-if)# bond-group Bond0
+Server(config-if)# exit
+Server(config)# end
+```
+
+フェイルオーバーテスト:
+
+```
+PC1# ping 192.168.1.100         ← 正常に応答
+Server# configure terminal
+Server(config)# interface Ethernet0
+Server(config-if)# shutdown      ← プライマリNICを停止
+Server(config-if)# end
+PC1# ping 192.168.1.100         ← Ethernet1経由で応答（フェイルオーバー成功）
+```
+
+---
+
+## 15. キャンバスのズーム / パン操作
+
+### 15.1 ズーム
+
+- **マウスホイール**: カーソル位置を中心にズームイン/ズームアウト（20%〜400%）
+- ズーム倍率が100%以外の場合、画面左下にパーセンテージが表示されます
+
+### 15.2 パン（スクロール）
+
+- **空白エリアをドラッグ**: デザインモード・シミュレーションモードの両方でキャンバスをパン移動できます
+- **中マウスボタン（ホイールクリック）ドラッグ**: モードに関わらず常にパン操作が可能です
+
+### 15.3 画面フィット
+
+- **空白エリアをダブルクリック**: 全デバイスが画面内に収まるように自動的にズームとパンを調整します
+
+---
+
+## 16. 設定の保存と読み込み
 
 すべてのファイル操作はツールバーの「**File ▾**」ドロップダウンメニューから行います。
 
-### 12.1 手動保存
+### 16.1 手動保存
 
 「File ▾」>「Save」をクリックすると、現在の全設定がブラウザのlocalStorageに保存されます。
 
-### 12.2 手動読み込み
+### 16.2 手動読み込み
 
 「File ▾」>「Load」をクリックすると、最後に保存した設定を読み込みます。
 
-### 12.3 JSONエクスポート
+### 16.3 JSONエクスポート
 
 1. 「File ▾」>「Export JSON」をクリック
 2. JSON形式の設定ファイルが自動的にダウンロードされます
 3. このファイルを他の環境やバックアップとして保管できます
 
-### 12.4 JSONインポート
+### 16.4 JSONインポート
 
 1. 「File ▾」>「Import JSON」をクリック
 2. ファイル選択ダイアログでJSONファイルを選択
 3. 設定が読み込まれ、トポロジが復元されます
 
-### 12.5 コマンドスクリプトエクスポート
+### 16.5 コマンドスクリプトエクスポート
 
 1. 「File ▾」>「Export Script」をクリック
 2. 全デバイスの設定がCLIコマンド形式のテキストファイルとしてダウンロードされます
@@ -543,7 +719,7 @@ ip route 10.0.0.0 255.255.255.0 192.168.2.2
 end
 ```
 
-### 12.6 テンプレートからのロード
+### 16.6 テンプレートからのロード
 
 1. ツールバーの「Templates」ボタンをクリック
 2. テンプレート選択画面が表示されます
@@ -557,7 +733,7 @@ end
 - **NAT to Internet** — R x2 + SW + SV + PC x2
 - **Empty Canvas** — 空のキャンバス
 
-### 12.7 初期化（リセット）
+### 16.7 初期化（リセット）
 
 1. ツールバーの「Reset」ボタンをクリック
 2. 確認ダイアログが表示されます
@@ -565,9 +741,9 @@ end
 
 ---
 
-## 14. トラブルシューティング
+## 17. トラブルシューティング
 
-### 14.1 Pingが失敗する
+### 17.1 Pingが失敗する
 
 | 確認事項 | コマンド |
 |----------|---------|
@@ -580,7 +756,7 @@ end
 | NATの設定が正しいか | `show ip nat translations` |
 | パケットフロー診断で原因を特定 | `show packet-flow <宛先IP>` |
 
-### 14.2 VLANが通じない
+### 17.2 VLANが通じない
 
 | 確認事項 | コマンド |
 |----------|---------|
@@ -590,7 +766,7 @@ end
 | 両端のポートが同じVLANか | 両スイッチで `show vlan brief` |
 | ARPがVLAN境界を越えていないか | `clear arp` して `ping` でARP可視化を確認 |
 
-### 14.3 NATが動作しない
+### 17.3 NATが動作しない
 
 | 確認事項 | コマンド |
 |----------|---------|
@@ -599,7 +775,7 @@ end
 | NATプールに利用可能なIPがあるか | `show ip nat statistics` |
 | スタティックNATエントリが正しいか | `show ip nat translations` |
 
-### 14.4 ACLでブロックされる
+### 17.4 ACLでブロックされる
 
 | 確認事項 | コマンド |
 |----------|---------|
@@ -610,7 +786,7 @@ end
 
 ---
 
-## 15. キーボードショートカット
+## 18. キーボードショートカット
 
 | キー | 動作 |
 |------|------|
@@ -621,7 +797,7 @@ end
 
 ---
 
-## 16. よくある質問（FAQ）
+## 19. よくある質問（FAQ）
 
 **Q: ブラウザを閉じると設定は消えますか？**
 A: 自動保存機能により、localStorageに設定が保持されます。ただし、ブラウザの閲覧データを消去すると失われるため、重要な設定はJSONエクスポートでバックアップしてください。
