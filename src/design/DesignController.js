@@ -32,7 +32,7 @@ export class DesignController {
     const rect = this.canvas.getBoundingClientRect();
     const mx = clientX - rect.left;
     const my = clientY - rect.top;
-    return { x: mx / (rect.width / 800), y: my / (rect.height / 560) };
+    return this.renderer.screenToLogical(mx, my);
   }
 
   hitTestDevice(logicalX, logicalY) {
@@ -72,7 +72,7 @@ export class DesignController {
 
     const deviceId = this.hitTestDevice(pos.x, pos.y);
     if (deviceId) {
-      // Start drag
+      // Start device drag
       const dv = this.store.getDevice(deviceId);
       state.dragging = {
         deviceId,
@@ -80,6 +80,11 @@ export class DesignController {
         offsetY: pos.y - dv.y,
       };
       e.preventDefault();
+    } else {
+      // Start canvas pan (empty area drag in design mode)
+      this._designPanning = true;
+      this._designPanStart = { x: e.clientX, y: e.clientY, panX: this.store.viewState.panX, panY: this.store.viewState.panY };
+      this.canvas.style.cursor = 'grabbing';
     }
   }
 
@@ -92,9 +97,17 @@ export class DesignController {
     // Update cursor position for rubber band line
     state.cursorPos = pos;
 
+    if (this._designPanning && this._designPanStart) {
+      const vs = this.store.viewState;
+      vs.panX = this._designPanStart.panX + (e.clientX - this._designPanStart.x);
+      vs.panY = this._designPanStart.panY + (e.clientY - this._designPanStart.y);
+      this.renderer.draw();
+      return;
+    }
+
     if (state.dragging) {
-      const newX = Math.max(30, Math.min(770, pos.x - state.dragging.offsetX));
-      const newY = Math.max(30, Math.min(530, pos.y - state.dragging.offsetY));
+      const newX = Math.max(-200, Math.min(2000, pos.x - state.dragging.offsetX));
+      const newY = Math.max(-200, Math.min(1400, pos.y - state.dragging.offsetY));
       this.store.moveDevice(state.dragging.deviceId, newX, newY);
       return;
     }
@@ -114,6 +127,11 @@ export class DesignController {
 
   _onMouseUp(e) {
     if (!this.store.designMode) return;
+    if (this._designPanning) {
+      this._designPanning = false;
+      this._designPanStart = null;
+      this.canvas.style.cursor = '';
+    }
     const state = this.store.designState;
     if (state.dragging) {
       state.dragging = null;

@@ -14,6 +14,7 @@ export class Store {
     this.historyIndex = -1;
     this.designMode = false;
     this.designState = { dragging: null, linking: null, hoverDeviceId: null, cursorPos: null };
+    this.viewState = { zoom: 1, panX: 0, panY: 0 };
   }
 
   // ─── Device access ───
@@ -183,6 +184,36 @@ export class Store {
       this.currentDeviceId = ids[0];
     }
     this.eventBus.emit('device:listChanged');
+    this.eventBus.emit('topology:changed');
+  }
+
+  // ─── View (zoom/pan) ───
+  resetView() {
+    this.viewState = { zoom: 1, panX: 0, panY: 0 };
+    this.eventBus.emit('topology:changed');
+  }
+
+  fitView(canvasWidth, canvasHeight) {
+    const devices = Object.values(this.devices);
+    if (devices.length === 0) { this.resetView(); return; }
+    const margin = 60;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const dv of devices) {
+      minX = Math.min(minX, dv.x); minY = Math.min(minY, dv.y);
+      maxX = Math.max(maxX, dv.x); maxY = Math.max(maxY, dv.y);
+    }
+    const contentW = (maxX - minX) + margin * 2;
+    const contentH = (maxY - minY) + margin * 2;
+    const scaleX = canvasWidth / 800;
+    const scaleY = canvasHeight / 560;
+    const zoomX = canvasWidth / (contentW * scaleX);
+    const zoomY = canvasHeight / (contentH * scaleY);
+    const zoom = Math.min(zoomX, zoomY, 2.0);
+    const centerLX = (minX + maxX) / 2;
+    const centerLY = (minY + maxY) / 2;
+    const panX = canvasWidth / 2 - centerLX * scaleX * zoom;
+    const panY = canvasHeight / 2 - centerLY * scaleY * zoom;
+    this.viewState = { zoom, panX, panY };
     this.eventBus.emit('topology:changed');
   }
 

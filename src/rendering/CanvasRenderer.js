@@ -11,9 +11,17 @@ export class CanvasRenderer {
     this.dpr = window.devicePixelRatio || 1;
     this.pingAnimId = 0;
     this.pingAnimRunning = false;
+    this._panning = false;
+    this._panStart = null;
 
     // Bind events
     window.addEventListener('resize', () => this.resize());
+    canvas.addEventListener('wheel', (e) => this._onWheel(e), { passive: false });
+    canvas.addEventListener('mousedown', (e) => this._onPanStart(e));
+    canvas.addEventListener('mousemove', (e) => this._onPanMove(e));
+    canvas.addEventListener('mouseup', (e) => this._onPanEnd(e));
+    canvas.addEventListener('mouseleave', (e) => this._onPanEnd(e));
+    canvas.addEventListener('dblclick', (e) => this._onDblClick(e));
     eventBus.on('topology:changed', () => { if (!this.pingAnimRunning) this.draw(); });
     eventBus.on('device:switched', () => this.draw());
     eventBus.on('command:executed', () => { if (!this.pingAnimRunning) this.draw(); });
@@ -29,16 +37,35 @@ export class CanvasRenderer {
     this.draw();
   }
 
+  // Convert screen (CSS pixel) coordinates to logical coordinates
+  screenToLogical(screenX, screenY) {
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+    const { zoom, panX, panY } = this.store.viewState;
+    return {
+      x: (screenX - panX) / (zoom * w / 800),
+      y: (screenY - panY) / (zoom * h / 560),
+    };
+  }
+
   draw() {
     const ctx = this.ctx;
     const w = this.canvas.width / this.dpr;
     const h = this.canvas.height / this.dpr;
 
+    // Clear in screen space (before zoom/pan transform)
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    // Apply zoom/pan
+    const { zoom, panX, panY } = this.store.viewState;
+    ctx.translate(panX, panY);
+    ctx.scale(zoom, zoom);
+
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
     ctx.setLineDash([]);
     ctx.textAlign = 'left';
-    ctx.clearRect(0, 0, w, h);
 
     const scaleX = w / 800;
     const scaleY = h / 560;
@@ -145,6 +172,17 @@ export class CanvasRenderer {
     if (this.store.designMode) {
       this._drawDesignOverlay(ctx, w, h, sx, sy);
     }
+
+    // ─── Zoom indicator (drawn in screen space) ───
+    if (zoom !== 1 || panX !== 0 || panY !== 0) {
+      ctx.save();
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      ctx.font = '11px Segoe UI, sans-serif';
+      ctx.fillStyle = '#ffffff55';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.round(zoom * 100)}%`, 10, h - 10);
+      ctx.restore();
+    }
   }
 
   _drawDesignOverlay(ctx, w, h, sx, sy) {
@@ -181,12 +219,15 @@ export class CanvasRenderer {
       }
     }
 
-    // "DESIGN MODE" indicator
+    // "DESIGN MODE" indicator (in screen space)
     ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    const sw = this.canvas.width / this.dpr;
+    const sh = this.canvas.height / this.dpr;
     ctx.font = '11px Segoe UI, sans-serif';
     ctx.fillStyle = '#4fc3f755';
     ctx.textAlign = 'right';
-    ctx.fillText('DESIGN MODE', w - 12, h - 12);
+    ctx.fillText('DESIGN MODE', sw - 12, sh - 12);
     ctx.restore();
   }
 
@@ -714,6 +755,79 @@ export class CanvasRenderer {
     animateOneResolution();
   }
 
+  // ─── Zoom/Pan event handlers ───
+  _onWheel(e) {
+    e.preventDefault();
+    const vs = this.store.viewState;
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const newZoom = Math.max(0.2, Math.min(4.0, vs.zoom * factor));
+
+    // Zoom centered on cursor
+    vs.panX = mx - (mx - vs.panX) * newZoom / vs.zoom;
+    vs.panY = my - (my - vs.panY) * newZoom / vs.zoom;
+    vs.zoom = newZoom;
+    this.draw();
+  }
+
+  _onPanStart(e) {
+    // Middle mouse button always pans
+    if (e.button === 1) {
+      e.preventDefault();
+      this._panning = true;
+      this._panStart = { x: e.clientX, y: e.clientY, panX: this.store.viewState.panX, panY: this.store.viewState.panY };
+      this.canvas.style.cursor = 'grabbing';
+      return;
+    }
+    // Left button on empty area: pan in simulation mode (not design mode)
+    if (e.button === 0 && !this.store.designMode) {
+      const rect = this.canvas.getBoundingClientRect();
+      const pos = this.screenToLogical(e.clientX - rect.left, e.clientY - rect.top);
+      const devices = this.store.getDevices();
+      let hitDevice = false;
+      for (const dv of Object.values(devices)) {
+        if (Math.sqrt((pos.x - dv.x) ** 2 + (pos.y - dv.y) ** 2) < 35) { hitDevice = true; break; }
+      }
+      if (!hitDevice) {
+        this._panning = true;
+        this._panStart = { x: e.clientX, y: e.clientY, panX: this.store.viewState.panX, panY: this.store.viewState.panY };
+        this.canvas.style.cursor = 'grabbing';
+      }
+    }
+  }
+
+  _onPanMove(e) {
+    if (!this._panning || !this._panStart) return;
+    const vs = this.store.viewState;
+    vs.panX = this._panStart.panX + (e.clientX - this._panStart.x);
+    vs.panY = this._panStart.panY + (e.clientY - this._panStart.y);
+    this.draw();
+  }
+
+  _onPanEnd(e) {
+    if (this._panning) {
+      this._panning = false;
+      this._panStart = null;
+      this.canvas.style.cursor = '';
+    }
+  }
+
+  _onDblClick(e) {
+    // Double-click on empty area: fit view to content
+    const rect = this.canvas.getBoundingClientRect();
+    const pos = this.screenToLogical(e.clientX - rect.left, e.clientY - rect.top);
+    const devices = this.store.getDevices();
+    for (const dv of Object.values(devices)) {
+      if (Math.sqrt((pos.x - dv.x) ** 2 + (pos.y - dv.y) ** 2) < 35) return;
+    }
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+    this.store.fitView(w, h);
+  }
+
   // ─── Canvas click handling ───
   setupClickHandler(switchDevice, designController, palette) {
     this.canvas.addEventListener('click', async (e) => {
@@ -727,15 +841,13 @@ export class CanvasRenderer {
 
       // Normal simulation mode: switch device on click
       const rect = this.canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const w = rect.width;
-      const h = rect.height;
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      const pos = this.screenToLogical(screenX, screenY);
       const devices = this.store.getDevices();
       for (const [id, dv] of Object.entries(devices)) {
-        const x = dv.x * (w / 800);
-        const y = dv.y * (h / 560);
-        if (Math.sqrt((mx - x) ** 2 + (my - y) ** 2) < 35) { switchDevice(id); return; }
+        const dx = pos.x - dv.x, dy = pos.y - dv.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 35) { switchDevice(id); return; }
       }
     });
   }
