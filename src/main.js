@@ -22,6 +22,15 @@ import { initSplitter } from './ui/Splitter.js';
 import { initTemplateSelector, showTemplateSelector } from './ui/TemplateSelector.js';
 import { downloadCommandScript } from './persistence/ConfigExport.js';
 import { showToast } from './ui/Toast.js';
+import { TestRunner } from './test/TestRunner.js';
+import { TestUI } from './test/TestUI.js';
+import { registerVlanTests } from './test/tests/VlanTests.js';
+import { registerArpTests } from './test/tests/ArpTests.js';
+import { registerRoutingTests } from './test/tests/RoutingTests.js';
+import { registerFirewallTests } from './test/tests/FirewallTests.js';
+import { registerNatTests } from './test/tests/NatTests.js';
+import { registerAclTests } from './test/tests/AclTests.js';
+import { registerPacketFlowTests } from './test/tests/PacketFlowTests.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -166,6 +175,35 @@ window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
 window.showTemplates = showTemplateSelector;
 window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
+
+// ─── Test Mode ───
+const testRunner = new TestRunner();
+registerVlanTests(testRunner);
+registerArpTests(testRunner);
+registerRoutingTests(testRunner);
+registerFirewallTests(testRunner);
+registerNatTests(testRunner);
+registerAclTests(testRunner);
+registerPacketFlowTests(testRunner);
+
+const testModeContainer = document.getElementById('testModeContainer');
+const testUI = new TestUI(testModeContainer, testRunner);
+
+function enterTestMode() {
+  testModeContainer.style.display = 'flex';
+  document.querySelector('header').style.display = 'none';
+  document.querySelector('.main-container').style.display = 'none';
+}
+
+function exitTestMode() {
+  testModeContainer.style.display = 'none';
+  document.querySelector('header').style.display = '';
+  document.querySelector('.main-container').style.display = '';
+  document.getElementById('cmdInput').focus();
+}
+
+testUI.onBack = exitTestMode;
+document.getElementById('testModeBtn').addEventListener('click', enterTestMode);
 
 // ─── Setup ───
 initTemplateSelector(store, refreshUI);
