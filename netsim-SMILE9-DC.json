@@ -1,0 +1,1303 @@
+{
+  "timestamp": "2026-04-01T00:00:00.000Z",
+  "version": 2,
+  "devices": {
+    "RTX1220DC": {
+      "type": "router",
+      "hostname": "RTX1220-DC",
+      "x": 500,
+      "y": 60,
+      "routes": [
+        {
+          "network": "192.168.1.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.2"
+        },
+        {
+          "network": "192.168.2.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.2"
+        }
+      ],
+      "nat": {
+        "staticEntries": [],
+        "pools": {},
+        "dynamicRules": []
+      },
+      "accessLists": {},
+      "interfaces": {
+        "GigabitEthernet0/0": {
+          "ip": "192.168.0.1",
+          "mask": "255.255.255.252",
+          "status": "up",
+          "protocol": "up",
+          "description": "LAN1 - DMZ transit to UTX200",
+          "connected": {
+            "device": "UTX200",
+            "iface": "GigabitEthernet0/1"
+          }
+        },
+        "GigabitEthernet0/1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "LAN2 - IP-VPN (HOTnet)",
+          "connected": null
+        }
+      }
+    },
+    "UTX200": {
+      "type": "firewall",
+      "hostname": "UTX200",
+      "x": 500,
+      "y": 220,
+      "routes": [
+        {
+          "network": "192.168.2.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.1.253"
+        },
+        {
+          "network": "192.168.91.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.92.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.93.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.101.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.102.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.103.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.104.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.105.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.106.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.107.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.108.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.109.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.110.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.111.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.112.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.113.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.114.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.115.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.116.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        },
+        {
+          "network": "192.168.201.0",
+          "mask": "255.255.255.0",
+          "nextHop": "192.168.0.1"
+        }
+      ],
+      "nat": {
+        "staticEntries": [
+          {
+            "insideLocal": "192.168.1.11",
+            "insideGlobal": "10.1.2.11"
+          },
+          {
+            "insideLocal": "192.168.1.12",
+            "insideGlobal": "10.1.2.12"
+          }
+        ],
+        "pools": {
+          "HIDE-NAT": {
+            "startIP": "10.1.2.13",
+            "endIP": "10.1.2.13",
+            "netmask": "255.255.255.0"
+          }
+        },
+        "dynamicRules": [
+          {
+            "aclNum": 1,
+            "poolName": "HIDE-NAT"
+          }
+        ]
+      },
+      "accessLists": {
+        "1": [
+          {
+            "action": "permit",
+            "network": "192.168.1.0",
+            "wildcard": "0.0.0.255"
+          }
+        ],
+        "100": [
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "any",
+            "srcWildcard": "0.0.0.0",
+            "dst": "192.168.1.11",
+            "dstWildcard": "0.0.0.0",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "any",
+            "srcWildcard": "0.0.0.0",
+            "dst": "192.168.1.12",
+            "dstWildcard": "0.0.0.0",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "icmp",
+            "src": "any",
+            "srcWildcard": "0.0.0.0",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": null
+          },
+          {
+            "action": "deny",
+            "protocol": "ip",
+            "src": "any",
+            "srcWildcard": "0.0.0.0",
+            "dst": "any",
+            "dstWildcard": "0.0.0.0",
+            "port": null
+          }
+        ],
+        "101": [
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.91.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.92.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.93.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.101.0",
+            "srcWildcard": "0.0.15.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.201.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "tcp",
+            "src": "192.168.201.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.2.0",
+            "dstWildcard": "0.0.0.255",
+            "port": 443
+          },
+          {
+            "action": "permit",
+            "protocol": "icmp",
+            "src": "192.168.201.0",
+            "srcWildcard": "0.0.0.255",
+            "dst": "192.168.1.0",
+            "dstWildcard": "0.0.0.255",
+            "port": null
+          },
+          {
+            "action": "deny",
+            "protocol": "ip",
+            "src": "any",
+            "srcWildcard": "0.0.0.0",
+            "dst": "any",
+            "dstWildcard": "0.0.0.0",
+            "port": null
+          }
+        ]
+      },
+      "policies": [
+        {
+          "seq": 10,
+          "action": "permit",
+          "src": "any",
+          "srcWildcard": "0.0.0.0",
+          "dst": "192.168.1.11",
+          "dstWildcard": "0.0.0.0",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 20,
+          "action": "permit",
+          "src": "any",
+          "srcWildcard": "0.0.0.0",
+          "dst": "192.168.1.12",
+          "dstWildcard": "0.0.0.0",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 30,
+          "action": "permit",
+          "src": "192.168.91.0",
+          "srcWildcard": "0.0.0.255",
+          "dst": "192.168.1.0",
+          "dstWildcard": "0.0.0.255",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 40,
+          "action": "permit",
+          "src": "192.168.92.0",
+          "srcWildcard": "0.0.0.255",
+          "dst": "192.168.1.0",
+          "dstWildcard": "0.0.0.255",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 50,
+          "action": "permit",
+          "src": "192.168.93.0",
+          "srcWildcard": "0.0.0.255",
+          "dst": "192.168.1.0",
+          "dstWildcard": "0.0.0.255",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 60,
+          "action": "permit",
+          "src": "192.168.201.0",
+          "srcWildcard": "0.0.0.255",
+          "dst": "192.168.1.0",
+          "dstWildcard": "0.0.0.255",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 70,
+          "action": "permit",
+          "src": "192.168.201.0",
+          "srcWildcard": "0.0.0.255",
+          "dst": "192.168.2.0",
+          "dstWildcard": "0.0.0.255",
+          "protocol": "tcp",
+          "port": 443
+        },
+        {
+          "seq": 80,
+          "action": "permit",
+          "src": "192.168.1.32",
+          "srcWildcard": "0.0.0.0",
+          "dst": "any",
+          "dstWildcard": "0.0.0.0",
+          "protocol": "tcp",
+          "port": 80
+        },
+        {
+          "seq": 90,
+          "action": "permit",
+          "src": "192.168.1.32",
+          "srcWildcard": "0.0.0.0",
+          "dst": "any",
+          "dstWildcard": "0.0.0.0",
+          "protocol": "udp",
+          "port": 123
+        },
+        {
+          "seq": 1000,
+          "action": "deny",
+          "src": "any",
+          "srcWildcard": "0.0.0.0",
+          "dst": "any",
+          "dstWildcard": "0.0.0.0",
+          "protocol": "ip",
+          "port": null
+        }
+      ],
+      "interfaces": {
+        "GigabitEthernet0/0": {
+          "ip": "10.1.2.11",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "WAN - L2L closed network (HOTnet MC)",
+          "connected": null,
+          "natRole": "outside",
+          "accessGroup": {
+            "in": 100
+          }
+        },
+        "GigabitEthernet0/1": {
+          "ip": "192.168.0.2",
+          "mask": "255.255.255.252",
+          "status": "up",
+          "protocol": "up",
+          "description": "DMZ - VPN transit to RTX1220-DC",
+          "connected": {
+            "device": "RTX1220DC",
+            "iface": "GigabitEthernet0/0"
+          },
+          "accessGroup": {
+            "in": 101
+          }
+        },
+        "GigabitEthernet0/2": {
+          "ip": "192.168.1.254",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "LAN - Business segment gateway",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/24"
+          },
+          "natRole": "inside"
+        }
+      }
+    },
+    "SWX2310_1": {
+      "type": "switch",
+      "hostname": "SWX2310-1",
+      "x": 330,
+      "y": 420,
+      "vlans": {
+        "1": {
+          "name": "default"
+        },
+        "10": {
+          "name": "VLAN-Business"
+        },
+        "20": {
+          "name": "VLAN-Management"
+        }
+      },
+      "routes": [
+        {
+          "network": "0.0.0.0",
+          "mask": "0.0.0.0",
+          "nextHop": "192.168.1.254"
+        }
+      ],
+      "accessLists": {},
+      "interfaces": {
+        "Vlan10": {
+          "ip": "192.168.1.253",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "SVI VLAN10 - Business L3 gateway",
+          "connected": null
+        },
+        "Vlan20": {
+          "ip": "192.168.2.254",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "SVI VLAN20 - Management L3 gateway",
+          "connected": null
+        },
+        "GigabitEthernet0/0": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port1 - AP01 Business NIC1 (LACP)",
+          "connected": {
+            "device": "AP01",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port2 - AP02 Business NIC1 (LACP)",
+          "connected": {
+            "device": "AP02",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/2": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port3 - DB01 Business NIC1 (LACP)",
+          "connected": {
+            "device": "DB01",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/3": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port4 - DB02 Business NIC1 (LACP)",
+          "connected": {
+            "device": "DB02",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/4": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port5 - BK01 Business NIC1 (LACP)",
+          "connected": {
+            "device": "BK01",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/5": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port6 - AV01 Business NIC1 (LACP)",
+          "connected": {
+            "device": "AV01",
+            "iface": "Ethernet0"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/12": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port13 - AP01 iRMC",
+          "connected": {
+            "device": "AP01",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/13": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port14 - DB01 iRMC",
+          "connected": {
+            "device": "DB01",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/14": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port15 - BK01 iRMC",
+          "connected": {
+            "device": "BK01",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/24": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port25 - UTX200 LAN",
+          "connected": {
+            "device": "UTX200",
+            "iface": "GigabitEthernet0/2"
+          },
+          "switchport": {
+            "mode": "trunk",
+            "accessVlan": 1,
+            "trunkAllowed": [
+              10,
+              20
+            ]
+          }
+        },
+        "GigabitEthernet0/26": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port27 - Virtual Stack trunk to SW2",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/26"
+          },
+          "switchport": {
+            "mode": "trunk",
+            "accessVlan": 1,
+            "trunkAllowed": [
+              10,
+              20
+            ]
+          }
+        },
+        "GigabitEthernet0/27": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port28 - Virtual Stack trunk to SW2",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/27"
+          },
+          "switchport": {
+            "mode": "trunk",
+            "accessVlan": 1,
+            "trunkAllowed": [
+              10,
+              20
+            ]
+          }
+        }
+      }
+    },
+    "SWX2310_2": {
+      "type": "switch",
+      "hostname": "SWX2310-2",
+      "x": 670,
+      "y": 420,
+      "vlans": {
+        "1": {
+          "name": "default"
+        },
+        "10": {
+          "name": "VLAN-Business"
+        },
+        "20": {
+          "name": "VLAN-Management"
+        }
+      },
+      "routes": [],
+      "accessLists": {},
+      "interfaces": {
+        "GigabitEthernet0/0": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port1 - AP01 Business NIC2 (LACP)",
+          "connected": {
+            "device": "AP01",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port2 - AP02 Business NIC2 (LACP)",
+          "connected": {
+            "device": "AP02",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/2": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port3 - DB01 Business NIC2 (LACP)",
+          "connected": {
+            "device": "DB01",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/3": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port4 - DB02 Business NIC2 (LACP)",
+          "connected": {
+            "device": "DB02",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/4": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port5 - BK01 Business NIC2 (LACP)",
+          "connected": {
+            "device": "BK01",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/5": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port6 - AV01 Business NIC2 (LACP)",
+          "connected": {
+            "device": "AV01",
+            "iface": "Ethernet1"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 10,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/12": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port13 - AP02 iRMC",
+          "connected": {
+            "device": "AP02",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/13": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port14 - DB02 iRMC",
+          "connected": {
+            "device": "DB02",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/14": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port15 - AV01 iRMC",
+          "connected": {
+            "device": "AV01",
+            "iface": "Ethernet2"
+          },
+          "switchport": {
+            "mode": "access",
+            "accessVlan": 20,
+            "trunkAllowed": "all"
+          }
+        },
+        "GigabitEthernet0/26": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port27 - Virtual Stack trunk to SW1",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/26"
+          },
+          "switchport": {
+            "mode": "trunk",
+            "accessVlan": 1,
+            "trunkAllowed": [
+              10,
+              20
+            ]
+          }
+        },
+        "GigabitEthernet0/27": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Port28 - Virtual Stack trunk to SW1",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/27"
+          },
+          "switchport": {
+            "mode": "trunk",
+            "accessVlan": 1,
+            "trunkAllowed": [
+              10,
+              20
+            ]
+          }
+        }
+      }
+    },
+    "AP01": {
+      "type": "server",
+      "hostname": "SMILE9-AP01",
+      "x": 30,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.11",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - AP Active / IIS",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/0"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/0"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.11",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/12"
+          }
+        }
+      }
+    },
+    "AP02": {
+      "type": "server",
+      "hostname": "SMILE9-AP02",
+      "x": 190,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.12",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - AP Standby / IIS",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/1"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/1"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.12",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/12"
+          }
+        }
+      }
+    },
+    "DB01": {
+      "type": "server",
+      "hostname": "SMILE9-DB01",
+      "x": 350,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.21",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - DB Active / PostgreSQL 17",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/2"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/2"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.21",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/13"
+          }
+        }
+      }
+    },
+    "DB02": {
+      "type": "server",
+      "hostname": "SMILE9-DB02",
+      "x": 510,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.22",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - DB Standby",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/3"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/3"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.22",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/13"
+          }
+        }
+      }
+    },
+    "BK01": {
+      "type": "server",
+      "hostname": "SMILE9-BK01",
+      "x": 670,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.31",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - Backup/AD Secondary/Arcserve",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/4"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/4"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.31",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/14"
+          }
+        }
+      }
+    },
+    "AV01": {
+      "type": "server",
+      "hostname": "SMILE9-AV01",
+      "x": 830,
+      "y": 680,
+      "defaultGateway": "192.168.1.254",
+      "routes": [],
+      "interfaces": {
+        "Ethernet0": {
+          "ip": "192.168.1.32",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC1 (LACP) - AV/AD Primary/DNS/NTP",
+          "connected": {
+            "device": "SWX2310_1",
+            "iface": "GigabitEthernet0/5"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet1": {
+          "ip": "",
+          "mask": "",
+          "status": "up",
+          "protocol": "up",
+          "description": "Business NIC2 (LACP partner)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/5"
+          },
+          "bondGroup": "Bond0"
+        },
+        "Ethernet2": {
+          "ip": "192.168.2.32",
+          "mask": "255.255.255.0",
+          "status": "up",
+          "protocol": "up",
+          "description": "iRMC (VLAN20 Management)",
+          "connected": {
+            "device": "SWX2310_2",
+            "iface": "GigabitEthernet0/14"
+          }
+        }
+      }
+    }
+  },
+  "links": [
+    {
+      "from": "UTX200",
+      "fromIf": "GigabitEthernet0/1",
+      "to": "RTX1220DC",
+      "toIf": "GigabitEthernet0/0"
+    },
+    {
+      "from": "UTX200",
+      "fromIf": "GigabitEthernet0/2",
+      "to": "SWX2310_1",
+      "toIf": "GigabitEthernet0/24"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/26",
+      "to": "SWX2310_2",
+      "toIf": "GigabitEthernet0/26"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/27",
+      "to": "SWX2310_2",
+      "toIf": "GigabitEthernet0/27"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/0",
+      "to": "AP01",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/0",
+      "to": "AP01",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/12",
+      "to": "AP01",
+      "toIf": "Ethernet2"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/1",
+      "to": "AP02",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/1",
+      "to": "AP02",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/12",
+      "to": "AP02",
+      "toIf": "Ethernet2"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/2",
+      "to": "DB01",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/2",
+      "to": "DB01",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/13",
+      "to": "DB01",
+      "toIf": "Ethernet2"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/3",
+      "to": "DB02",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/3",
+      "to": "DB02",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/13",
+      "to": "DB02",
+      "toIf": "Ethernet2"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/4",
+      "to": "BK01",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/4",
+      "to": "BK01",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/14",
+      "to": "BK01",
+      "toIf": "Ethernet2"
+    },
+    {
+      "from": "SWX2310_1",
+      "fromIf": "GigabitEthernet0/5",
+      "to": "AV01",
+      "toIf": "Ethernet0"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/5",
+      "to": "AV01",
+      "toIf": "Ethernet1"
+    },
+    {
+      "from": "SWX2310_2",
+      "fromIf": "GigabitEthernet0/14",
+      "to": "AV01",
+      "toIf": "Ethernet2"
+    }
+  ]
+}
