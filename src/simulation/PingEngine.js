@@ -84,41 +84,12 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
 
     // Apply NAT at routers/firewalls — update curTargetIP for subsequent path decisions
     if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && step > 0) {
-      // Find ingress interface by tracing which interface connects to the previous device
       const prevDevId = path[path.length - 2] || null;
-      let ingressIfName = null;
-      if (prevDevId) {
-        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-          if (!iface.connected || iface.status !== 'up') continue;
-          if (iface.connected.device === prevDevId) { ingressIfName = ifName; break; }
-          // Check if previous device is behind a switch
-          const connDev = devices[iface.connected.device];
-          if (connDev && connDev.type === 'switch') {
-            const swVisited = new Set([iface.connected.device]);
-            const queue = [iface.connected.device];
-            while (queue.length > 0) {
-              const swId = queue.shift();
-              const sw = devices[swId];
-              for (const swIf of Object.values(sw.interfaces)) {
-                if (!swIf.connected || swIf.status !== 'up') continue;
-                if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
-                const cd = devices[swIf.connected.device];
-                if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
-                  swVisited.add(swIf.connected.device);
-                  queue.push(swIf.connected.device);
-                }
-              }
-              if (ingressIfName) break;
-            }
-          }
-          if (ingressIfName) break;
-        }
-      }
+      let ingressIfName = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
       if (ingressIfName) {
         const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
         curSrcIP = natResult.srcIP;
         curTargetIP = natResult.dstIP;
-        // Re-check: did NAT resolve to a local address on this device?
         for (const iface of Object.values(dv.interfaces)) {
           if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
         }
@@ -128,18 +99,8 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     // Inbound ACL check on ingress interface
     if ((dv.type === 'router' || dv.type === 'firewall') && step > 0) {
       const prevDevId = path[path.length - 2] || null;
-      if (prevDevId) {
-        let aclIngressIf = null;
-        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-          if (!iface.connected || iface.status !== 'up') continue;
-          if (iface.connected.device === prevDevId) { aclIngressIf = ifName; break; }
-          const connDev = devices[iface.connected.device];
-          if (connDev && connDev.type === 'switch') {
-            if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) { aclIngressIf = ifName; break; }
-          }
-        }
-        if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP)) break;
-      }
+      const aclIngressIf = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
+      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP)) break;
     }
 
     // Firewall policy check — if denied, stop path here
@@ -184,6 +145,10 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     if (!neighborDev) break;
 
     if (neighborDev.type === 'switch') {
+      // Determine the VLAN from the switch entry port
+      const entrySwIf = neighborDev.interfaces[neighbor.iface];
+      const entryVlan = entrySwIf && entrySwIf.switchport ? (entrySwIf.switchport.mode === 'access' ? entrySwIf.switchport.accessVlan : null) : 1;
+
       // Always add switch to path (switches are L2 transit points, can appear multiple times)
       linkHints.push({ fromIf: exitIfName, toIf: neighbor.iface });
       path.push(neighbor.device);
@@ -192,7 +157,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       const targetDevId = findDeviceByIP(devices, nextHopIP);
       if (!targetDevId || visited.has(targetDevId)) break;
 
-      const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId);
+      const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId, entryVlan);
       for (const sid of swPath) {
         // Switch-to-switch links: find the connecting interfaces
         const prevSwId = path[path.length - 1];
@@ -260,7 +225,9 @@ function findIngressIP(devices, devId, prevDevId, ingressIfHint) {
     } else {
       const connDev = devices[iface.connected.device];
       if (connDev && connDev.type === 'switch') {
-        if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) candidates.push(ifName);
+        const swIf = connDev.interfaces[iface.connected.iface];
+        const vlan = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+        if (isReachableViaSwitch(devices, iface.connected.device, prevDevId, vlan)) candidates.push(ifName);
       }
     }
   }
@@ -273,14 +240,44 @@ function findIngressIP(devices, devId, prevDevId, ingressIfHint) {
 }
 
 // BFS: check if targetDevId is reachable from a switch without crossing L3 devices
-function isReachableViaSwitch(devices, startSwId, targetDevId) {
+// Check if a switch port carries the given VLAN
+function portCarriesVlan(iface, vlan) {
+  if (!iface.switchport) return true; // non-switchport (e.g. L3 interface) — allow
+  if (iface.switchport.mode === 'access') return iface.switchport.accessVlan === vlan;
+  if (iface.switchport.mode === 'trunk') {
+    const allowed = iface.switchport.trunkAllowed;
+    return allowed === 'all' || (Array.isArray(allowed) && allowed.includes(vlan));
+  }
+  return false;
+}
+
+// Find which interface on 'dv' connects to prevDevId (directly or via switch, VLAN-aware)
+function findIngressIfViaSwitch(devices, dv, prevDevId) {
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.connected || iface.status !== 'up') continue;
+    if (iface.connected.device === prevDevId) return ifName;
+    const connDev = devices[iface.connected.device];
+    if (connDev && connDev.type === 'switch') {
+      const swIf = connDev.interfaces[iface.connected.iface];
+      const vlan = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+      if (isReachableViaSwitch(devices, iface.connected.device, prevDevId, vlan)) return ifName;
+    }
+  }
+  return null;
+}
+
+// VLAN-aware BFS: check if targetDevId is reachable from a switch within a given VLAN
+// If vlan is null, falls back to non-VLAN-aware behavior (for backward compatibility)
+function isReachableViaSwitch(devices, startSwId, targetDevId, vlan) {
   const visited = new Set([startSwId]);
   const queue = [startSwId];
   while (queue.length > 0) {
     const curId = queue.shift();
     const sw = devices[curId];
-    for (const iface of Object.values(sw.interfaces)) {
+    for (const [ifName, iface] of Object.entries(sw.interfaces)) {
       if (!iface.connected || iface.status !== 'up') continue;
+      // VLAN check: if vlan is specified, only traverse ports that carry it
+      if (vlan != null && !portCarriesVlan(iface, vlan)) continue;
       const connId = iface.connected.device;
       if (connId === targetDevId) return true;
       if (visited.has(connId)) continue;
@@ -294,14 +291,16 @@ function isReachableViaSwitch(devices, startSwId, targetDevId) {
   return false;
 }
 
-function bfsSwitchPath(devices, startSwId, targetDevId) {
+// VLAN-aware BFS: find path of intermediate switches to targetDevId within a VLAN
+function bfsSwitchPath(devices, startSwId, targetDevId, vlan) {
   const queue = [{ id: startSwId, path: [] }];
   const visited = new Set([startSwId]);
   while (queue.length > 0) {
     const { id: curId, path: curPath } = queue.shift();
     const sw = devices[curId];
-    for (const iface of Object.values(sw.interfaces)) {
+    for (const [ifName, iface] of Object.entries(sw.interfaces)) {
       if (iface.status !== 'up' || !iface.connected) continue;
+      if (vlan != null && !portCarriesVlan(iface, vlan)) continue;
       const connId = iface.connected.device;
       if (connId === targetDevId) return curPath;
       if (visited.has(connId)) continue;
@@ -437,7 +436,9 @@ export function tracePacketFlow(devices, fromId, targetIP) {
         } else {
           const connDev = devices[iface.connected.device];
           if (connDev && connDev.type === 'switch') {
-            if (isReachableViaSwitch(devices, iface.connected.device, prevDevId)) {
+            const swIf = connDev.interfaces[iface.connected.iface];
+            const vlan = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+            if (isReachableViaSwitch(devices, iface.connected.device, prevDevId, vlan)) {
               candidates.push(ifName);
             }
           }
@@ -643,7 +644,7 @@ export function tracePacketFlow(devices, fromId, targetIP) {
 // ─── ARP resolution computation (for visualization) ───
 
 // Get all devices on the same L2 broadcast domain reachable from a switch
-function getL2BroadcastDomain(devices, switchId, excludeDeviceId) {
+function getL2BroadcastDomain(devices, switchId, excludeDeviceId, vlan) {
   const result = [];
   const visitedSwitches = new Set([switchId]);
   const queue = [switchId];
@@ -652,6 +653,8 @@ function getL2BroadcastDomain(devices, switchId, excludeDeviceId) {
     const sw = devices[curSwId];
     for (const [ifName, iface] of Object.entries(sw.interfaces)) {
       if (!iface.connected || iface.status !== 'up') continue;
+      // VLAN check: only traverse ports that carry the broadcast VLAN
+      if (vlan != null && !portCarriesVlan(iface, vlan)) continue;
       const connId = iface.connected.device;
       if (connId === excludeDeviceId) continue;
       const connDev = devices[connId];
@@ -662,7 +665,7 @@ function getL2BroadcastDomain(devices, switchId, excludeDeviceId) {
           queue.push(connId);
         }
       } else {
-        // Non-switch device on this L2 segment
+        // Non-switch device on this L2 segment (within the same VLAN)
         if (!result.find(r => r.deviceId === connId)) {
           result.push({ deviceId: connId, viaSwitch: curSwId, switchIf: ifName, deviceIf: iface.connected.iface });
         }
@@ -700,7 +703,9 @@ export function computeArpResolutions(devices, path, linkHints) {
         const connDev = devices[iface.connected.device];
         let reaches = iface.connected.device === path[j];
         if (!reaches && connDev && connDev.type === 'switch') {
-          reaches = isReachableViaSwitch(devices, iface.connected.device, path[j]);
+          const swIf = connDev.interfaces[iface.connected.iface];
+          const vl = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+          reaches = isReachableViaSwitch(devices, iface.connected.device, path[j], vl);
         }
         if (reaches) { egressIfName = ifName; egressIface = iface; break; }
       }
@@ -721,7 +726,11 @@ export function computeArpResolutions(devices, path, linkHints) {
         let connects = pif.connected.device === path[i];
         if (!connects) {
           const pc = devices[pif.connected.device];
-          if (pc && pc.type === 'switch') connects = isReachableViaSwitch(devices, pif.connected.device, path[i]);
+          if (pc && pc.type === 'switch') {
+            const swIf2 = pc.interfaces[pif.connected.iface];
+            const vl2 = swIf2 && swIf2.switchport && swIf2.switchport.mode === 'access' ? swIf2.switchport.accessVlan : null;
+            connects = isReachableViaSwitch(devices, pif.connected.device, path[i], vl2);
+          }
         }
         if (connects && getNetwork(egressIface.ip, egressIface.mask) === getNetwork(pif.ip, pif.mask)) {
           peerIfName = pifName; peerIface = pif; break;
@@ -753,8 +762,10 @@ export function computeArpResolutions(devices, path, linkHints) {
     const connDev = devices[egressIface.connected.device];
     if (connDev && connDev.type === 'switch') {
       const switchId = egressIface.connected.device;
+      const swEntryIf = connDev.interfaces[egressIface.connected.iface];
+      const arpVlan = swEntryIf && swEntryIf.switchport && swEntryIf.switchport.mode === 'access' ? swEntryIf.switchport.accessVlan : null;
       resolution.switchPath = [switchId];
-      resolution.broadcastTargets = getL2BroadcastDomain(devices, switchId, path[i]);
+      resolution.broadcastTargets = getL2BroadcastDomain(devices, switchId, path[i], arpVlan);
     } else {
       // Direct connection (point-to-point) — only the peer receives
       resolution.broadcastTargets = [{ deviceId: path[j], viaSwitch: null, switchIf: null, deviceIf: peerIfName }];
@@ -792,14 +803,15 @@ function buildArpAlongPath(devices, path) {
         if (iface.connected.device === path[j]) {
           reachesPeer = true;
         } else if (connDev && connDev.type === 'switch') {
-          reachesPeer = isReachableViaSwitch(devices, iface.connected.device, path[j]);
+          const swIf = connDev.interfaces[iface.connected.iface];
+          const vl = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+          reachesPeer = isReachableViaSwitch(devices, iface.connected.device, path[j], vl);
         }
         if (!reachesPeer) continue;
 
         // Find peer's interface facing us
         for (const [peerIfName, peerIface] of Object.entries(peer.interfaces)) {
           if (!peerIface.ip || peerIface.status !== 'up') continue;
-          // Check this peer interface connects back to us (directly or via switch)
           if (!peerIface.connected) continue;
           let connectsBack = false;
           if (peerIface.connected.device === path[i]) {
@@ -807,13 +819,15 @@ function buildArpAlongPath(devices, path) {
           } else {
             const peerConn = devices[peerIface.connected.device];
             if (peerConn && peerConn.type === 'switch') {
-              connectsBack = isReachableViaSwitch(devices, peerIface.connected.device, path[i]);
+              const pSwIf = peerConn.interfaces[peerIface.connected.iface];
+              const pVl = pSwIf && pSwIf.switchport && pSwIf.switchport.mode === 'access' ? pSwIf.switchport.accessVlan : null;
+              connectsBack = isReachableViaSwitch(devices, peerIface.connected.device, path[i], pVl);
             }
           }
           if (!connectsBack) continue;
 
-          // Check same subnet
-          if (getNetwork(iface.ip, iface.mask) !== getNetwork(peerIface.ip, peerIface.mask)) continue;
+          // Check if peer IP is in our subnet (use sender's mask — ARP is based on sender's view)
+          if (getNetwork(iface.ip, iface.mask) !== getNetwork(peerIface.ip, iface.mask)) continue;
 
           // Add ARP entry: we learned peer's IP → peer's MAC via our interface
           const peerMAC = generateMAC(path[j], peerIfName);
@@ -821,9 +835,9 @@ function buildArpAlongPath(devices, path) {
           if (!existing) {
             dv.arpTable.push({ ip: peerIface.ip, mac: peerMAC, iface: ifName });
           }
-          break;
+          // Continue to learn all reachable peer interfaces in the same subnet
         }
-        break;
+        break; // Only need one local egress interface
       }
     }
   }

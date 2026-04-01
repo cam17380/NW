@@ -1,6 +1,47 @@
 // ─── Routing, L2 reachability, and NAT logic (pure functions) ───
 import { getNetwork, maskToCIDR, ipToInt, intToIP } from './NetworkUtils.js';
 
+// VLAN-aware: find which interface on device connects to prevDevId (directly or via switch)
+function findIngressIf(devices, dv, prevDevId) {
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.connected || iface.status !== 'up') continue;
+    if (iface.connected.device === prevDevId) return ifName;
+    const connDev = devices[iface.connected.device];
+    if (connDev && connDev.type === 'switch') {
+      // Determine VLAN from the switch entry port
+      const swIf = connDev.interfaces[iface.connected.iface];
+      const vlan = swIf && swIf.switchport && swIf.switchport.mode === 'access' ? swIf.switchport.accessVlan : null;
+      // BFS through switch with VLAN awareness
+      const visited = new Set([iface.connected.device]);
+      const queue = [iface.connected.device];
+      let found = false;
+      while (queue.length > 0) {
+        const swId = queue.shift();
+        const sw = devices[swId];
+        for (const swPort of Object.values(sw.interfaces)) {
+          if (!swPort.connected || swPort.status !== 'up') continue;
+          if (vlan != null && swPort.switchport) {
+            if (swPort.switchport.mode === 'access' && swPort.switchport.accessVlan !== vlan) continue;
+            if (swPort.switchport.mode === 'trunk') {
+              const allowed = swPort.switchport.trunkAllowed;
+              if (allowed !== 'all' && !(Array.isArray(allowed) && allowed.includes(vlan))) continue;
+            }
+          }
+          if (swPort.connected.device === prevDevId) { found = true; break; }
+          const cd = devices[swPort.connected.device];
+          if (cd && cd.type === 'switch' && !visited.has(swPort.connected.device)) {
+            visited.add(swPort.connected.device);
+            queue.push(swPort.connected.device);
+          }
+        }
+        if (found) break;
+      }
+      if (found) return ifName;
+    }
+  }
+  return null;
+}
+
 export function canReach(devices, fromId, targetIP) {
   const visited = new Set();
   let srcIP = null;
@@ -26,41 +67,11 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
 
   // 1b. Apply NAT if this is a router/firewall with NAT config
   if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && prevDevId !== null) {
-    // Find ingress interface (the one connected to previous device)
-    let ingressIfName = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.connected || iface.status !== 'up') continue;
-      if (iface.connected.device === prevDevId) {
-        ingressIfName = ifName; break;
-      }
-      // Also check if previous device is behind a switch connected to this interface
-      const connDev = devices[iface.connected.device];
-      if (connDev && connDev.type === 'switch') {
-        // BFS: is prevDevId reachable through this switch?
-        const swVisited = new Set([iface.connected.device]);
-        const queue = [iface.connected.device];
-        while (queue.length > 0) {
-          const swId = queue.shift();
-          const sw = devices[swId];
-          for (const swIf of Object.values(sw.interfaces)) {
-            if (!swIf.connected || swIf.status !== 'up') continue;
-            if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
-            const cd = devices[swIf.connected.device];
-            if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
-              swVisited.add(swIf.connected.device);
-              queue.push(swIf.connected.device);
-            }
-          }
-          if (ingressIfName) break;
-        }
-      }
-      if (ingressIfName) break;
-    }
+    const ingressIfName = findIngressIf(devices, dv, prevDevId);
     if (ingressIfName) {
       const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
       curSrcIP = natResult.srcIP;
       curTargetIP = natResult.dstIP;
-      // Re-check after NAT
       for (const iface of Object.values(dv.interfaces)) {
         if (iface.ip === curTargetIP && iface.status === 'up') return true;
       }
@@ -69,31 +80,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
 
   // 1c. Inbound ACL check on ingress interface
   if (prevDevId !== null && (dv.type === 'router' || dv.type === 'firewall')) {
-    let ingressIfName = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.connected || iface.status !== 'up') continue;
-      if (iface.connected.device === prevDevId) { ingressIfName = ifName; break; }
-      const connDev = devices[iface.connected.device];
-      if (connDev && connDev.type === 'switch') {
-        const swVisited = new Set([iface.connected.device]);
-        const queue = [iface.connected.device];
-        while (queue.length > 0) {
-          const swId = queue.shift();
-          const sw = devices[swId];
-          for (const swIf of Object.values(sw.interfaces)) {
-            if (!swIf.connected || swIf.status !== 'up') continue;
-            if (swIf.connected.device === prevDevId) { ingressIfName = ifName; break; }
-            const cd = devices[swIf.connected.device];
-            if (cd && cd.type === 'switch' && !swVisited.has(swIf.connected.device)) {
-              swVisited.add(swIf.connected.device);
-              queue.push(swIf.connected.device);
-            }
-          }
-          if (ingressIfName) break;
-        }
-      }
-      if (ingressIfName) break;
-    }
+    const ingressIfName = findIngressIf(devices, dv, prevDevId);
     if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP)) return false;
   }
 
@@ -248,9 +235,8 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
           queue.push(iface.connected.device);
         }
       } else {
-        for (const endIf of Object.values(rDev.interfaces)) {
-          if (endIf.ip === targetIP && endIf.status === 'up') return true;
-        }
+        // Only check the specific interface connected to this VLAN port, not all device interfaces
+        if (rIf.ip === targetIP) return true;
       }
     }
   }
