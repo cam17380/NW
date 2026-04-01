@@ -14,7 +14,24 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   if (cmd === 'interface') {
     if (parts.length < 2) { termWrite('% Incomplete command — specify interface name', 'error-line'); return; }
-    const ifName = normalizeInterface(parts.slice(1).join(''));
+    const rawName = parts.slice(1).join('');
+    const ifName = normalizeInterface(rawName);
+    // SVI: "interface vlan <id>" on switches — auto-create if needed
+    if (ifName.startsWith('Vlan') && dev.type === 'switch') {
+      const vid = parseInt(ifName.slice(4));
+      if (isNaN(vid) || vid < 1 || vid > 4094) { termWrite('% Invalid VLAN ID (1-4094)', 'error-line'); return; }
+      if (!dev.vlans[vid]) {
+        dev.vlans[vid] = { name: 'VLAN' + String(vid).padStart(4, '0') };
+        termWrite(`% VLAN ${vid} created`, 'success-line');
+      }
+      if (!dev.interfaces[ifName]) {
+        dev.interfaces[ifName] = { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: null };
+        termWrite(`% SVI ${ifName} created`, 'success-line');
+      }
+      store.setCurrentInterface(ifName);
+      store.setCLIMode('config-if');
+      return;
+    }
     if (!dev.interfaces[ifName]) {
       termWrite(`% Invalid interface "${ifName}"`, 'error-line');
       termWrite('  Available: ' + Object.keys(dev.interfaces).join(', '));
@@ -25,9 +42,10 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
-  // ip route <network> <mask> <next-hop> — router/firewall/server
+  // ip route <network> <mask> <next-hop> — router/firewall/server/switch(L3)
   if (lower.startsWith('ip route ')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server') { termWrite('% ip route is only available on routers/firewalls/servers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server' && dev.type !== 'switch') { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
+    if (dev.type === 'switch' && !dev.routes) dev.routes = [];
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[2], mask = args[3], nextHop = args[4];
@@ -44,7 +62,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip route <network> <mask> <next-hop>
   if (lower.startsWith('no ip route')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server') { termWrite('% ip route is only available on routers/firewalls/servers', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server' && dev.type !== 'switch') { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 6) { termWrite('% Incomplete command — usage: no ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[3], mask = args[4], nextHop = args[5];
@@ -195,7 +213,8 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   // Extended ACL (100-199): access-list <num> permit|deny <proto> <src> <srcWC> <dst> <dstWC> [eq <port>]
   //                         supports "any" and "host <ip>" keywords for src/dst
   if (cmd === 'access-list') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% access-list is only available on routers/firewalls', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
+    if (!dev.accessLists) dev.accessLists = {};
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit|deny ...', 'error-line'); return; }
     const aclNum = parseInt(args[1]);
@@ -276,7 +295,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no access-list <num>
   if (lower.startsWith('no access-list')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% access-list is only available on routers/firewalls', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
     const args = input.split(/\s+/);
     const aclNum = parseInt(args[2]);
     if (isNaN(aclNum)) { termWrite('% Incomplete command — usage: no access-list <num>', 'error-line'); return; }

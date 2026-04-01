@@ -6,6 +6,7 @@ const abbreviations = {
   'conf term': 'configure terminal',
   'configure t': 'configure terminal',
   'int': 'interface',
+  'int vlan': 'interface vlan',
   'sh ip int br': 'show ip interface brief',
   'sh ip int brief': 'show ip interface brief',
   'show ip int br': 'show ip interface brief',
@@ -67,6 +68,10 @@ const abbreviations = {
   'sh pf': 'show packet-flow',
   'show pf': 'show packet-flow',
   'sh packet-flow': 'show packet-flow',
+  // Bond/EtherChannel
+  'sh ether': 'show etherchannel summary',
+  'sh etherchannel': 'show etherchannel summary',
+  'sh bond': 'show bond',
   // ARP
   'sh arp': 'show arp',
   'cl arp': 'clear arp',

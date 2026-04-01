@@ -44,7 +44,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show access-lists' || lower === 'show ip access-lists') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ACLs are not available on this device', 'error-line'); return; }
+    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% ACLs are not available on this device', 'error-line'); return; }
     if (!dev.accessLists || Object.keys(dev.accessLists).length === 0) {
       termWrite('  (no access lists configured)');
       return;
@@ -83,7 +83,8 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show ip route') {
-    if (dev.type === 'switch') { termWrite('% Routing table is not available on switches', 'error-line'); return; }
+    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (dev.type === 'switch' && !hasSVI) { termWrite('% Routing table is not available on L2 switches (configure SVIs for L3)', 'error-line'); return; }
     termWrite('Codes: C - connected, S - static, * - candidate default\n');
     const defaultRoute = dev.routes ? dev.routes.find(r => r.network === '0.0.0.0') : null;
     const gwLastResort = defaultRoute ? defaultRoute.nextHop : (dev.defaultGateway || 'not set');
@@ -218,6 +219,32 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'show etherchannel summary' || lower === 'show bond') {
+    // Collect bond groups
+    const bonds = {};
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (!iface.bondGroup) continue;
+      if (!bonds[iface.bondGroup]) bonds[iface.bondGroup] = [];
+      bonds[iface.bondGroup].push({ ifName, iface });
+    }
+    if (Object.keys(bonds).length === 0) {
+      termWrite('  (no bond groups configured)');
+      return;
+    }
+    termWrite('Group  Members                          Status');
+    termWrite('-----  -------------------------------  --------');
+    for (const [name, members] of Object.entries(bonds)) {
+      const memberStr = members.map(m => {
+        const flag = m.iface.status === 'up' ? '(P)' : '(D)';
+        return shortIfName(m.ifName) + flag;
+      }).join(', ');
+      const activeCount = members.filter(m => m.iface.status === 'up').length;
+      const status = activeCount > 0 ? `${activeCount}/${members.length} active` : 'all down';
+      termWrite(`${name.padEnd(7)}${memberStr.padEnd(33)}${status}`);
+    }
+    return;
+  }
+
   if (lower === 'show running-config') {
     termWrite('Building configuration...\n');
     termWrite('!');
@@ -245,6 +272,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
           if (sp.accessVlan !== 1) termWrite(` switchport access vlan ${sp.accessVlan}`);
         }
       }
+      if (iface.bondGroup) termWrite(` bond-group ${iface.bondGroup}`);
       if (iface.natRole) termWrite(` ip nat ${iface.natRole}`);
       if (iface.accessGroup) {
         if (iface.accessGroup.in) termWrite(` ip access-group ${iface.accessGroup.in} in`);
@@ -318,13 +346,15 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       if (iface.switchport) {
         termWrite(`  Switchport mode: ${iface.switchport.mode}, VLAN: ${iface.switchport.mode === 'access' ? iface.switchport.accessVlan : 'trunk'}`);
       }
+      if (iface.bondGroup) termWrite(`  Bond group: ${iface.bondGroup}`);
       termWrite('');
     }
     return;
   }
 
   if (lower === 'show arp') {
-    if (dev.type === 'switch') { termWrite('% ARP table is not available on switches', 'error-line'); return; }
+    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (dev.type === 'switch' && !hasSVI) { termWrite('% ARP table is not available on L2 switches', 'error-line'); return; }
     termWrite('Protocol  Address          Age (min)  Hardware Addr   Type   Interface');
     // Self entries: device's own interfaces
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
@@ -344,7 +374,8 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower.startsWith('show packet-flow ')) {
-    if (dev.type === 'switch') { termWrite('% packet-flow is not available on switches', 'error-line'); return; }
+    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (dev.type === 'switch' && !hasSVI) { termWrite('% packet-flow is not available on L2 switches', 'error-line'); return; }
     const targetIP = parts[2];
     if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: show packet-flow <target-ip>', 'error-line'); return; }
 

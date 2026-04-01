@@ -1,16 +1,13 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
   const currentDeviceId = store.getCurrentDeviceId();
   const d = store.getCurrentDevice();
 
-  let srcIP = null;
-  for (const iface of Object.values(d.interfaces)) {
-    if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
-  }
+  const srcIP = getUsableSrcIP(d);
   if (!srcIP) {
     terminal.write(`% No source interface available — configure an interface with an IP and bring it up`, 'error-line');
     return;
@@ -69,17 +66,95 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
   let curTargetIP = targetIP;
   let curSrcIP = null;
 
-  // Get source IP
+  // Get source IP (bond-aware)
   const srcDev = devices[fromId];
-  for (const iface of Object.values(srcDev.interfaces)) {
-    if (iface.status === 'up' && iface.ip) { curSrcIP = iface.ip; break; }
-  }
+  curSrcIP = getUsableSrcIP(srcDev);
 
   for (let step = 0; step < 20; step++) {
     const dv = devices[curId];
 
-    for (const iface of Object.values(dv.interfaces)) {
-      if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
+    // Local delivery check (bond-aware)
+    // For firewalls: policy check first, so defer local check
+    if (dv.type !== 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
+
+    // L3 switch forwarding via SVIs
+    if (dv.type === 'switch' && switchHasSVI(dv)) {
+      // Inbound ACL on ingress SVI
+      if (step > 0) {
+        const prevDevId = path.length >= 2 ? path[path.length - 2] : null;
+        if (prevDevId) {
+          const ingressVlan = findIngressVlanForPath(devices, dv, prevDevId);
+          if (ingressVlan != null) {
+            const ingressSVI = 'Vlan' + ingressVlan;
+            const svi = dv.interfaces[ingressSVI];
+            if (svi && svi.ip && svi.status === 'up') {
+              if (!checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP)) break;
+            }
+          }
+        }
+      }
+
+      // Route lookup via SVIs
+      let swNextHop = lookupRoute(dv, curTargetIP);
+      const resolvedIP = swNextHop || curTargetIP;
+
+      // Find egress SVI whose subnet covers the resolved IP
+      let egressSVI = null;
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
+        if (getNetwork(iface.ip, iface.mask) === getNetwork(resolvedIP, iface.mask)) {
+          egressSVI = ifName; break;
+        }
+      }
+      if (!egressSVI) break;
+
+      // Outbound ACL on egress SVI
+      if (!checkInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP)) break;
+
+      // Find target device in the egress VLAN
+      const egressVlan = getSVIVlan(egressSVI);
+      const targetDevId = findDeviceByIP(devices, resolvedIP);
+      if (!targetDevId || targetDevId === curId) break;
+
+      // BFS to find physical path from this switch to target in the egress VLAN
+      const swPath = bfsSwitchPath(devices, curId, targetDevId, egressVlan);
+      for (const sid of swPath) {
+        const prevSwId = path[path.length - 1];
+        const prevSw = devices[prevSwId];
+        let swFromIf = null, swToIf = null;
+        for (const [ifn, iff] of Object.entries(prevSw.interfaces)) {
+          if (iff.connected && iff.connected.device === sid) { swFromIf = ifn; swToIf = iff.connected.iface; break; }
+        }
+        linkHints.push({ fromIf: swFromIf, toIf: swToIf });
+        path.push(sid);
+        visited.add(sid);
+      }
+
+      // Switch-to-target: find the physical port connecting to target
+      const lastSwId = path[path.length - 1];
+      const targetDev = devices[targetDevId];
+      let swToTargetFromIf = null, swToTargetToIf = null;
+      for (const [ifName, iface] of Object.entries(targetDev.interfaces)) {
+        if (iface.connected && iface.connected.device === lastSwId && iface.ip === resolvedIP) {
+          swToTargetToIf = ifName; swToTargetFromIf = iface.connected.iface; break;
+        }
+      }
+      if (!swToTargetToIf) {
+        for (const [ifName, iface] of Object.entries(targetDev.interfaces)) {
+          if (iface.connected && iface.connected.device === lastSwId) {
+            swToTargetToIf = ifName; swToTargetFromIf = iface.connected.iface; break;
+          }
+        }
+      }
+      if (swToTargetFromIf) {
+        linkHints.push({ fromIf: swToTargetFromIf, toIf: swToTargetToIf });
+        path.push(targetDevId);
+        visited.add(targetDevId);
+        curId = targetDevId;
+      } else {
+        break;
+      }
+      continue;
     }
 
     // Apply NAT at routers/firewalls — update curTargetIP for subsequent path decisions
@@ -90,8 +165,11 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
         const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
         curSrcIP = natResult.srcIP;
         curTargetIP = natResult.dstIP;
-        for (const iface of Object.values(dv.interfaces)) {
-          if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
+        // Non-firewall: check local after NAT
+        if (dv.type !== 'firewall') {
+          for (const iface of Object.values(dv.interfaces)) {
+            if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
+          }
         }
       }
     }
@@ -108,14 +186,16 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) break;
     }
 
+    // Firewall local delivery: checked AFTER policy
+    if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
+
     // Check routing table first (specific route like /32 takes priority over connected /24)
     let nextHopIP = lookupRoute(dv, curTargetIP);
 
-    // If no explicit route, check directly connected networks
+    // If no explicit route, check directly connected networks (bond-aware)
     if (!nextHopIP) {
-      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-        if (!iface.ip || iface.status !== 'up') continue;
-        if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
+      for (const ui of getUsableInterfaces(dv)) {
+        if (getNetwork(ui.ip, ui.mask) === getNetwork(curTargetIP, ui.mask)) {
           nextHopIP = curTargetIP;
           break;
         }
@@ -123,17 +203,17 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     }
     if (!nextHopIP) break;
 
+    // Find exit interface (bond-aware)
     let exitIf = null;
     let exitIfName = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHopIP, iface.mask)) {
-        exitIf = iface;
-        exitIfName = ifName;
+    for (const ui of getUsableInterfaces(dv)) {
+      if (getNetwork(ui.ip, ui.mask) === getNetwork(nextHopIP, ui.mask)) {
+        exitIf = dv.interfaces[ui.ifName];
+        exitIfName = ui.ifName;
         break;
       }
     }
-    if (!exitIf) break;
+    if (!exitIf || !exitIf.connected) break;
 
     // Outbound ACL check
     if ((dv.type === 'router' || dv.type === 'firewall') && exitIfName) {
@@ -155,6 +235,13 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       visited.add(neighbor.device);
 
       const targetDevId = findDeviceByIP(devices, nextHopIP);
+
+      // L3 switch: if the next hop is the switch's own SVI (gateway), continue as L3 routing
+      if (targetDevId === neighbor.device && switchHasSVI(neighborDev)) {
+        curId = neighbor.device;
+        continue;
+      }
+
       if (!targetDevId || visited.has(targetDevId)) break;
 
       const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId, entryVlan);
@@ -205,6 +292,23 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
     }
   }
   return { path, linkHints };
+}
+
+// Determine ingress VLAN on a switch based on which device sent the packet
+function findIngressVlanForPath(devices, sw, prevDevId) {
+  for (const [ifName, iface] of Object.entries(sw.interfaces)) {
+    if (!iface.switchport || !iface.connected || iface.status !== 'up') continue;
+    if (iface.connected.device === prevDevId) {
+      return iface.switchport.mode === 'access' ? iface.switchport.accessVlan : null;
+    }
+    // Check through other switches
+    const connDev = devices[iface.connected.device];
+    if (connDev && connDev.type === 'switch') {
+      const vlan = iface.switchport.mode === 'access' ? iface.switchport.accessVlan : null;
+      if (vlan != null && isReachableViaSwitch(devices, iface.connected.device, prevDevId, vlan)) return vlan;
+    }
+  }
+  return null;
 }
 
 // Find the IP of the ingress interface on devId facing prevDevId
@@ -321,10 +425,7 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
   const currentDeviceId = store.getCurrentDeviceId();
   const d = store.getCurrentDevice();
 
-  let srcIP = null;
-  for (const iface of Object.values(d.interfaces)) {
-    if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
-  }
+  const srcIP = getUsableSrcIP(d);
   if (!srcIP) {
     terminal.write('% No source interface available — configure an interface with an IP and bring it up', 'error-line');
     return;
@@ -404,11 +505,9 @@ export function tracePacketFlow(devices, fromId, targetIP) {
   let curSrcIP = null;
   let curTargetIP = targetIP;
 
-  // Get source IP
+  // Get source IP (bond-aware)
   const srcDev = devices[fromId];
-  for (const iface of Object.values(srcDev.interfaces)) {
-    if (iface.status === 'up' && iface.ip) { curSrcIP = iface.ip; break; }
-  }
+  curSrcIP = getUsableSrcIP(srcDev);
   if (!curSrcIP) {
     return { hops: [{ deviceId: fromId, hostname: srcDev.hostname, deviceType: srcDev.type, ingressIf: null, decisions: [{ type: 'error', text: 'No source interface available' }], result: 'no-source' }], reachable: false };
   }
@@ -454,13 +553,92 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       }
     }
 
-    // Switch: L2 transit — should not normally appear as curId
-    // (switches are traversed inline when an L3 device forwards through them)
+    // Switch handling: L2 transit or L3 routing via SVIs
     if (dv.type === 'switch') {
+      if (switchHasSVI(dv)) {
+        // L3 switch — check if target is on this device's SVI
+        let localMatch = null;
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') { localMatch = ifName; break; }
+        }
+        if (localMatch) {
+          hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches SVI ${localMatch} -> REACHED` });
+          hop.result = 'reached';
+          hops.push(hop);
+          return { hops, reachable: true };
+        }
+
+        // Find ingress SVI for ACL
+        if (step > 0 && prevDevId) {
+          const ingressVlan = findIngressVlanForPath(devices, dv, prevDevId);
+          if (ingressVlan != null) {
+            const ingressSVI = 'Vlan' + ingressVlan;
+            const svi = dv.interfaces[ingressSVI];
+            if (svi && svi.ip && svi.status === 'up') {
+              hop.ingressIf = ingressSVI;
+              hop.decisions.push({ type: 'ingress', text: `L3 received on ${ingressSVI} (${svi.ip})` });
+              const aclInInfo = describeInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP);
+              if (aclInInfo.description) {
+                hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+              }
+              if (!aclInInfo.allowed) {
+                hop.result = 'dropped';
+                hops.push(hop);
+                return { hops, reachable: false };
+              }
+            }
+          }
+        }
+
+        // Route lookup
+        const routeInfo = describeRouteLookup(dv, curTargetIP);
+        hop.decisions.push({ type: 'route-lookup', text: routeInfo.description });
+        const nextHop = routeInfo.nextHop || lookupRoute(dv, curTargetIP);
+
+        // Find egress SVI
+        const resolvedIP = nextHop || curTargetIP;
+        let egressSVI = null;
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
+          if (getNetwork(iface.ip, iface.mask) === getNetwork(resolvedIP, iface.mask)) {
+            egressSVI = ifName; break;
+          }
+        }
+        if (!egressSVI) {
+          hop.result = 'no-route';
+          hops.push(hop);
+          return { hops, reachable: false };
+        }
+
+        // Outbound ACL on egress SVI
+        const aclOutInfo = describeInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP);
+        if (aclOutInfo.description) {
+          hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+        }
+        if (!aclOutInfo.allowed) {
+          hop.result = 'dropped';
+          hops.push(hop);
+          return { hops, reachable: false };
+        }
+
+        hop.decisions.push({ type: 'forward', text: `Exit ${egressSVI} -> L2 delivery to ${resolvedIP}` });
+        hops.push(hop);
+
+        // Find target device and continue
+        const l3TargetId = findDeviceByIP(devices, resolvedIP);
+        if (l3TargetId && !visited.has(l3TargetId)) {
+          prevDevId = curId;
+          curId = l3TargetId;
+        } else {
+          return { hops, reachable: false };
+        }
+        continue;
+      }
+
+      // Pure L2 switch transit
       hop.decisions.push({ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' });
       hop.result = 'transit';
       hops.push(hop);
-      // Find the target device behind this switch using BFS
       const l2TargetId = findDeviceByIP(devices, curTargetIP);
       if (l2TargetId && !visited.has(l2TargetId)) {
         prevDevId = curId;
@@ -471,18 +649,21 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       continue;
     }
 
-    // Check if target is on this device
-    let localMatch = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (iface.ip === curTargetIP && iface.status === 'up') { localMatch = ifName; break; }
-    }
-    if (localMatch) {
-      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch} -> REACHED` });
+    // Check if target is on this device (bond-aware)
+    // For firewalls: policy check must happen first, even for locally-destined traffic
+    if (dv.type !== 'firewall' && deviceHasReachableIP(dv, curTargetIP)) {
+      let localMatch = null;
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (iface.ip === curTargetIP) { localMatch = ifName; break; }
+      }
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch || '(bond)'} -> REACHED` });
       hop.result = 'reached';
       hops.push(hop);
       return { hops, reachable: true };
     }
-    hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+    if (dv.type !== 'firewall') {
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+    }
 
     // NAT check (router/firewall, step > 0)
     if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && step > 0 && hop.ingressIf) {
@@ -493,13 +674,15 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       if (natInfo.translated) {
         curSrcIP = natInfo.srcIP;
         curTargetIP = natInfo.dstIP;
-        // Re-check local after NAT
-        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-          if (iface.ip === curTargetIP && iface.status === 'up') {
-            hop.decisions.push({ type: 'local-check', text: `After NAT: ${curTargetIP} matches local interface ${ifName} -> REACHED` });
-            hop.result = 'reached';
-            hops.push(hop);
-            return { hops, reachable: true };
+        // Re-check local after NAT (non-firewall only; firewall checks after policy)
+        if (dv.type !== 'firewall') {
+          for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+            if (iface.ip === curTargetIP && iface.status === 'up') {
+              hop.decisions.push({ type: 'local-check', text: `After NAT: ${curTargetIP} matches local interface ${ifName} -> REACHED` });
+              hop.result = 'reached';
+              hops.push(hop);
+              return { hops, reachable: true };
+            }
           }
         }
       }
@@ -531,20 +714,34 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       }
     }
 
+    // Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
+    if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) {
+      let localMatch = null;
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (iface.ip === curTargetIP) { localMatch = ifName; break; }
+      }
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch} -> REACHED` });
+      hop.result = 'reached';
+      hops.push(hop);
+      return { hops, reachable: true };
+    }
+    if (dv.type === 'firewall') {
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+    }
+
     // Route lookup
     const routeInfo = describeRouteLookup(dv, curTargetIP);
     hop.decisions.push({ type: 'route-lookup', text: routeInfo.description });
 
     const nextHop = routeInfo.nextHop || lookupRoute(dv, curTargetIP);
 
-    // Find egress interface
+    // Find egress interface (bond-aware)
     if (!nextHop) {
       // Directly connected — find the egress interface
       let egressIf = null;
-      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-        if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-        if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
-          egressIf = ifName; break;
+      for (const ui of getUsableInterfaces(dv)) {
+        if (getNetwork(ui.ip, ui.mask) === getNetwork(curTargetIP, ui.mask)) {
+          egressIf = ui.ifName; break;
         }
       }
       if (!egressIf) {
@@ -588,12 +785,11 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       continue;
     }
 
-    // Has a next hop — find egress interface toward it
+    // Has a next hop — find egress interface toward it (bond-aware)
     let egressIf = null;
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(nextHop, iface.mask)) {
-        egressIf = ifName; break;
+    for (const ui of getUsableInterfaces(dv)) {
+      if (getNetwork(ui.ip, ui.mask) === getNetwork(nextHop, ui.mask)) {
+        egressIf = ui.ifName; break;
       }
     }
     if (!egressIf) {

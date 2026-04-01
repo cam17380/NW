@@ -88,9 +88,10 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     return;
   }
 
-  // ── ACL on interface (router/firewall only) ──
+  // ── ACL on interface (router/firewall/switch SVI) ──
   if (lower.startsWith('ip access-group')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip access-group is only available on routers/firewalls', 'error-line'); return; }
+    const isSVI = dev.type === 'switch' && currentInterface.startsWith('Vlan');
+    if (dev.type !== 'router' && dev.type !== 'firewall' && !isSVI) { termWrite('% ip access-group is only available on routers/firewalls/switch SVIs', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: ip access-group <acl-num> in|out', 'error-line'); return; }
     const aclNum = parseInt(args[2]);
@@ -130,6 +131,20 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
   if (lower === 'no ip nat inside' || lower === 'no ip nat outside') {
     iface.natRole = null;
     termWrite(`% NAT role removed from ${currentInterface}`, 'success-line');
+    return;
+  }
+
+  // ── Bond group (LACP) ──
+  if (lower.startsWith('bond-group')) {
+    if (dev.type !== 'server' && dev.type !== 'pc') { termWrite('% bond-group is only available on servers/PCs', 'error-line'); return; }
+    if (parts.length < 2) { termWrite('% Usage: bond-group <name>', 'error-line'); return; }
+    iface.bondGroup = parts[1];
+    termWrite(`% Interface ${currentInterface} added to bond group ${parts[1]}`, 'success-line');
+    return;
+  }
+  if (lower === 'no bond-group') {
+    delete iface.bondGroup;
+    termWrite(`% Bond group removed from ${currentInterface}`, 'success-line');
     return;
   }
 

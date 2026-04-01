@@ -32,6 +32,8 @@ export function createDevice(type, id, x, y) {
     return {
       ...base,
       vlans: { 1: { name: 'default' } },
+      routes: [],
+      accessLists: {},
       interfaces: {
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
         'GigabitEthernet0/2': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
@@ -127,6 +129,8 @@ export function createDefaultDevices() {
     SW1: {
       type: 'switch', hostname: 'Switch1', x: 400, y: 300,
       vlans: { 1: { name: 'default' } },
+      routes: [],
+      accessLists: {},
       interfaces: {
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
         'GigabitEthernet0/2': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R2', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },

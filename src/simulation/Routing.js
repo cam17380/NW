@@ -1,6 +1,184 @@
 // ─── Routing, L2 reachability, and NAT logic (pure functions) ───
 import { getNetwork, maskToCIDR, ipToInt, intToIP } from './NetworkUtils.js';
 
+// ─── LACP / Bond helpers ───────────────────────────────────
+
+// Find an active bond partner for a down interface
+export function findBondPartner(dv, ifName) {
+  const iface = dv.interfaces[ifName];
+  if (!iface || !iface.bondGroup) return null;
+  for (const [pName, partner] of Object.entries(dv.interfaces)) {
+    if (pName !== ifName && partner.bondGroup === iface.bondGroup &&
+        partner.status === 'up' && partner.connected) {
+      return { ifName: pName, iface: partner };
+    }
+  }
+  return null;
+}
+
+// Bond-aware: check if a device has targetIP reachable (up or via bond partner)
+export function deviceHasReachableIP(dv, targetIP) {
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (iface.ip !== targetIP) continue;
+    if (iface.status === 'up') return true;
+    // Interface has the IP but is down — check bond partner
+    if (iface.bondGroup) {
+      const partner = findBondPartner(dv, ifName);
+      if (partner) return true;
+    }
+  }
+  return false;
+}
+
+// Bond-aware: get first usable source IP (for canReach/ping)
+export function getUsableSrcIP(dv) {
+  // First try: any up interface with IP
+  for (const iface of Object.values(dv.interfaces)) {
+    if (iface.status === 'up' && iface.ip) return iface.ip;
+  }
+  // Bond failover: down interface with IP, but bond partner is up
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (iface.ip && iface.status !== 'up' && iface.bondGroup) {
+      if (findBondPartner(dv, ifName)) return iface.ip;
+    }
+  }
+  return null;
+}
+
+// Bond-aware: iterate usable {ifName, ip, mask, connected} entries for forwarding
+// For bonded interfaces where primary is down, yields the partner with the primary's IP/mask
+export function* getUsableInterfaces(dv) {
+  const yielded = new Set();
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (iface.status === 'up' && iface.ip && iface.connected && !yielded.has(ifName)) {
+      yielded.add(ifName);
+      yield { ifName, ip: iface.ip, mask: iface.mask, connected: iface.connected };
+    }
+  }
+  // Bond failover: down interfaces with IP
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (iface.ip && iface.status !== 'up' && iface.bondGroup && !yielded.has(ifName)) {
+      const partner = findBondPartner(dv, ifName);
+      if (partner && !yielded.has(partner.ifName)) {
+        yielded.add(partner.ifName);
+        yielded.add(ifName);
+        yield { ifName: partner.ifName, ip: iface.ip, mask: iface.mask, connected: partner.iface.connected };
+      }
+    }
+  }
+}
+
+// ─── L3 Switch (SVI) helpers ───────────────────────────────
+
+// Check if a switch has any SVI interfaces (L3 capability)
+export function switchHasSVI(dv) {
+  if (dv.type !== 'switch') return false;
+  return Object.keys(dv.interfaces).some(n => n.startsWith('Vlan'));
+}
+
+// Get VLAN ID from SVI interface name (e.g., 'Vlan10' → 10)
+export function getSVIVlan(ifName) {
+  if (!ifName.startsWith('Vlan')) return null;
+  const vid = parseInt(ifName.slice(4));
+  return isNaN(vid) ? null : vid;
+}
+
+// Find which SVI on a switch faces a given VLAN
+function findSVIForVlan(dv, vlan) {
+  const sviName = 'Vlan' + vlan;
+  const svi = dv.interfaces[sviName];
+  if (svi && svi.ip && svi.status === 'up') return sviName;
+  return null;
+}
+
+// Determine which VLAN a packet entered the switch through
+// prevDevId: the device the packet came from
+function findIngressVlan(devices, dv, prevDevId) {
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.switchport || !iface.connected || iface.status !== 'up') continue;
+    if (iface.connected.device === prevDevId) {
+      return iface.switchport.mode === 'access' ? iface.switchport.accessVlan : null;
+    }
+  }
+  // prevDevId might be connected through another switch
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.switchport || !iface.connected || iface.status !== 'up') continue;
+    const connDev = devices[iface.connected.device];
+    if (connDev && connDev.type === 'switch') {
+      const vlan = iface.switchport.mode === 'access' ? iface.switchport.accessVlan : null;
+      if (vlan != null && switchReachesDevice(devices, iface.connected.device, prevDevId, vlan)) {
+        return vlan;
+      }
+    }
+  }
+  return null;
+}
+
+// BFS check if a device is reachable from a switch within a VLAN
+function switchReachesDevice(devices, startSwId, targetDevId, vlan) {
+  const visited = new Set([startSwId]);
+  const queue = [startSwId];
+  while (queue.length > 0) {
+    const curId = queue.shift();
+    const sw = devices[curId];
+    for (const iface of Object.values(sw.interfaces)) {
+      if (!iface.connected || iface.status !== 'up' || !iface.switchport) continue;
+      if (!portCarriesVlanRouting(iface, vlan)) continue;
+      if (iface.connected.device === targetDevId) return true;
+      const cd = devices[iface.connected.device];
+      if (cd && cd.type === 'switch' && !visited.has(iface.connected.device)) {
+        visited.add(iface.connected.device);
+        queue.push(iface.connected.device);
+      }
+    }
+  }
+  return false;
+}
+
+function portCarriesVlanRouting(iface, vlan) {
+  if (!iface.switchport) return false;
+  if (iface.switchport.mode === 'access') return iface.switchport.accessVlan === vlan;
+  if (iface.switchport.mode === 'trunk') {
+    const allowed = iface.switchport.trunkAllowed;
+    return allowed === 'all' || (Array.isArray(allowed) && allowed.includes(vlan));
+  }
+  return false;
+}
+
+// L2 reachability from a switch itself (not from an external device through a switch)
+// Used when an L3 switch routes a packet and needs to deliver it via a specific VLAN
+export function switchL2Deliver(devices, switchId, vlan, targetIP) {
+  const sw = devices[switchId];
+  const visited = new Set([switchId]);
+  const queue = [switchId];
+  while (queue.length > 0) {
+    const curId = queue.shift();
+    const curDev = devices[curId];
+    for (const [ifName, iface] of Object.entries(curDev.interfaces)) {
+      if (iface.status !== 'up' || !iface.connected || !iface.switchport) continue;
+      if (!portCarriesVlanRouting(iface, vlan)) continue;
+      const rDev = devices[iface.connected.device];
+      const rIf = rDev.interfaces[iface.connected.iface];
+      if (!rIf || rIf.status !== 'up') continue;
+      if (rDev.type === 'switch') {
+        if (!visited.has(iface.connected.device)) {
+          visited.add(iface.connected.device);
+          queue.push(iface.connected.device);
+        }
+      } else {
+        if (rIf.ip === targetIP) return true;
+        // Bond failover: check if a bond partner has the target IP
+        if (rIf.bondGroup) {
+          for (const pIface of Object.values(rDev.interfaces)) {
+            if (pIface !== rIf && pIface.bondGroup === rIf.bondGroup && pIface.ip === targetIP) return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 // VLAN-aware: find which interface on device connects to prevDevId (directly or via switch)
 function findIngressIf(devices, dv, prevDevId) {
   for (const [ifName, iface] of Object.entries(dv.interfaces)) {
@@ -44,11 +222,8 @@ function findIngressIf(devices, dv, prevDevId) {
 
 export function canReach(devices, fromId, targetIP) {
   const visited = new Set();
-  let srcIP = null;
   const srcDev = devices[fromId];
-  for (const iface of Object.values(srcDev.interfaces)) {
-    if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
-  }
+  const srcIP = getUsableSrcIP(srcDev);
   return forwardPacket(devices, fromId, targetIP, visited, srcIP, null);
 }
 
@@ -60,9 +235,50 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
   let curTargetIP = targetIP;
   let curSrcIP = srcIP;
 
-  // 1. Check if target is directly on this device
-  for (const iface of Object.values(dv.interfaces)) {
-    if (iface.ip === curTargetIP && iface.status === 'up') return true;
+  // 1. Check if target is directly on this device (bond-aware)
+  // For firewalls: policy check must happen first, even for locally-destined traffic
+  if (dv.type !== 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return true;
+
+  // 1a-L3SW. L3 switch forwarding via SVIs
+  if (dv.type === 'switch' && switchHasSVI(dv)) {
+    // Determine ingress VLAN and SVI
+    if (prevDevId !== null) {
+      const ingressVlan = findIngressVlan(devices, dv, prevDevId);
+      if (ingressVlan != null) {
+        const ingressSVI = findSVIForVlan(dv, ingressVlan);
+        if (ingressSVI && !checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP)) return false;
+      }
+    }
+
+    // Route lookup (reuse existing lookupRoute — switch now has routes[])
+    const swNextHop = lookupRoute(dv, curTargetIP);
+
+    if (!swNextHop) {
+      // Directly connected via SVI subnet
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
+        if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
+          if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
+          const vlan = getSVIVlan(ifName);
+          return switchL2Deliver(devices, devId, vlan, curTargetIP);
+        }
+      }
+      return false;
+    }
+
+    // Has next hop — find SVI for next hop's subnet
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(swNextHop, iface.mask)) {
+        if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
+        const nextDevId = findDeviceByIP(devices, swNextHop);
+        if (!nextDevId) return false;
+        const vlan = getSVIVlan(ifName);
+        if (!switchL2Deliver(devices, devId, vlan, swNextHop)) return false;
+        return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId);
+      }
+    }
+    return false;
   }
 
   // 1b. Apply NAT if this is a router/firewall with NAT config
@@ -72,8 +288,11 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
       curSrcIP = natResult.srcIP;
       curTargetIP = natResult.dstIP;
-      for (const iface of Object.values(dv.interfaces)) {
-        if (iface.ip === curTargetIP && iface.status === 'up') return true;
+      // For non-firewall: check local delivery after NAT
+      if (dv.type !== 'firewall') {
+        for (const iface of Object.values(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') return true;
+        }
       }
     }
   }
@@ -89,35 +308,34 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) return false;
   }
 
+  // 1e. Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
+  if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return true;
+
   // 2. Check routing table for a specific route (e.g. /32 takes priority over connected /24)
   const nextHop = lookupRoute(dv, curTargetIP);
 
-  // 3. If no explicit route, check directly connected networks via L2
+  // 3. If no explicit route, check directly connected networks via L2 (bond-aware)
   if (!nextHop) {
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-      const net = getNetwork(iface.ip, iface.mask);
-      const targetNet = getNetwork(curTargetIP, iface.mask);
+    for (const ui of getUsableInterfaces(dv)) {
+      const net = getNetwork(ui.ip, ui.mask);
+      const targetNet = getNetwork(curTargetIP, ui.mask);
       if (net === targetNet) {
-        // Outbound ACL check
-        if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
-        return canReachL2(devices, devId, ifName, curTargetIP);
+        if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP)) return false;
+        return canReachL2(devices, devId, ui.ifName, curTargetIP);
       }
     }
     return false;
   }
 
-  // 4. Find which interface can reach the next hop and forward
-  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-    if (!iface.ip || iface.status !== 'up' || !iface.connected) continue;
-    const net = getNetwork(iface.ip, iface.mask);
-    const hopNet = getNetwork(nextHop, iface.mask);
+  // 4. Find which interface can reach the next hop and forward (bond-aware)
+  for (const ui of getUsableInterfaces(dv)) {
+    const net = getNetwork(ui.ip, ui.mask);
+    const hopNet = getNetwork(nextHop, ui.mask);
     if (net === hopNet) {
-      // Outbound ACL check
-      if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
+      if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP)) return false;
       const nextDevId = findDeviceByIP(devices, nextHop);
       if (!nextDevId) return false;
-      if (!canReachL2(devices, devId, ifName, nextHop)) return false;
+      if (!canReachL2(devices, devId, ui.ifName, nextHop)) return false;
       return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId);
     }
   }
@@ -126,18 +344,16 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
 
 export function lookupRoute(dv, targetIP) {
   if (dv.type === 'pc') {
-    // If target is on a directly connected subnet, no gateway needed (L2 reachable)
-    for (const iface of Object.values(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up') continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    // If target is on a directly connected subnet, no gateway needed (bond-aware)
+    for (const ui of getUsableInterfaces(dv)) {
+      if (getNetwork(ui.ip, ui.mask) === getNetwork(targetIP, ui.mask)) return null;
     }
     return dv.defaultGateway || null;
   }
-  // Server: check routes first, then fall back to default gateway
+  // Server: check routes first, then fall back to default gateway (bond-aware)
   if (dv.type === 'server') {
-    for (const iface of Object.values(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up') continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    for (const ui of getUsableInterfaces(dv)) {
+      if (getNetwork(ui.ip, ui.mask) === getNetwork(targetIP, ui.mask)) return null;
     }
     if (dv.routes && dv.routes.length > 0) {
       let bestRoute = null, bestCIDR = -1;
@@ -153,6 +369,14 @@ export function lookupRoute(dv, targetIP) {
     }
     return dv.defaultGateway || null;
   }
+  // L3 switch: check SVI connected subnets first, then routes
+  if (dv.type === 'switch') {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
+      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) return null;
+    }
+  }
+
   if (!dv.routes || dv.routes.length === 0) return null;
 
   let bestRoute = null;
@@ -173,9 +397,7 @@ export function lookupRoute(dv, targetIP) {
 
 export function findDeviceByIP(devices, ip) {
   for (const [did, dv] of Object.entries(devices)) {
-    for (const iface of Object.values(dv.interfaces)) {
-      if (iface.ip === ip && iface.status === 'up') return did;
-    }
+    if (deviceHasReachableIP(dv, ip)) return did;
   }
   return null;
 }
@@ -191,10 +413,7 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
   if (!remoteIf || remoteIf.status !== 'up') return false;
 
   if (remoteDev.type !== 'switch') {
-    for (const iface of Object.values(remoteDev.interfaces)) {
-      if (iface.ip === targetIP && iface.status === 'up') return true;
-    }
-    return false;
+    return deviceHasReachableIP(remoteDev, targetIP);
   }
 
   // Entering a switch — determine VLAN
@@ -211,6 +430,11 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
   while (queue.length > 0) {
     const curId = queue.shift();
     const curDev = devices[curId];
+
+    // Check if this switch's SVI for this VLAN has the target IP (L3 switch gateway)
+    const sviName = 'Vlan' + vlan;
+    const svi = curDev.interfaces[sviName];
+    if (svi && svi.ip === targetIP && svi.status === 'up') return true;
 
     for (const [ifName, iface] of Object.entries(curDev.interfaces)) {
       if (iface.status !== 'up' || !iface.connected) continue;
@@ -235,8 +459,16 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
           queue.push(iface.connected.device);
         }
       } else {
-        // Only check the specific interface connected to this VLAN port, not all device interfaces
+        // Check the specific interface, or its bond partner if bonded
         if (rIf.ip === targetIP) return true;
+        // Bond failover: rIf is up and bonded — check if a partner has the target IP
+        if (rIf.bondGroup) {
+          for (const pIface of Object.values(rDev.interfaces)) {
+            if (pIface !== rIf && pIface.bondGroup === rIf.bondGroup && pIface.ip === targetIP) {
+              return true;
+            }
+          }
+        }
       }
     }
   }

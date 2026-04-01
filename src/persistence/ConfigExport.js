@@ -84,6 +84,7 @@ export function exportCommandScript(store) {
           if (sp.accessVlan !== 1) lines.push(` switchport access vlan ${sp.accessVlan}`);
         }
       }
+      if (iface.bondGroup) lines.push(` bond-group ${iface.bondGroup}`);
       if (iface.natRole) lines.push(` ip nat ${iface.natRole}`);
       if (iface.accessGroup) {
         if (iface.accessGroup.in) lines.push(` ip access-group ${iface.accessGroup.in} in`);

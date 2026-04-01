@@ -28,6 +28,7 @@ export function getSnapshot(devices, links) {
         switchport: iface.switchport ? JSON.parse(JSON.stringify(iface.switchport)) : undefined,
         natRole: iface.natRole || undefined,
         accessGroup: iface.accessGroup ? JSON.parse(JSON.stringify(iface.accessGroup)) : undefined,
+        bondGroup: iface.bondGroup || undefined,
       };
     }
   }
@@ -76,6 +77,7 @@ export function applySnapshot(store, snap) {
         if (savedIf.switchport !== undefined) iface.switchport = savedIf.switchport;
         if (savedIf.natRole !== undefined) iface.natRole = savedIf.natRole;
         if (savedIf.accessGroup !== undefined) iface.accessGroup = savedIf.accessGroup;
+        if (savedIf.bondGroup !== undefined) iface.bondGroup = savedIf.bondGroup;
       }
       devices[id] = dv;
     }
@@ -112,6 +114,7 @@ export function applySnapshot(store, snap) {
       if (savedIf.switchport !== undefined) iface.switchport = savedIf.switchport;
       if (savedIf.natRole !== undefined) iface.natRole = savedIf.natRole;
       if (savedIf.accessGroup !== undefined) iface.accessGroup = savedIf.accessGroup;
+      if (savedIf.bondGroup !== undefined) iface.bondGroup = savedIf.bondGroup;
     }
   }
   store.emitTopologyChanged();
