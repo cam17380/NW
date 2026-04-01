@@ -1,7 +1,7 @@
 # ネットワークシミュレータ 仕様説明書
 
-**バージョン:** 1.0
-**最終更新日:** 2026-03-31
+**バージョン:** 1.1
+**最終更新日:** 2026-04-01
 
 ---
 
@@ -32,36 +32,47 @@
 ```
 NW/
 ├── index.html              # エントリーポイント（HTML）
-├── main.css                # スタイルシート（ダークテーマ）
-├── main.js                 # アプリケーション初期化
-├── Store.js                # 集中状態管理
-├── EventBus.js             # Pub/Subイベントシステム
-├── Topology.js             # デバイス・リンクのデータモデルとファクトリ
-├── CLIEngine.js            # コマンドパーサー・モードディスパッチャ
-├── CommandRegistry.js      # コマンドツリー・ヒントデータ構造
-├── TabComplete.js          # タブ補完エンジン
-├── Abbreviations.js        # コマンド略語展開
-├── PingEngine.js           # Ping/Traceroute実行エンジン
-├── Routing.js              # ルーティング・NAT・ファイアウォールロジック
-├── NetworkUtils.js         # IPアドレスユーティリティ
-├── Terminal.js             # ターミナル表示
-├── DeviceTabs.js           # デバイスタブ切替
-├── CommandHints.js         # コマンドヒント表示
-├── VlanLegend.js           # VLAN凡例表示
-├── Toast.js                # 通知トースト
-├── CanvasRenderer.js       # キャンバス描画オーケストレータ
-├── DeviceRenderer.js       # デバイスアイコン描画
-├── LinkRenderer.js         # リンク描画
-├── DesignController.js     # デザインモードのキャンバス操作
-├── DevicePalette.js        # デバイスパレット
-├── InterfacePicker.js      # インターフェース選択ダイアログ
-├── ContextMenu.js          # 右クリックメニュー
-├── LocalStorage.js         # ブラウザストレージ永続化
-├── Snapshot.js             # シリアライゼーション
-├── Templates.js            # ネットワーク構成テンプレートデータ
-├── ConfigExport.js         # CLIコマンドスクリプト生成
-├── Splitter.js             # パネルスプリッター（キャンバス/ターミナル境界）
-└── TemplateSelector.js     # テンプレート選択UI
+├── styles/
+│   └── main.css            # スタイルシート（ダークテーマ）
+├── src/
+│   ├── main.js             # アプリケーション初期化
+│   ├── core/
+│   │   ├── Store.js        # 集中状態管理
+│   │   └── EventBus.js     # Pub/Subイベントシステム
+│   ├── model/
+│   │   └── Topology.js     # デバイス・リンクのデータモデルとファクトリ
+│   ├── cli/
+│   │   ├── CLIEngine.js    # コマンドパーサー・モードディスパッチャ
+│   │   ├── CommandRegistry.js # コマンドツリー・ヒントデータ構造
+│   │   ├── TabComplete.js  # タブ補完エンジン
+│   │   ├── Abbreviations.js # コマンド略語展開
+│   │   └── commands/       # コマンド実装（Show, Config, Interface等）
+│   ├── simulation/
+│   │   ├── PingEngine.js   # Ping/Traceroute/ARP解決エンジン
+│   │   ├── Routing.js      # ルーティング・NAT・ファイアウォール・L2到達性ロジック
+│   │   └── NetworkUtils.js # IPアドレスユーティリティ
+│   ├── rendering/
+│   │   ├── CanvasRenderer.js # キャンバス描画・アニメーションオーケストレータ
+│   │   ├── DeviceRenderer.js # デバイスアイコン描画
+│   │   └── LinkRenderer.js # リンク描画・エッジポイント計算
+│   ├── ui/
+│   │   ├── Terminal.js     # ターミナル表示
+│   │   ├── DeviceTabs.js   # デバイスタブ切替
+│   │   ├── CommandHints.js # コマンドヒント表示
+│   │   ├── VlanLegend.js   # VLAN凡例表示
+│   │   └── Toast.js        # 通知トースト
+│   ├── design/
+│   │   ├── DesignController.js # デザインモードのキャンバス操作
+│   │   ├── DevicePalette.js # デバイスパレット
+│   │   ├── InterfacePicker.js # インターフェース選択ダイアログ
+│   │   └── ContextMenu.js  # 右クリックメニュー
+│   └── persistence/
+│       ├── LocalStorage.js # ブラウザストレージ永続化
+│       ├── Snapshot.js     # シリアライゼーション
+│       ├── Templates.js    # ネットワーク構成テンプレートデータ
+│       ├── ConfigExport.js # CLIコマンドスクリプト生成
+│       ├── Splitter.js     # パネルスプリッター
+│       └── TemplateSelector.js # テンプレート選択UI
 ```
 
 ### 2.2 アーキテクチャパターン
@@ -295,9 +306,12 @@ interface GigabitEthernet0/0
 
 ### 5.2 L2スイッチング
 
-- **BFS（幅優先探索）**: スイッチファブリックを通じた経路探索
+- **VLAN対応BFS（幅優先探索）**: スイッチファブリック全体でVLAN境界を厳密に分離
 - **VLAN制約**: アクセスポートのVLANタグとトランクポートの許可VLANリストを考慮
 - VLANが経路上で一致しない場合、到達不能と判定
+- **全BFS関数がVLAN対応**: `isReachableViaSwitch`、`bfsSwitchPath`、`getL2BroadcastDomain`、`canReachL2` のすべてでVLANパラメータを使用
+- **portCarriesVlan()**: スイッチポートが指定VLANを搬送するかをaccess/trunkモード別に判定
+- **canReachL2()**: スイッチ経由でL3デバイスに到達した際、接続されたインターフェースのIPのみをチェック（デバイスの全インターフェースではない）
 
 ### 5.3 NAT処理
 
@@ -337,7 +351,40 @@ ACLはインターフェース単位で `in`（受信）/`out`（送信）方向
 3. 最初にマッチしたルールの`permit`/`deny`を適用
 4. どのルールにもマッチしない場合、暗黙の**deny all**
 
-### 5.6 パケットパス構築
+### 5.6 ARP解決
+
+#### 5.6.1 ARPテーブル
+
+各L3デバイス（ルーター、ファイアウォール、サーバー、PC）はARPテーブルを保持します。
+
+```
+arpTable: [{ ip: string, mac: string, iface: string }]
+```
+
+- **MACアドレス生成**: `generateMAC(deviceId, ifName)` でデバイスIDとインターフェース名から決定論的に生成
+- **学習タイミング**: ping/traceroute実行時に経路上の隣接L3デバイス間で学習
+- **サブネット判定**: 送信元のサブネットマスクでピアIPが同一サブネットかを判定（送信元の/16マスクに対応）
+- **VLAN対応**: 同一VLAN内で到達可能なインターフェースのみARP学習対象
+
+#### 5.6.2 ARP解決の可視化
+
+ping実行時、ARPテーブルにエントリがないL3ホップでは、ICMPアニメーションの**前に**ARP解決アニメーションを表示します。
+
+| フェーズ | 説明 | ビジュアル |
+|---------|------|-----------|
+| **ARP Request** | 送信元 → スイッチ → L2ブロードキャストドメイン全体にフラッド | 金色ダイヤモンド型パーティクル、`ARP: Who has X.X.X.X?` ラベル |
+| **ブロードキャスト結果** | ターゲットデバイスにヒット表示、非ターゲットにミス表示 | 緑チェックマーク / 赤×マーク |
+| **ARP Reply** | ターゲット → スイッチ → 送信元へユニキャスト応答 | オレンジダイヤモンド型パーティクル、`ARP Reply: X.X.X.X is at MAC` ラベル |
+
+- **2回目以降のpingではスキップ**: ARPテーブルにキャッシュ済みのエントリがあればARP解決は省略
+- **ターミナル出力**: ARP Request/Replyのメッセージが金色で表示
+- **VLAN分離**: ブロードキャストは同一VLAN内のデバイスにのみフラッド
+
+#### 5.6.3 `clear arp` コマンド
+
+ARPキャッシュをクリアすることで、次回のpingで再びARP解決アニメーションを確認できます。
+
+### 5.7 パケットパス構築
 
 1. 送信元デバイスから宛先まで、ホップごとにルーティングを解決
 2. 各ルーター/ファイアウォールの入力インターフェースでinbound ACLチェック
@@ -346,8 +393,9 @@ ACLはインターフェース単位で `in`（受信）/`out`（送信）方向
 5. 出力インターフェースでoutbound ACLチェック
 6. スイッチファブリックではVLAN対応のBFSで経路を探索
 7. ループ検出（訪問済みセット）で無限ループを防止
+8. **linkHints配列**: 各セグメントで使用するインターフェースペア（fromIf, toIf）を記録し、アニメーションやARP解決で正確なリンクを特定
 
-### 5.7 パケットフロー診断
+### 5.8 パケットフロー診断
 
 `show packet-flow <ip>` コマンドは各ホップでの判断を詳細に表示:
 
@@ -391,13 +439,15 @@ ACLはインターフェース単位で `in`（受信）/`out`（送信）方向
 - **デバイスタイプ別カラー**: ルーター=緑、スイッチ=オレンジ、ファイアウォール=赤、サーバー=紫、PC=青
 - **ステータスの明暗表現**: 明るい=全インターフェースUP、暗い=一部UP、最も暗い=全DOWN
 - **リンク**: デバイス間を線で接続、VLANに応じた色分け
-- **並行リンク**: 同一デバイス間の複数リンクを法線方向にオフセットし、ラベルは接線方向にずらして表示
+- **エッジベースリンク描画**: リンクはデバイスの中心ではなく外周（辺）から描画され、各インターフェースが異なる接続点を持つ
+- **並行リンク**: 同一デバイス間の複数リンクをデバイスIDのソート順で統一した法線方向にオフセットし、ラベルは接線方向にずらして表示。リンクのfrom/to方向に関係なく一貫した法線方向を使用
 - **凡例（2行）**: 1行目=デバイスタイプ色、2行目=リンク状態・トランク・VLAN情報
-- **パケットアニメーション**: Ping/Traceroute時にパケットの移動を視覚化
+- **パケットアニメーション**: Ping/Traceroute時にパケットの移動をリンク線上で正確に視覚化（linkHintsにより正しいリンクを追従）
+- **ARP解決アニメーション**: ping時にARP Request（金色ダイヤモンド）のブロードキャストとARP Reply（オレンジ）のユニキャストを可視化
 
 ### 6.3 ターミナル
 
-- **カラー出力**: コマンド（シアン）、成功（緑）、エラー（赤）
+- **カラー出力**: コマンド（シアン）、成功（緑）、エラー（赤）、ARP情報（金色）
 - **タブ補完**: Tabキーでコマンド自動補完
 - **コマンド履歴**: 上下矢印キーで履歴をナビゲーション
 - **コマンドヒント**: 現在の入力に応じた候補をリアルタイム表示

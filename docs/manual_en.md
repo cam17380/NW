@@ -1,7 +1,7 @@
 # Network Simulator Operation Manual
 
-**Version:** 1.0
-**Last Updated:** 2026-03-31
+**Version:** 1.1
+**Last Updated:** 2026-04-01
 
 ---
 
@@ -448,7 +448,57 @@ Router# show packet-flow 10.0.0.1
 
 ---
 
-## 12. Saving and Loading Configurations
+## 12. ARP Resolution Visualization
+
+### 12.1 Overview
+
+When executing a ping command, if the destination device's MAC address is not in the ARP table, the ARP resolution process is visually displayed before the ICMP packet animation.
+
+### 12.2 ARP Resolution Flow
+
+1. **ARP Request (Broadcast)**: A gold diamond-shaped particle travels from the source to the switch, then floods simultaneously to all devices in the L2 broadcast domain
+2. **Hit/Miss Indicators**: A green checkmark appears on the target device; red X marks appear on non-target devices
+3. **ARP Reply (Unicast)**: An orange diamond-shaped particle returns from the target to the source, displaying the resolved MAC address
+4. **ICMP Begins**: After ARP resolution completes, the normal ping animation (green/blue particles) starts
+
+### 12.3 Viewing the ARP Table
+
+```
+Router# show arp
+Protocol  Address      Age (min)  Hardware Addr   Type  Interface
+Internet  10.0.1.1     -          00:50:56:36:d7:dd  ARPA  Gi0/0
+Internet  172.16.0.11  0          00:50:56:b3:00:72  ARPA  Gi0/1
+```
+
+### 12.4 Clearing ARP Cache
+
+```
+Router# clear arp
+```
+
+Clearing the ARP cache causes the next ping to display the ARP resolution animation again, allowing you to repeatedly observe broadcast behavior.
+
+### 12.5 VLAN Isolation and ARP
+
+ARP broadcasts only reach devices within the **same VLAN**. Devices on different VLANs cannot receive ARP requests, so even devices on the same IP subnet will fail to communicate if they are on different VLANs.
+
+```
+Example: Firewall Gi0/1 (VLAN 1) → DBServer Eth1 (VLAN 20)
+         → Communication fails even if IP subnet matches, because VLANs differ
+```
+
+### 12.6 Terminal Output
+
+During ARP resolution, gold-colored messages appear in the terminal:
+
+```
+ARP: Firewall1 — Who has 172.16.0.11? Tell 172.16.0.1
+ARP: 172.16.0.11 is at 00:50:56:b3:00:72
+```
+
+---
+
+## 13. Saving and Loading Configurations
 
 All file operations are accessed from the "**File ▾**" dropdown menu in the toolbar.
 
@@ -514,9 +564,9 @@ Available templates:
 
 ---
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
-### 13.1 Ping Fails
+### 14.1 Ping Fails
 
 | Check | Command |
 |-------|---------|
@@ -529,7 +579,7 @@ Available templates:
 | Is NAT configured correctly? | `show ip nat translations` |
 | Identify the cause with packet flow diagnostics | `show packet-flow <destination-ip>` |
 
-### 13.2 VLAN Not Working
+### 14.2 VLAN Not Working
 
 | Check | Command |
 |-------|---------|
@@ -537,8 +587,9 @@ Available templates:
 | Is the correct VLAN assigned to the port? | `show interfaces switchport` |
 | Is the VLAN allowed on the trunk port? | `show interfaces trunk` |
 | Are both ports in the same VLAN? | `show vlan brief` on both switches |
+| Is ARP crossing a VLAN boundary? | `clear arp` then `ping` to observe ARP visualization |
 
-### 13.3 NAT Not Working
+### 14.3 NAT Not Working
 
 | Check | Command |
 |-------|---------|
@@ -547,7 +598,7 @@ Available templates:
 | Are IPs available in the NAT pool? | `show ip nat statistics` |
 | Are static NAT entries correct? | `show ip nat translations` |
 
-### 13.4 ACL Blocking Traffic
+### 14.4 ACL Blocking Traffic
 
 | Check | Command |
 |-------|---------|
@@ -558,7 +609,7 @@ Available templates:
 
 ---
 
-## 14. Keyboard Shortcuts
+## 15. Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -569,7 +620,7 @@ Available templates:
 
 ---
 
-## 15. Frequently Asked Questions (FAQ)
+## 16. Frequently Asked Questions (FAQ)
 
 **Q: Will my configuration be lost if I close the browser?**
 A: The auto-save feature preserves your configuration in localStorage. However, clearing browser data will erase it. Use JSON export to back up important configurations.

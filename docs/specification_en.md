@@ -1,7 +1,7 @@
 # Network Simulator Specification Document
 
-**Version:** 1.0
-**Last Updated:** 2026-03-31
+**Version:** 1.1
+**Last Updated:** 2026-04-01
 
 ---
 
@@ -32,36 +32,47 @@ This application is a Cisco IOS-style network simulator that runs in a web brows
 ```
 NW/
 ├── index.html              # Entry point (HTML)
-├── main.css                # Stylesheet (dark theme)
-├── main.js                 # Application initialization
-├── Store.js                # Centralized state management
-├── EventBus.js             # Pub/Sub event system
-├── Topology.js             # Device/link data models and factories
-├── CLIEngine.js            # Command parser and mode dispatcher
-├── CommandRegistry.js      # Command tree and hint data structure
-├── TabComplete.js          # Tab completion engine
-├── Abbreviations.js        # Command abbreviation expansion
-├── PingEngine.js           # Ping/Traceroute execution engine
-├── Routing.js              # Routing, NAT, and firewall logic
-├── NetworkUtils.js         # IP address utilities
-├── Terminal.js             # Terminal display
-├── DeviceTabs.js           # Device tab switcher
-├── CommandHints.js         # Command hints display
-├── VlanLegend.js           # VLAN legend display
-├── Toast.js                # Toast notifications
-├── CanvasRenderer.js       # Canvas rendering orchestrator
-├── DeviceRenderer.js       # Device icon rendering
-├── LinkRenderer.js         # Link rendering
-├── DesignController.js     # Design mode canvas interactions
-├── DevicePalette.js        # Device palette
-├── InterfacePicker.js      # Interface selection dialog
-├── ContextMenu.js          # Right-click context menus
-├── LocalStorage.js         # Browser storage persistence
-├── Snapshot.js             # Serialization/deserialization
-├── Templates.js            # Network topology template data
-├── ConfigExport.js         # CLI command script generator
-├── Splitter.js             # Panel splitter (canvas/terminal boundary)
-└── TemplateSelector.js     # Template selection UI
+├── styles/
+│   └── main.css            # Stylesheet (dark theme)
+├── src/
+│   ├── main.js             # Application initialization
+│   ├── core/
+│   │   ├── Store.js        # Centralized state management
+│   │   └── EventBus.js     # Pub/Sub event system
+│   ├── model/
+│   │   └── Topology.js     # Device/link data models and factories
+│   ├── cli/
+│   │   ├── CLIEngine.js    # Command parser and mode dispatcher
+│   │   ├── CommandRegistry.js # Command tree and hint data structure
+│   │   ├── TabComplete.js  # Tab completion engine
+│   │   ├── Abbreviations.js # Command abbreviation expansion
+│   │   └── commands/       # Command implementations (Show, Config, Interface, etc.)
+│   ├── simulation/
+│   │   ├── PingEngine.js   # Ping/Traceroute/ARP resolution engine
+│   │   ├── Routing.js      # Routing, NAT, firewall, and L2 reachability logic
+│   │   └── NetworkUtils.js # IP address utilities
+│   ├── rendering/
+│   │   ├── CanvasRenderer.js # Canvas rendering and animation orchestrator
+│   │   ├── DeviceRenderer.js # Device icon rendering
+│   │   └── LinkRenderer.js # Link rendering and edge point calculation
+│   ├── ui/
+│   │   ├── Terminal.js     # Terminal display
+│   │   ├── DeviceTabs.js   # Device tab switcher
+│   │   ├── CommandHints.js # Command hints display
+│   │   ├── VlanLegend.js   # VLAN legend display
+│   │   └── Toast.js        # Toast notifications
+│   ├── design/
+│   │   ├── DesignController.js # Design mode canvas interactions
+│   │   ├── DevicePalette.js # Device palette
+│   │   ├── InterfacePicker.js # Interface selection dialog
+│   │   └── ContextMenu.js  # Right-click context menus
+│   └── persistence/
+│       ├── LocalStorage.js # Browser storage persistence
+│       ├── Snapshot.js     # Serialization/deserialization
+│       ├── Templates.js    # Network topology template data
+│       ├── ConfigExport.js # CLI command script generator
+│       ├── Splitter.js     # Panel splitter
+│       └── TemplateSelector.js # Template selection UI
 ```
 
 ### 2.2 Architecture Patterns
@@ -295,9 +306,12 @@ interface GigabitEthernet0/0
 
 ### 5.2 L2 Switching
 
-- **BFS (Breadth-First Search)**: Path discovery through switch fabric
+- **VLAN-aware BFS (Breadth-First Search)**: Strict VLAN boundary isolation across the entire switch fabric
 - **VLAN constraints**: Respects access port VLAN tags and trunk port allowed VLAN lists
 - If VLANs don't match along the path, the destination is deemed unreachable
+- **All BFS functions are VLAN-aware**: `isReachableViaSwitch`, `bfsSwitchPath`, `getL2BroadcastDomain`, and `canReachL2` all use a VLAN parameter
+- **portCarriesVlan()**: Determines whether a switch port carries a given VLAN based on access/trunk mode
+- **canReachL2()**: When reaching an L3 device through a switch, only checks the connected interface's IP (not all device interfaces)
 
 ### 5.3 NAT Processing
 
@@ -337,7 +351,36 @@ ACLs are applied per-interface in the `in` (inbound) or `out` (outbound) directi
 3. First matching rule's `permit`/`deny` action is applied
 4. If no rule matches, implicit **deny all**
 
-### 5.6 Packet Path Construction
+### 5.6 ARP Resolution
+
+#### 5.6.1 ARP Table
+
+Each L3 device (router, firewall, server, PC) maintains an ARP table.
+
+```
+arpTable: [{ ip: string, mac: string, iface: string }]
+```
+
+- **MAC address generation**: Deterministic generation from device ID and interface name via `generateMAC(deviceId, ifName)`
+- **Learning timing**: Learned between adjacent L3 devices along the path during ping/traceroute execution
+- **Subnet determination**: Uses the sender's subnet mask to determine if a peer IP is in the same subnet (supports /16 masks)
+- **VLAN-aware**: Only interfaces reachable within the same VLAN are ARP learning targets
+
+#### 5.6.2 ARP Resolution Visualization
+
+When executing ping, if the ARP table lacks an entry for an L3 hop, an ARP resolution animation is displayed **before** the ICMP animation.
+
+| Phase | Description | Visual |
+|-------|-------------|--------|
+| **ARP Request** | Source → switch → flood to entire L2 broadcast domain | Gold diamond-shaped particle with `ARP: Who has X.X.X.X?` label |
+| **Broadcast result** | Hit indicator on target device, miss on non-targets | Green checkmark / red X mark |
+| **ARP Reply** | Target → switch → unicast response to source | Orange diamond-shaped particle with `ARP Reply: X.X.X.X is at MAC` label |
+
+- **Skipped on subsequent pings**: If the ARP table already has a cached entry, ARP resolution is omitted
+- **Terminal output**: ARP Request/Reply messages displayed in gold color
+- **VLAN isolation**: Broadcasts flood only to devices within the same VLAN
+
+### 5.7 Packet Path Construction
 
 1. Resolve routing hop-by-hop from source to destination
 2. Check inbound ACL on each router/firewall ingress interface
@@ -346,8 +389,9 @@ ACLs are applied per-interface in the `in` (inbound) or `out` (outbound) directi
 5. Check outbound ACL on egress interface
 6. Use VLAN-aware BFS for switch fabric traversal
 7. Loop detection (visited set) prevents infinite loops
+8. **linkHints array**: Records the interface pair (fromIf, toIf) used for each segment, enabling accurate link identification in animations and ARP resolution
 
-### 5.7 Packet Flow Diagnostics
+### 5.8 Packet Flow Diagnostics
 
 The `show packet-flow <ip>` command displays detailed decisions at each hop:
 
@@ -393,13 +437,15 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 - **Device type colors**: Router = green, Switch = orange, Firewall = red, Server = purple, PC = blue
 - **Status brightness**: Bright = all interfaces UP, dim = partial UP, dark = all DOWN
 - **Links**: Lines connecting devices, color-coded by VLAN
-- **Parallel links**: Multiple links between the same device pair are offset perpendicular, with labels spread along link direction
+- **Edge-based link rendering**: Links originate from device edges (not centers), with each interface having a distinct attachment point
+- **Parallel links**: Multiple links between the same device pair are offset using a consistent perpendicular normal based on sorted device IDs, with labels spread along link direction
 - **Legend (2 rows)**: Row 1 = device type colors, Row 2 = link status / trunk / VLAN info
-- **Packet animation**: Visual packet movement during ping/traceroute
+- **Packet animation**: Visual packet movement along link lines during ping/traceroute (linkHints ensure correct link tracking)
+- **ARP resolution animation**: Visualizes ARP Request broadcasts (gold diamond) and ARP Reply unicasts (orange) before ICMP ping
 
 ### 6.3 Terminal
 
-- **Color output**: Commands (cyan), success (green), errors (red)
+- **Color output**: Commands (cyan), success (green), errors (red), ARP info (gold)
 - **Tab completion**: Auto-complete commands with Tab key
 - **Command history**: Navigate history with up/down arrow keys
 - **Command hints**: Real-time suggestions based on current input
