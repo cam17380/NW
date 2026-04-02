@@ -344,6 +344,116 @@ export const templates = [
   },
 
   {
+    id: 'site-to-site-vpn',
+    name: 'Site-to-Site VPN',
+    description: '2 sites connected via IPsec tunnel over ISP — tunnel routing with crypto config',
+    icon: '🔒',
+    build() {
+      const devices = {
+        R1: {
+          type: 'router', hostname: 'HQ-Router', x: 150, y: 120,
+          routes: [
+            { network: '0.0.0.0', mask: '0.0.0.0', nextHop: '203.0.113.1' },
+            { network: '192.168.2.0', mask: '255.255.255.0', nextHop: '10.0.0.2' },
+          ],
+          nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+          accessLists: {},
+          crypto: {
+            isakmpPolicies: { 10: { encryption: 'aes', hash: 'sha', authentication: 'pre-share', group: 14, lifetime: 86400 } },
+            transformSets: { 'VPN-SET': { transform1: 'esp-aes', transform2: 'esp-sha-hmac' } },
+            cryptoMaps: { 'VPN-MAP': { 10: { peer: '198.51.100.2', transformSet: 'VPN-SET', matchACL: null } } },
+          },
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'HQ-LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '203.0.113.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-ISP', connected: { device: 'RISP', iface: 'GigabitEthernet0/0' } },
+            'Tunnel0': { ip: '10.0.0.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'VPN-to-Branch', connected: null, tunnel: { source: 'GigabitEthernet0/1', destination: '198.51.100.2', mode: 'ipsec' } },
+          }
+        },
+        RISP: {
+          type: 'router', hostname: 'ISP-Router', x: 400, y: 120,
+          routes: [
+            { network: '203.0.113.0', mask: '255.255.255.252', nextHop: '203.0.113.2' },
+            { network: '198.51.100.0', mask: '255.255.255.252', nextHop: '198.51.100.2' },
+          ],
+          nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+          accessLists: {},
+          crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '203.0.113.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-HQ', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '198.51.100.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-Branch', connected: { device: 'R2', iface: 'GigabitEthernet0/1' } },
+          }
+        },
+        R2: {
+          type: 'router', hostname: 'Branch-Router', x: 650, y: 120,
+          routes: [
+            { network: '0.0.0.0', mask: '0.0.0.0', nextHop: '198.51.100.1' },
+            { network: '192.168.1.0', mask: '255.255.255.0', nextHop: '10.0.0.1' },
+          ],
+          nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
+          accessLists: {},
+          crypto: {
+            isakmpPolicies: { 10: { encryption: 'aes', hash: 'sha', authentication: 'pre-share', group: 14, lifetime: 86400 } },
+            transformSets: { 'VPN-SET': { transform1: 'esp-aes', transform2: 'esp-sha-hmac' } },
+            cryptoMaps: { 'VPN-MAP': { 10: { peer: '203.0.113.2', transformSet: 'VPN-SET', matchACL: null } } },
+          },
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '192.168.2.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'Branch-LAN', connected: { device: 'SW2', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '198.51.100.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-ISP', connected: { device: 'RISP', iface: 'GigabitEthernet0/1' } },
+            'Tunnel0': { ip: '10.0.0.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'VPN-to-HQ', connected: null, tunnel: { source: 'GigabitEthernet0/1', destination: '203.0.113.2', mode: 'ipsec' } },
+          }
+        },
+        SW1: {
+          type: 'switch', hostname: 'HQ-Switch', x: 150, y: 290,
+          vlans: { 1: { name: 'default' } },
+          routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/3': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC2', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        SW2: {
+          type: 'switch', hostname: 'Branch-Switch', x: 650, y: 290,
+          vlans: { 1: { name: 'default' } },
+          routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R2', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC3', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/3': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC4', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: {
+          type: 'pc', hostname: 'HQ-PC1', x: 70, y: 440, defaultGateway: '192.168.1.1',
+          interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } }
+        },
+        PC2: {
+          type: 'pc', hostname: 'HQ-PC2', x: 230, y: 440, defaultGateway: '192.168.1.1',
+          interfaces: { 'Ethernet0': { ip: '192.168.1.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } }
+        },
+        PC3: {
+          type: 'pc', hostname: 'Branch-PC1', x: 570, y: 440, defaultGateway: '192.168.2.1',
+          interfaces: { 'Ethernet0': { ip: '192.168.2.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW2', iface: 'GigabitEthernet0/2' } } }
+        },
+        PC4: {
+          type: 'pc', hostname: 'Branch-PC2', x: 730, y: 440, defaultGateway: '192.168.2.1',
+          interfaces: { 'Ethernet0': { ip: '192.168.2.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW2', iface: 'GigabitEthernet0/3' } } }
+        },
+      };
+      const links = [
+        { from: 'R1', fromIf: 'GigabitEthernet0/0', to: 'SW1', toIf: 'GigabitEthernet0/1' },
+        { from: 'R1', fromIf: 'GigabitEthernet0/1', to: 'RISP', toIf: 'GigabitEthernet0/0' },
+        { from: 'RISP', fromIf: 'GigabitEthernet0/1', to: 'R2', toIf: 'GigabitEthernet0/1' },
+        { from: 'R2', fromIf: 'GigabitEthernet0/0', to: 'SW2', toIf: 'GigabitEthernet0/1' },
+        { from: 'SW1', fromIf: 'GigabitEthernet0/2', to: 'PC1', toIf: 'Ethernet0' },
+        { from: 'SW1', fromIf: 'GigabitEthernet0/3', to: 'PC2', toIf: 'Ethernet0' },
+        { from: 'SW2', fromIf: 'GigabitEthernet0/2', to: 'PC3', toIf: 'Ethernet0' },
+        { from: 'SW2', fromIf: 'GigabitEthernet0/3', to: 'PC4', toIf: 'Ethernet0' },
+      ];
+      return { version: 2, devices, links };
+    }
+  },
+
+  {
     id: 'empty',
     name: 'Empty Canvas',
     description: 'Start from scratch — no devices, no links',

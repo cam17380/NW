@@ -9,6 +9,7 @@ export function createDevice(type, id, x, y) {
       routes: [],
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
@@ -21,6 +22,7 @@ export function createDevice(type, id, x, y) {
       routes: [],
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
       policies: [],
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
@@ -86,13 +88,22 @@ export function generateInterfaceName(device) {
     }
     return 'Ethernet' + (max + 1);
   }
-  // Router and switch: GigabitEthernet0/N
+  // Router and switch: GigabitEthernet0/N (skip Tunnel interfaces)
   let max = -1;
   for (const name of ifaces) {
     const m = name.match(/^GigabitEthernet0\/(\d+)$/);
     if (m) max = Math.max(max, parseInt(m[1], 10));
   }
   return 'GigabitEthernet0/' + (max + 1);
+}
+
+export function generateTunnelName(device) {
+  let max = -1;
+  for (const name of Object.keys(device.interfaces)) {
+    const m = name.match(/^Tunnel(\d+)$/);
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return 'Tunnel' + (max + 1);
 }
 
 export function createInterfaceForDevice(device) {
@@ -111,6 +122,7 @@ export function createDefaultDevices() {
       routes: [],
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R2', iface: 'GigabitEthernet0/1' } },
@@ -121,6 +133,7 @@ export function createDefaultDevices() {
       routes: [],
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },

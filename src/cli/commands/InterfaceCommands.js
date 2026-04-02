@@ -134,6 +134,54 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     return;
   }
 
+  // ── Tunnel interface commands (router/firewall) ──
+  if (lower.startsWith('tunnel source')) {
+    if (!currentInterface.startsWith('Tunnel')) { termWrite('% tunnel source is only available on tunnel interfaces', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: tunnel source <interface-name|ip-address>', 'error-line'); return; }
+    if (!iface.tunnel) iface.tunnel = { source: '', destination: '', mode: 'ipsec' };
+    const srcArg = args.slice(2).join('');
+    iface.tunnel.source = srcArg;
+    termWrite(`% Tunnel source set to ${srcArg}`, 'success-line');
+    return;
+  }
+  if (lower.startsWith('tunnel destination')) {
+    if (!currentInterface.startsWith('Tunnel')) { termWrite('% tunnel destination is only available on tunnel interfaces', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: tunnel destination <ip-address>', 'error-line'); return; }
+    if (!isValidIP(args[2])) { termWrite('% Invalid IP address', 'error-line'); return; }
+    if (!iface.tunnel) iface.tunnel = { source: '', destination: '', mode: 'ipsec' };
+    iface.tunnel.destination = args[2];
+    termWrite(`% Tunnel destination set to ${args[2]}`, 'success-line');
+    return;
+  }
+  if (lower.startsWith('tunnel mode')) {
+    if (!currentInterface.startsWith('Tunnel')) { termWrite('% tunnel mode is only available on tunnel interfaces', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: tunnel mode ipsec|gre', 'error-line'); return; }
+    const mode = args[2].toLowerCase();
+    if (mode !== 'ipsec' && mode !== 'gre') { termWrite('% Invalid tunnel mode: use ipsec or gre', 'error-line'); return; }
+    if (!iface.tunnel) iface.tunnel = { source: '', destination: '', mode: 'ipsec' };
+    iface.tunnel.mode = mode;
+    termWrite(`% Tunnel mode set to ${mode}`, 'success-line');
+    return;
+  }
+
+  // ── Crypto map on interface (router/firewall) ──
+  if (lower.startsWith('crypto map')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto map is only available on routers/firewalls', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: crypto map <name>', 'error-line'); return; }
+    iface.cryptoMap = args[2];
+    termWrite(`% Crypto map "${args[2]}" applied to ${currentInterface}`, 'success-line');
+    return;
+  }
+  if (lower === 'no crypto map') {
+    delete iface.cryptoMap;
+    termWrite(`% Crypto map removed from ${currentInterface}`, 'success-line');
+    return;
+  }
+
   // ── Bond group (LACP) ──
   if (lower.startsWith('bond-group')) {
     if (dev.type !== 'server' && dev.type !== 'pc') { termWrite('% bond-group is only available on servers/PCs', 'error-line'); return; }

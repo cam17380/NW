@@ -88,6 +88,19 @@ const abbreviations = {
   'fw policy': 'firewall policy',
   'no fw pol': 'no firewall policy',
   'no fw policy': 'no firewall policy',
+  // VPN / Crypto
+  'int tunnel': 'interface tunnel',
+  'sh crypto isakmp': 'show crypto isakmp sa',
+  'show crypto isakmp': 'show crypto isakmp sa',
+  'sh crypto ipsec': 'show crypto ipsec sa',
+  'show crypto ipsec': 'show crypto ipsec sa',
+  'sh int tunnel': 'show interfaces tunnel',
+  'show int tunnel': 'show interfaces tunnel',
+  'tun src': 'tunnel source',
+  'tun source': 'tunnel source',
+  'tun dest': 'tunnel destination',
+  'tun destination': 'tunnel destination',
+  'tun mode': 'tunnel mode',
 };
 
 export function expandAbbrev(input) {

@@ -1,11 +1,13 @@
 // ─── Command tree and hint data for CLI modes ───
 
 export const commandTree = {
-  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'exit'],
-  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'clear arp', 'disable', 'exit'],
-  config: ['hostname', 'interface', 'interface vlan', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'exit', 'end'],
-  'config-if': ['ip address', 'no shutdown', 'shutdown', 'description', 'switchport mode access', 'switchport mode trunk', 'switchport access vlan', 'switchport trunk allowed vlan', 'ip nat inside', 'ip nat outside', 'no ip nat inside', 'no ip nat outside', 'ip access-group', 'no ip access-group', 'bond-group', 'no bond-group', 'exit', 'end'],
+  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'exit'],
+  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'clear arp', 'disable', 'exit'],
+  config: ['hostname', 'interface', 'interface vlan', 'interface tunnel', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'crypto isakmp policy', 'crypto ipsec transform-set', 'crypto map', 'no crypto isakmp policy', 'no crypto ipsec transform-set', 'no crypto map', 'exit', 'end'],
+  'config-if': ['ip address', 'no shutdown', 'shutdown', 'description', 'switchport mode access', 'switchport mode trunk', 'switchport access vlan', 'switchport trunk allowed vlan', 'ip nat inside', 'ip nat outside', 'no ip nat inside', 'no ip nat outside', 'ip access-group', 'no ip access-group', 'tunnel source', 'tunnel destination', 'tunnel mode', 'crypto map', 'no crypto map', 'bond-group', 'no bond-group', 'exit', 'end'],
   'config-vlan': ['name', 'exit', 'end'],
+  'config-isakmp': ['encryption', 'hash', 'authentication', 'group', 'lifetime', 'exit', 'end'],
+  'config-crypto-map': ['set peer', 'set transform-set', 'match address', 'exit', 'end'],
 };
 
 export function getCmdHintData(store) {
@@ -18,6 +20,11 @@ export function getCmdHintData(store) {
   const isL3Capable = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'switch';
   const isRouterOrFWOrSVOrSW = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'server' || dev().type === 'switch';
   const hasSVI = () => isSwitch() && Object.keys(dev().interfaces).some(n => n.startsWith('Vlan'));
+
+  const isTunnel = () => {
+    const ci = store.getCurrentInterface();
+    return ci && ci.startsWith('Tunnel');
+  };
 
   return {
     user: [
@@ -34,6 +41,9 @@ export function getCmdHintData(store) {
       { label: 'show firewall policy', fill: 'show firewall policy', cat: 'firewall', cond: isFirewall },
       { label: 'show access-lists', fill: 'show access-lists', cat: 'acl', cond: isL3Capable },
       { label: 'show arp', fill: 'show arp', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
+      { label: 'show crypto isakmp sa', fill: 'show crypto isakmp sa', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'show crypto ipsec sa', fill: 'show crypto ipsec sa', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'show interfaces tunnel', fill: 'show interfaces tunnel', cat: 'vpn', cond: isRouterOrFW },
       { label: 'show etherchannel summary', fill: 'show etherchannel summary', cat: 'show', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
@@ -53,6 +63,9 @@ export function getCmdHintData(store) {
       { label: 'show firewall policy', fill: 'show firewall policy', cat: 'firewall', cond: isFirewall },
       { label: 'show access-lists', fill: 'show access-lists', cat: 'acl', cond: isL3Capable },
       { label: 'show arp', fill: 'show arp', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
+      { label: 'show crypto isakmp sa', fill: 'show crypto isakmp sa', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'show crypto ipsec sa', fill: 'show crypto ipsec sa', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'show interfaces tunnel', fill: 'show interfaces tunnel', cat: 'vpn', cond: isRouterOrFW },
       { label: 'show etherchannel summary', fill: 'show etherchannel summary', cat: 'show', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
@@ -75,6 +88,10 @@ export function getCmdHintData(store) {
       { label: 'access-list <100-199> permit|deny <proto> <src> <dst> [eq port]', fill: 'access-list ', cat: 'acl', cond: isL3Capable },
       { label: 'firewall policy <seq> permit|deny ...', fill: 'firewall policy ', cat: 'firewall', cond: isFirewall },
       { label: 'no firewall policy <seq>|all', fill: 'no firewall policy ', cat: 'firewall', cond: isFirewall },
+      { label: 'interface tunnel <N>', fill: 'interface tunnel ', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'crypto isakmp policy <num>', fill: 'crypto isakmp policy ', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'crypto ipsec transform-set <name> <t1> [t2]', fill: 'crypto ipsec transform-set ', cat: 'vpn', cond: isRouterOrFW },
+      { label: 'crypto map <name> <seq> ipsec-isakmp', fill: 'crypto map ', cat: 'vpn', cond: isRouterOrFW },
       { label: 'vlan <id>', fill: 'vlan ', cat: 'vlan', cond: isSwitch },
       { label: 'no vlan <id>', fill: 'no vlan ', cat: 'vlan', cond: isSwitch },
       { label: 'exit', fill: 'exit', cat: 'nav' },
@@ -93,6 +110,10 @@ export function getCmdHintData(store) {
       { label: 'ip nat outside', fill: 'ip nat outside', cat: 'nat', cond: isRouterOrFW },
       { label: 'ip access-group <acl> in|out', fill: 'ip access-group ', cat: 'acl', cond: isL3Capable },
       { label: 'no ip access-group <acl> in|out', fill: 'no ip access-group ', cat: 'acl', cond: isL3Capable },
+      { label: 'tunnel source <if|ip>', fill: 'tunnel source ', cat: 'vpn', cond: isTunnel },
+      { label: 'tunnel destination <ip>', fill: 'tunnel destination ', cat: 'vpn', cond: isTunnel },
+      { label: 'tunnel mode ipsec|gre', fill: 'tunnel mode ', cat: 'vpn', cond: isTunnel },
+      { label: 'crypto map <name>', fill: 'crypto map ', cat: 'vpn', cond: isRouterOrFW },
       { label: 'bond-group <name>', fill: 'bond-group ', cat: 'config', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'no bond-group', fill: 'no bond-group', cat: 'config', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'exit', fill: 'exit', cat: 'nav' },
@@ -100,6 +121,22 @@ export function getCmdHintData(store) {
     ],
     'config-vlan': [
       { label: 'name <vlan-name>', fill: 'name ', cat: 'vlan' },
+      { label: 'exit', fill: 'exit', cat: 'nav' },
+      { label: 'end', fill: 'end', cat: 'nav' },
+    ],
+    'config-isakmp': [
+      { label: 'encryption aes|3des|des', fill: 'encryption ', cat: 'vpn' },
+      { label: 'hash sha|md5', fill: 'hash ', cat: 'vpn' },
+      { label: 'authentication pre-share|rsa-sig', fill: 'authentication ', cat: 'vpn' },
+      { label: 'group 1|2|5|14', fill: 'group ', cat: 'vpn' },
+      { label: 'lifetime <seconds>', fill: 'lifetime ', cat: 'vpn' },
+      { label: 'exit', fill: 'exit', cat: 'nav' },
+      { label: 'end', fill: 'end', cat: 'nav' },
+    ],
+    'config-crypto-map': [
+      { label: 'set peer <ip>', fill: 'set peer ', cat: 'vpn' },
+      { label: 'set transform-set <name>', fill: 'set transform-set ', cat: 'vpn' },
+      { label: 'match address <acl-num>', fill: 'match address ', cat: 'vpn' },
       { label: 'exit', fill: 'exit', cat: 'nav' },
       { label: 'end', fill: 'end', cat: 'nav' },
     ],

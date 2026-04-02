@@ -68,6 +68,60 @@ export function* getUsableInterfaces(dv) {
   }
 }
 
+// ─── VPN Tunnel helpers ───────────────────────────────────
+
+// Check if a router/firewall has any configured VPN tunnels
+export function routerHasVPN(dv) {
+  if (dv.type !== 'router' && dv.type !== 'firewall') return false;
+  return Object.keys(dv.interfaces).some(n => n.startsWith('Tunnel'));
+}
+
+// Find the tunnel interface whose subnet covers the target IP
+export function findTunnelForTarget(dv, targetIP) {
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!ifName.startsWith('Tunnel') || !iface.ip || iface.status !== 'up') continue;
+    if (!iface.tunnel || !iface.tunnel.destination) continue;
+    if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+      return { ifName, iface };
+    }
+  }
+  return null;
+}
+
+// Find the peer device that has the tunnel destination IP on one of its physical interfaces
+export function findTunnelPeerDevice(devices, tunnelDest) {
+  for (const [devId, dv] of Object.entries(devices)) {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (ifName.startsWith('Tunnel')) continue; // skip tunnel IFs
+      if (iface.ip === tunnelDest && iface.status === 'up') return devId;
+    }
+  }
+  return null;
+}
+
+// Find the peer's tunnel interface that points back to us
+export function findPeerTunnelIF(peerDev, localTunnelIP, localTunnelMask) {
+  for (const [ifName, iface] of Object.entries(peerDev.interfaces)) {
+    if (!ifName.startsWith('Tunnel') || !iface.ip || iface.status !== 'up') continue;
+    if (getNetwork(iface.ip, iface.mask) === getNetwork(localTunnelIP, localTunnelMask)) {
+      return { ifName, iface };
+    }
+  }
+  return null;
+}
+
+// Resolve tunnel source: can be an interface name or an IP address
+export function resolveTunnelSource(dv, tunnelSource) {
+  if (!tunnelSource) return null;
+  // If it's an IP, return as-is
+  const parts = tunnelSource.split('.');
+  if (parts.length === 4 && parts.every(p => !isNaN(parseInt(p)))) return tunnelSource;
+  // Otherwise treat as interface name — find its IP
+  const iface = dv.interfaces[tunnelSource];
+  if (iface && iface.ip) return iface.ip;
+  return null;
+}
+
 // ─── L3 Switch (SVI) helpers ───────────────────────────────
 
 // Check if a switch has any SVI interfaces (L3 capability)
@@ -314,6 +368,36 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
   // 2. Check routing table for a specific route (e.g. /32 takes priority over connected /24)
   const nextHop = lookupRoute(dv, curTargetIP);
 
+  // 2a. Tunnel forwarding: if the route resolves to a tunnel interface, forward via underlay
+  if (nextHop && (dv.type === 'router' || dv.type === 'firewall')) {
+    const tunnelMatch = findTunnelForTarget(dv, nextHop);
+    if (tunnelMatch) {
+      const tunnelDest = tunnelMatch.iface.tunnel?.destination;
+      if (tunnelDest) {
+        const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
+        if (peerDevId && !visited.has(peerDevId)) {
+          // Forward through underlay to the peer, then let the peer continue forwarding
+          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId);
+        }
+      }
+      return false;
+    }
+  }
+  // Also check directly connected tunnel subnets (no explicit route, target is on tunnel subnet)
+  if (!nextHop && (dv.type === 'router' || dv.type === 'firewall')) {
+    const tunnelDirect = findTunnelForTarget(dv, curTargetIP);
+    if (tunnelDirect) {
+      const tunnelDest = tunnelDirect.iface.tunnel?.destination;
+      if (tunnelDest) {
+        const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
+        if (peerDevId && !visited.has(peerDevId)) {
+          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId);
+        }
+      }
+      return false;
+    }
+  }
+
   // 3. If no explicit route, check directly connected networks via L2 (bond-aware)
   if (!nextHop) {
     for (const ui of getUsableInterfaces(dv)) {
@@ -368,6 +452,14 @@ export function lookupRoute(dv, targetIP) {
       if (bestRoute) return bestRoute.nextHop;
     }
     return dv.defaultGateway || null;
+  }
+  // Router/Firewall: check directly connected subnets first (connected routes have AD 0, higher priority than static)
+  // Skip tunnel interfaces — tunnel subnets are virtual and handled by tunnel forwarding logic
+  if (dv.type === 'router' || dv.type === 'firewall') {
+    for (const ui of getUsableInterfaces(dv)) {
+      if (ui.ifName.startsWith('Tunnel')) continue;
+      if (getNetwork(ui.ip, ui.mask) === getNetwork(targetIP, ui.mask)) return null;
+    }
   }
   // L3 switch: check SVI connected subnets first, then routes
   if (dv.type === 'switch') {
@@ -703,14 +795,15 @@ export function describeRouteLookup(dv, targetIP) {
     }
     return { nextHop: null, description: 'No route or default gateway configured' };
   }
-  if (!dv.routes || dv.routes.length === 0) {
-    // Check directly connected
-    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-      if (!iface.ip || iface.status !== 'up') continue;
-      if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
-        return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
-      }
+  // Router/Firewall/Switch: check directly connected first (connected routes have AD 0)
+  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+    if (!iface.ip || iface.status !== 'up') continue;
+    if (ifName.startsWith('Tunnel')) continue; // tunnel subnets are virtual, not directly connected via L2
+    if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
+      return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
     }
+  }
+  if (!dv.routes || dv.routes.length === 0) {
     return { nextHop: null, description: 'No matching route' };
   }
   let bestRoute = null, bestCIDR = -1;
@@ -726,13 +819,6 @@ export function describeRouteLookup(dv, targetIP) {
     const isDefault = bestRoute.network === '0.0.0.0' && bestRoute.mask === '0.0.0.0';
     const prefix = isDefault ? 'default route' : `static route ${bestRoute.network}/${maskToCIDR(bestRoute.mask)}`;
     return { nextHop: bestRoute.nextHop, description: `Matched ${prefix} via ${bestRoute.nextHop}` };
-  }
-  // Check directly connected
-  for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-    if (!iface.ip || iface.status !== 'up') continue;
-    if (getNetwork(iface.ip, iface.mask) === getNetwork(targetIP, iface.mask)) {
-      return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
-    }
   }
   return { nextHop: null, description: 'No matching route' };
 }

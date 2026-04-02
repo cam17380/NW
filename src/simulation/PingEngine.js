@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP, findTunnelForTarget, findTunnelPeerDevice } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -201,6 +201,52 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
         }
       }
     }
+
+    // Tunnel forwarding: if the resolved next-hop or target is on a tunnel subnet,
+    // build the underlay path to the tunnel peer device
+    if ((dv.type === 'router' || dv.type === 'firewall') && nextHopIP) {
+      const tunnelMatch = findTunnelForTarget(dv, nextHopIP);
+      if (tunnelMatch) {
+        const tunnelDest = tunnelMatch.iface.tunnel?.destination;
+        if (tunnelDest) {
+          const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
+          if (peerDevId && !visited.has(peerDevId)) {
+            // Build underlay path from current device to tunnel peer
+            const underlayPath = buildPingPath(devices, curId, tunnelDest, true);
+            // Append underlay hops (skip the first which is curId already in path)
+            for (let u = 1; u < underlayPath.path.length; u++) {
+              linkHints.push(underlayPath.linkHints[u - 1]);
+              path.push(underlayPath.path[u]);
+              visited.add(underlayPath.path[u]);
+            }
+            curId = peerDevId;
+            continue;
+          }
+        }
+        break;
+      }
+    }
+    if (!nextHopIP && (dv.type === 'router' || dv.type === 'firewall')) {
+      const tunnelDirect = findTunnelForTarget(dv, curTargetIP);
+      if (tunnelDirect) {
+        const tunnelDest = tunnelDirect.iface.tunnel?.destination;
+        if (tunnelDest) {
+          const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
+          if (peerDevId && !visited.has(peerDevId)) {
+            const underlayPath = buildPingPath(devices, curId, tunnelDest, true);
+            for (let u = 1; u < underlayPath.path.length; u++) {
+              linkHints.push(underlayPath.linkHints[u - 1]);
+              path.push(underlayPath.path[u]);
+              visited.add(underlayPath.path[u]);
+            }
+            curId = peerDevId;
+            continue;
+          }
+        }
+        break;
+      }
+    }
+
     if (!nextHopIP) break;
 
     // Find exit interface (bond-aware)
@@ -734,6 +780,29 @@ export function tracePacketFlow(devices, fromId, targetIP) {
     hop.decisions.push({ type: 'route-lookup', text: routeInfo.description });
 
     const nextHop = routeInfo.nextHop || lookupRoute(dv, curTargetIP);
+
+    // Tunnel forwarding check
+    if ((dv.type === 'router' || dv.type === 'firewall')) {
+      const resolvedForTunnel = nextHop || curTargetIP;
+      const tunnelMatch = findTunnelForTarget(dv, resolvedForTunnel);
+      if (tunnelMatch) {
+        const tunnelDest = tunnelMatch.iface.tunnel?.destination;
+        if (tunnelDest) {
+          const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
+          if (peerDevId && !visited.has(peerDevId)) {
+            hop.decisions.push({ type: 'forward', text: `Encapsulate via ${tunnelMatch.ifName} (tunnel dest ${tunnelDest})` });
+            hops.push(hop);
+            prevDevId = curId;
+            curId = peerDevId;
+            continue;
+          }
+        }
+        hop.decisions.push({ type: 'error', text: `Tunnel ${tunnelMatch.ifName} destination unreachable` });
+        hop.result = 'no-route';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
+    }
 
     // Find egress interface (bond-aware)
     if (!nextHop) {

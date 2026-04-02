@@ -68,12 +68,49 @@ export function exportCommandScript(store) {
       }
     }
 
+    // Crypto / VPN configuration (before interfaces)
+    if (dev.crypto) {
+      const hasIsakmp = Object.keys(dev.crypto.isakmpPolicies || {}).length > 0;
+      const hasTS = Object.keys(dev.crypto.transformSets || {}).length > 0;
+      const hasCM = Object.keys(dev.crypto.cryptoMaps || {}).length > 0;
+      if (hasIsakmp || hasTS || hasCM) {
+        lines.push('!');
+        for (const [num, p] of Object.entries(dev.crypto.isakmpPolicies || {})) {
+          lines.push(`crypto isakmp policy ${num}`);
+          lines.push(` encryption ${p.encryption}`);
+          lines.push(` hash ${p.hash}`);
+          lines.push(` authentication ${p.authentication}`);
+          lines.push(` group ${p.group}`);
+          lines.push(` lifetime ${p.lifetime}`);
+          lines.push(` exit`);
+        }
+        for (const [name, ts] of Object.entries(dev.crypto.transformSets || {})) {
+          lines.push(`crypto ipsec transform-set ${name} ${ts.transform1}${ts.transform2 ? ' ' + ts.transform2 : ''}`);
+        }
+        for (const [mapName, seqs] of Object.entries(dev.crypto.cryptoMaps || {})) {
+          for (const [seq, entry] of Object.entries(seqs)) {
+            lines.push(`crypto map ${mapName} ${seq} ipsec-isakmp`);
+            if (entry.peer) lines.push(` set peer ${entry.peer}`);
+            if (entry.transformSet) lines.push(` set transform-set ${entry.transformSet}`);
+            if (entry.matchACL) lines.push(` match address ${entry.matchACL}`);
+            lines.push(` exit`);
+          }
+        }
+      }
+    }
+
     // Interfaces
     lines.push('!');
     for (const [name, iface] of Object.entries(dev.interfaces)) {
       lines.push(`interface ${name}`);
       if (iface.description) lines.push(` description ${iface.description}`);
       if (iface.ip) lines.push(` ip address ${iface.ip} ${iface.mask}`);
+      if (iface.tunnel) {
+        if (iface.tunnel.source) lines.push(` tunnel source ${iface.tunnel.source}`);
+        if (iface.tunnel.destination) lines.push(` tunnel destination ${iface.tunnel.destination}`);
+        if (iface.tunnel.mode) lines.push(` tunnel mode ${iface.tunnel.mode}`);
+      }
+      if (iface.cryptoMap) lines.push(` crypto map ${iface.cryptoMap}`);
       if (iface.switchport) {
         const sp = iface.switchport;
         if (sp.mode === 'trunk') {

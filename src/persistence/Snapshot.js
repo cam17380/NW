@@ -14,6 +14,7 @@ export function getSnapshot(devices, links) {
       vlans: dv.vlans ? JSON.parse(JSON.stringify(dv.vlans)) : undefined,
       nat: dv.nat ? JSON.parse(JSON.stringify({ staticEntries: dv.nat.staticEntries, pools: dv.nat.pools, dynamicRules: dv.nat.dynamicRules })) : undefined,
       accessLists: dv.accessLists && Object.keys(dv.accessLists).length > 0 ? JSON.parse(JSON.stringify(dv.accessLists)) : undefined,
+      crypto: dv.crypto && (Object.keys(dv.crypto.isakmpPolicies || {}).length > 0 || Object.keys(dv.crypto.transformSets || {}).length > 0 || Object.keys(dv.crypto.cryptoMaps || {}).length > 0) ? JSON.parse(JSON.stringify(dv.crypto)) : undefined,
       policies: dv.policies && dv.policies.length > 0 ? JSON.parse(JSON.stringify(dv.policies)) : undefined,
       interfaces: {},
     };
@@ -29,6 +30,8 @@ export function getSnapshot(devices, links) {
         natRole: iface.natRole || undefined,
         accessGroup: iface.accessGroup ? JSON.parse(JSON.stringify(iface.accessGroup)) : undefined,
         bondGroup: iface.bondGroup || undefined,
+        tunnel: iface.tunnel ? JSON.parse(JSON.stringify(iface.tunnel)) : undefined,
+        cryptoMap: iface.cryptoMap || undefined,
       };
     }
   }
@@ -57,6 +60,11 @@ export function applySnapshot(store, snap) {
         dv.nat.stats = { hits: 0, misses: 0 };
       }
       if (saved.accessLists !== undefined) dv.accessLists = saved.accessLists;
+      if (saved.crypto !== undefined && dv.crypto) {
+        dv.crypto.isakmpPolicies = saved.crypto.isakmpPolicies || {};
+        dv.crypto.transformSets = saved.crypto.transformSets || {};
+        dv.crypto.cryptoMaps = saved.crypto.cryptoMaps || {};
+      }
       if (saved.policies !== undefined) dv.policies = saved.policies;
       // Rebuild interfaces: use exactly what was saved
       // Remove factory defaults not in snapshot, add snapshot interfaces not in factory
@@ -78,6 +86,8 @@ export function applySnapshot(store, snap) {
         if (savedIf.natRole !== undefined) iface.natRole = savedIf.natRole;
         if (savedIf.accessGroup !== undefined) iface.accessGroup = savedIf.accessGroup;
         if (savedIf.bondGroup !== undefined) iface.bondGroup = savedIf.bondGroup;
+        if (savedIf.tunnel !== undefined) iface.tunnel = savedIf.tunnel;
+        if (savedIf.cryptoMap !== undefined) iface.cryptoMap = savedIf.cryptoMap;
       }
       devices[id] = dv;
     }

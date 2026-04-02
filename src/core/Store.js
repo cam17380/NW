@@ -7,11 +7,15 @@ export class Store {
     this.devices = createDefaultDevices();
     this.links = createDefaultLinks();
     this.currentDeviceId = 'R1';
-    this.cliMode = 'user';       // user, privileged, config, config-if, config-vlan
+    this.cliMode = 'user';       // user, privileged, config, config-if, config-vlan, config-isakmp, config-crypto-map
     this.currentInterface = '';
     this.currentVlanId = null;
+    this.currentCryptoPolicyNum = null;
+    this.currentCryptoMapName = null;
+    this.currentCryptoMapSeq = null;
     this.commandHistory = [];
     this.historyIndex = -1;
+    this.deviceSessions = {};  // deviceId -> { termBuffer, cliMode, currentInterface, currentVlanId, cryptoPolicyNum, cryptoMapName, cryptoMapSeq }
     this.designMode = false;
     this.designState = { dragging: null, linking: null, hoverDeviceId: null, cursorPos: null };
     this.viewState = { zoom: 1, panX: 0, panY: 0 };
@@ -26,12 +30,43 @@ export class Store {
   isSwitch() { return this.getCurrentDevice().type === 'switch'; }
   isFirewall() { return this.getCurrentDevice().type === 'firewall'; }
 
-  // ─── Device switching ───
-  setCurrentDevice(id) {
-    this.currentDeviceId = id;
+  // ─── Per-device session save/restore ───
+  saveSession(termBuffer) {
+    this.deviceSessions[this.currentDeviceId] = {
+      termBuffer,
+      cliMode: this.cliMode,
+      currentInterface: this.currentInterface,
+      currentVlanId: this.currentVlanId,
+      cryptoPolicyNum: this.currentCryptoPolicyNum,
+      cryptoMapName: this.currentCryptoMapName,
+      cryptoMapSeq: this.currentCryptoMapSeq,
+    };
+  }
+
+  restoreSession(id) {
+    const session = this.deviceSessions[id];
+    if (session) {
+      this.cliMode = session.cliMode;
+      this.currentInterface = session.currentInterface;
+      this.currentVlanId = session.currentVlanId;
+      this.currentCryptoPolicyNum = session.cryptoPolicyNum;
+      this.currentCryptoMapName = session.cryptoMapName;
+      this.currentCryptoMapSeq = session.cryptoMapSeq;
+      return session.termBuffer;
+    }
+    // No saved session — reset to defaults
     this.cliMode = 'user';
     this.currentInterface = '';
     this.currentVlanId = null;
+    this.currentCryptoPolicyNum = null;
+    this.currentCryptoMapName = null;
+    this.currentCryptoMapSeq = null;
+    return null;
+  }
+
+  // ─── Device switching ───
+  setCurrentDevice(id) {
+    this.currentDeviceId = id;
     this.eventBus.emit('device:switched', id);
   }
 
@@ -47,6 +82,15 @@ export class Store {
 
   getCurrentVlanId() { return this.currentVlanId; }
   setCurrentVlanId(vid) { this.currentVlanId = vid; }
+
+  getCurrentCryptoPolicyNum() { return this.currentCryptoPolicyNum; }
+  setCurrentCryptoPolicyNum(num) { this.currentCryptoPolicyNum = num; }
+
+  getCurrentCryptoMapName() { return this.currentCryptoMapName; }
+  setCurrentCryptoMapName(name) { this.currentCryptoMapName = name; }
+
+  getCurrentCryptoMapSeq() { return this.currentCryptoMapSeq; }
+  setCurrentCryptoMapSeq(seq) { this.currentCryptoMapSeq = seq; }
 
   // ─── Command history ───
   pushHistory(cmd) {

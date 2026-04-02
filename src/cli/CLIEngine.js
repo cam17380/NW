@@ -1,7 +1,7 @@
 // ─── CLI Engine: Command dispatch and mode state machine ───
 import { expandAbbrev } from './Abbreviations.js';
 import { execShow } from './commands/ShowCommands.js';
-import { execConfig, execConfigVlan } from './commands/ConfigCommands.js';
+import { execConfig, execConfigVlan, execConfigIsakmp, execConfigCryptoMap } from './commands/ConfigCommands.js';
 import { execConfigIf } from './commands/InterfaceCommands.js';
 
 export class CLIEngine {
@@ -37,6 +37,8 @@ export class CLIEngine {
       case 'config': this._execConfig(input, parts, cmd); break;
       case 'config-if': this._execConfigIf(input, parts, cmd); break;
       case 'config-vlan': this._execConfigVlan(input, parts, cmd); break;
+      case 'config-isakmp': this._execConfigIsakmp(input, parts, cmd); break;
+      case 'config-crypto-map': this._execConfigCryptoMap(input, parts, cmd); break;
     }
 
     this.eventBus.emit('command:executed');
@@ -50,6 +52,8 @@ export class CLIEngine {
       case 'config': return h + '(config)#';
       case 'config-if': return h + '(config-if)#';
       case 'config-vlan': return h + '(config-vlan)#';
+      case 'config-isakmp': return h + '(config-isakmp)#';
+      case 'config-crypto-map': return h + '(config-crypto-map)#';
     }
   }
 
@@ -92,5 +96,13 @@ export class CLIEngine {
 
   _execConfigVlan(input, parts, cmd) {
     execConfigVlan(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
+  }
+
+  _execConfigIsakmp(input, parts, cmd) {
+    execConfigIsakmp(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
+  }
+
+  _execConfigCryptoMap(input, parts, cmd) {
+    execConfigCryptoMap(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
   }
 }

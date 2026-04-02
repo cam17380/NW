@@ -24,6 +24,7 @@ export function normalizeInterface(name) {
     'fa': 'FastEthernet', 'fastethernet': 'FastEthernet',
     'eth': 'Ethernet', 'ethernet': 'Ethernet', 'e': 'Ethernet',
     'vlan': 'Vlan',
+    'tunnel': 'Tunnel', 'tun': 'Tunnel',
   };
   const m = name.match(/^([a-zA-Z]+)\s*(\d+.*)$/);
   if (!m) return name;
@@ -33,6 +34,7 @@ export function normalizeInterface(name) {
 
 export function shortIfName(name) {
   if (name.startsWith('Vlan')) return name;
+  if (name.startsWith('Tunnel')) return name;
   return name.replace('GigabitEthernet', 'Gi').replace('FastEthernet', 'Fa').replace('Ethernet', 'Eth');
 }
 

@@ -1,5 +1,6 @@
 // ─── Configuration mode commands ───
 import { normalizeInterface, isValidIP, maskToCIDR } from '../../simulation/NetworkUtils.js';
+import { generateTunnelName } from '../../model/Topology.js';
 
 export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   const lower = input.toLowerCase();
@@ -27,6 +28,18 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
       if (!dev.interfaces[ifName]) {
         dev.interfaces[ifName] = { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: null };
         termWrite(`% SVI ${ifName} created`, 'success-line');
+      }
+      store.setCurrentInterface(ifName);
+      store.setCLIMode('config-if');
+      return;
+    }
+    // Tunnel interface: "interface tunnel <N>" on routers/firewalls — auto-create if needed
+    if (ifName.startsWith('Tunnel') && (dev.type === 'router' || dev.type === 'firewall')) {
+      const tid = parseInt(ifName.slice(6));
+      if (isNaN(tid) || tid < 0) { termWrite('% Invalid tunnel number (0+)', 'error-line'); return; }
+      if (!dev.interfaces[ifName]) {
+        dev.interfaces[ifName] = { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: null, tunnel: { source: '', destination: '', mode: 'ipsec' } };
+        termWrite(`% Tunnel interface ${ifName} created`, 'success-line');
       }
       store.setCurrentInterface(ifName);
       store.setCLIMode('config-if');
@@ -386,9 +399,196 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
+  // ── Crypto / VPN commands (router/firewall) ──
+
+  // crypto isakmp policy <num>
+  if (lower.startsWith('crypto isakmp policy')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: crypto isakmp policy <number>', 'error-line'); return; }
+    const policyNum = parseInt(args[3]);
+    if (isNaN(policyNum) || policyNum < 1) { termWrite('% Invalid policy number', 'error-line'); return; }
+    if (!dev.crypto.isakmpPolicies[policyNum]) {
+      dev.crypto.isakmpPolicies[policyNum] = { encryption: 'aes', hash: 'sha', authentication: 'pre-share', group: 2, lifetime: 86400 };
+    }
+    store.setCurrentCryptoPolicyNum(policyNum);
+    store.setCLIMode('config-isakmp');
+    return;
+  }
+
+  // no crypto isakmp policy <num>
+  if (lower.startsWith('no crypto isakmp policy')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) return;
+    const args = input.split(/\s+/);
+    const policyNum = parseInt(args[4]);
+    if (isNaN(policyNum)) { termWrite('% Usage: no crypto isakmp policy <number>', 'error-line'); return; }
+    if (!dev.crypto.isakmpPolicies[policyNum]) { termWrite(`% ISAKMP policy ${policyNum} not found`, 'error-line'); return; }
+    delete dev.crypto.isakmpPolicies[policyNum];
+    termWrite(`% ISAKMP policy ${policyNum} removed`, 'success-line');
+    return;
+  }
+
+  // crypto ipsec transform-set <name> <transform1> [transform2]
+  if (lower.startsWith('crypto ipsec transform-set')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Usage: crypto ipsec transform-set <name> <transform1> [transform2]', 'error-line'); return; }
+    const name = args[3];
+    const transform1 = args[4];
+    const transform2 = args[5] || null;
+    dev.crypto.transformSets[name] = { transform1, transform2 };
+    termWrite(`% Transform set "${name}" defined: ${transform1}${transform2 ? ' ' + transform2 : ''}`, 'success-line');
+    return;
+  }
+
+  // no crypto ipsec transform-set <name>
+  if (lower.startsWith('no crypto ipsec transform-set')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) return;
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Usage: no crypto ipsec transform-set <name>', 'error-line'); return; }
+    const name = args[4];
+    if (!dev.crypto.transformSets[name]) { termWrite(`% Transform set "${name}" not found`, 'error-line'); return; }
+    delete dev.crypto.transformSets[name];
+    termWrite(`% Transform set "${name}" removed`, 'success-line');
+    return;
+  }
+
+  // crypto map <name> <seq> ipsec-isakmp
+  if (lower.startsWith('crypto map')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: crypto map <name> <seq> ipsec-isakmp', 'error-line'); return; }
+    const mapName = args[2];
+    const seq = parseInt(args[3]);
+    if (isNaN(seq) || seq < 1) { termWrite('% Invalid sequence number', 'error-line'); return; }
+    if (!dev.crypto.cryptoMaps[mapName]) dev.crypto.cryptoMaps[mapName] = {};
+    if (!dev.crypto.cryptoMaps[mapName][seq]) {
+      dev.crypto.cryptoMaps[mapName][seq] = { peer: '', transformSet: '', matchACL: null };
+    }
+    store.setCurrentCryptoMapName(mapName);
+    store.setCurrentCryptoMapSeq(seq);
+    store.setCLIMode('config-crypto-map');
+    return;
+  }
+
+  // no crypto map <name>
+  if (lower.startsWith('no crypto map')) {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) return;
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: no crypto map <name>', 'error-line'); return; }
+    const mapName = args[3];
+    if (!dev.crypto.cryptoMaps[mapName]) { termWrite(`% Crypto map "${mapName}" not found`, 'error-line'); return; }
+    delete dev.crypto.cryptoMaps[mapName];
+    // Remove crypto map references from interfaces
+    for (const iface of Object.values(dev.interfaces)) {
+      if (iface.cryptoMap === mapName) delete iface.cryptoMap;
+    }
+    termWrite(`% Crypto map "${mapName}" removed`, 'success-line');
+    return;
+  }
+
   if (cmd === 'exit') { store.setCLIMode('privileged'); return; }
   if (cmd === 'end') { store.setCLIMode('privileged'); return; }
   termWrite(`% Unknown command "${parts[0]}" in config mode`, 'error-line');
+}
+
+// ─── ISAKMP policy sub-mode ───
+export function execConfigIsakmp(input, parts, cmd, store, termWrite) {
+  const dev = store.getCurrentDevice();
+  const policyNum = store.getCurrentCryptoPolicyNum();
+  if (!dev.crypto || !dev.crypto.isakmpPolicies[policyNum]) { store.setCLIMode('config'); return; }
+  const policy = dev.crypto.isakmpPolicies[policyNum];
+
+  if (cmd === 'encryption') {
+    if (parts.length < 2) { termWrite('% Usage: encryption aes|3des|des', 'error-line'); return; }
+    const val = parts[1].toLowerCase();
+    if (!['aes', '3des', 'des'].includes(val)) { termWrite('% Invalid encryption: use aes, 3des, or des', 'error-line'); return; }
+    policy.encryption = val;
+    termWrite(`% Encryption set to ${val}`, 'success-line');
+    return;
+  }
+  if (cmd === 'hash') {
+    if (parts.length < 2) { termWrite('% Usage: hash sha|md5', 'error-line'); return; }
+    const val = parts[1].toLowerCase();
+    if (!['sha', 'md5'].includes(val)) { termWrite('% Invalid hash: use sha or md5', 'error-line'); return; }
+    policy.hash = val;
+    termWrite(`% Hash set to ${val}`, 'success-line');
+    return;
+  }
+  if (cmd === 'authentication') {
+    if (parts.length < 2) { termWrite('% Usage: authentication pre-share|rsa-sig', 'error-line'); return; }
+    const val = parts[1].toLowerCase();
+    if (!['pre-share', 'rsa-sig'].includes(val)) { termWrite('% Invalid authentication: use pre-share or rsa-sig', 'error-line'); return; }
+    policy.authentication = val;
+    termWrite(`% Authentication set to ${val}`, 'success-line');
+    return;
+  }
+  if (cmd === 'group') {
+    if (parts.length < 2) { termWrite('% Usage: group 1|2|5|14', 'error-line'); return; }
+    const val = parseInt(parts[1]);
+    if (![1, 2, 5, 14].includes(val)) { termWrite('% Invalid DH group: use 1, 2, 5, or 14', 'error-line'); return; }
+    policy.group = val;
+    termWrite(`% DH group set to ${val}`, 'success-line');
+    return;
+  }
+  if (cmd === 'lifetime') {
+    if (parts.length < 2) { termWrite('% Usage: lifetime <seconds>', 'error-line'); return; }
+    const val = parseInt(parts[1]);
+    if (isNaN(val) || val < 60) { termWrite('% Invalid lifetime (minimum 60 seconds)', 'error-line'); return; }
+    policy.lifetime = val;
+    termWrite(`% Lifetime set to ${val} seconds`, 'success-line');
+    return;
+  }
+  if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentCryptoPolicyNum(null); return; }
+  if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentCryptoPolicyNum(null); return; }
+  termWrite(`% Unknown command "${parts[0]}" in ISAKMP policy config mode`, 'error-line');
+}
+
+// ─── Crypto map sub-mode ───
+export function execConfigCryptoMap(input, parts, cmd, store, termWrite) {
+  const dev = store.getCurrentDevice();
+  const mapName = store.getCurrentCryptoMapName();
+  const seq = store.getCurrentCryptoMapSeq();
+  if (!dev.crypto || !dev.crypto.cryptoMaps[mapName] || !dev.crypto.cryptoMaps[mapName][seq]) { store.setCLIMode('config'); return; }
+  const entry = dev.crypto.cryptoMaps[mapName][seq];
+  const lower = input.toLowerCase();
+
+  // set peer <ip>
+  if (lower.startsWith('set peer')) {
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: set peer <ip-address>', 'error-line'); return; }
+    if (!isValidIP(args[2])) { termWrite('% Invalid IP address', 'error-line'); return; }
+    entry.peer = args[2];
+    termWrite(`% Peer set to ${args[2]}`, 'success-line');
+    return;
+  }
+  // set transform-set <name>
+  if (lower.startsWith('set transform-set')) {
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: set transform-set <name>', 'error-line'); return; }
+    entry.transformSet = args[2];
+    termWrite(`% Transform set set to ${args[2]}`, 'success-line');
+    return;
+  }
+  // match address <acl-num>
+  if (lower.startsWith('match address')) {
+    const args = input.split(/\s+/);
+    if (args.length < 3) { termWrite('% Usage: match address <acl-number>', 'error-line'); return; }
+    const aclNum = parseInt(args[2]);
+    if (isNaN(aclNum) || aclNum < 1 || aclNum > 199) { termWrite('% Invalid ACL number (1-199)', 'error-line'); return; }
+    entry.matchACL = aclNum;
+    termWrite(`% Match ACL ${aclNum}`, 'success-line');
+    return;
+  }
+  if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentCryptoMapName(null); store.setCurrentCryptoMapSeq(null); return; }
+  if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentCryptoMapName(null); store.setCurrentCryptoMapSeq(null); return; }
+  termWrite(`% Unknown command "${parts[0]}" in crypto map config mode`, 'error-line');
 }
 
 export function execConfigVlan(input, parts, cmd, store, termWrite) {

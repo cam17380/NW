@@ -20,4 +20,14 @@ export class Terminal {
   clear() {
     this.outputEl.innerHTML = '';
   }
+
+  // ─── Per-device buffer save/restore ───
+  getBuffer() {
+    return this.outputEl.innerHTML;
+  }
+
+  setBuffer(html) {
+    this.outputEl.innerHTML = html;
+    this.outputEl.scrollTop = this.outputEl.scrollHeight;
+  }
 }

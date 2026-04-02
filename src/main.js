@@ -41,9 +41,17 @@ designController.contextMenu = contextMenu;
 
 // ─── Wire up dependencies ───
 function switchDevice(id) {
+  // Save current device's session (terminal buffer + CLI state)
+  store.saveSession(terminal.getBuffer());
   store.setCurrentDevice(id);
-  terminal.clear();
-  terminal.write(`\n--- Connected to ${store.getCurrentDevice().hostname} ---\n`, 'success-line');
+  // Restore target device's session
+  const savedBuffer = store.restoreSession(id);
+  if (savedBuffer) {
+    terminal.setBuffer(savedBuffer);
+  } else {
+    terminal.clear();
+    terminal.write(`\n--- Connected to ${store.getCurrentDevice().hostname} ---\n`, 'success-line');
+  }
   doUpdatePrompt();
   doUpdateTabs();
   renderer.draw();
@@ -55,6 +63,7 @@ function doUpdatePrompt() { updatePrompt(store); }
 function doUpdateVlanLegend() { updateVlanLegend(store); }
 
 function refreshUI() {
+  store.deviceSessions = {};
   store.cliMode = 'user';
   store.currentInterface = '';
   store.currentVlanId = null;

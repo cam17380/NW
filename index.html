@@ -177,6 +177,45 @@
         <b>Example 2:</b> <code>firewall policy 20 permit any any 10.0.0.1 0.0.0.0 tcp 443</code> &nbsp;→&nbsp; Allow HTTPS to host 10.0.0.1<br>
         <b>Example 3:</b> <code>firewall policy 999 deny any any any any ip</code> &nbsp;→&nbsp; Explicit deny all (same as implicit default)
       </p>
+      <h3>VPN / IPsec Commands (Router / Firewall)</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Tunnel Interface</td></tr>
+        <tr><td><code>interface tunnel &lt;N&gt;</code></td><td>config</td><td>Create tunnel interface and enter config-if</td></tr>
+        <tr><td><code>tunnel source &lt;if|ip&gt;</code></td><td>config-if (Tunnel)</td><td>Set tunnel source (interface name or IP)</td></tr>
+        <tr><td><code>tunnel destination &lt;ip&gt;</code></td><td>config-if (Tunnel)</td><td>Set tunnel destination (remote peer IP)</td></tr>
+        <tr><td><code>tunnel mode ipsec|gre</code></td><td>config-if (Tunnel)</td><td>Set tunnel encapsulation mode</td></tr>
+        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">ISAKMP (IKE Phase 1)</td></tr>
+        <tr><td><code>crypto isakmp policy &lt;num&gt;</code></td><td>config</td><td>Enter ISAKMP policy config sub-mode</td></tr>
+        <tr><td><code>encryption aes|3des|des</code></td><td>config-isakmp</td><td>Set encryption algorithm</td></tr>
+        <tr><td><code>hash sha|md5</code></td><td>config-isakmp</td><td>Set hash algorithm</td></tr>
+        <tr><td><code>authentication pre-share|rsa-sig</code></td><td>config-isakmp</td><td>Set authentication method</td></tr>
+        <tr><td><code>group 1|2|5|14</code></td><td>config-isakmp</td><td>Set Diffie-Hellman group</td></tr>
+        <tr><td><code>lifetime &lt;seconds&gt;</code></td><td>config-isakmp</td><td>Set SA lifetime</td></tr>
+        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">IPsec (IKE Phase 2)</td></tr>
+        <tr><td><code>crypto ipsec transform-set &lt;name&gt; &lt;t1&gt; [t2]</code></td><td>config</td><td>Define transform set (e.g. esp-aes esp-sha-hmac)</td></tr>
+        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Crypto Map</td></tr>
+        <tr><td><code>crypto map &lt;name&gt; &lt;seq&gt; ipsec-isakmp</code></td><td>config</td><td>Enter crypto map config sub-mode</td></tr>
+        <tr><td><code>set peer &lt;ip&gt;</code></td><td>config-crypto-map</td><td>Set VPN peer address</td></tr>
+        <tr><td><code>set transform-set &lt;name&gt;</code></td><td>config-crypto-map</td><td>Set transform set to use</td></tr>
+        <tr><td><code>match address &lt;acl-num&gt;</code></td><td>config-crypto-map</td><td>Set interesting traffic ACL</td></tr>
+        <tr><td><code>crypto map &lt;name&gt;</code></td><td>config-if</td><td>Apply crypto map to interface</td></tr>
+        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Show / Delete</td></tr>
+        <tr><td><code>show crypto isakmp sa</code></td><td>EXEC</td><td>Show ISAKMP policies</td></tr>
+        <tr><td><code>show crypto ipsec sa</code></td><td>EXEC</td><td>Show IPsec SA / transform sets / tunnel status</td></tr>
+        <tr><td><code>show interfaces tunnel</code></td><td>EXEC</td><td>Show tunnel interface details</td></tr>
+        <tr><td><code>no crypto isakmp policy &lt;num&gt;</code></td><td>config</td><td>Delete ISAKMP policy</td></tr>
+        <tr><td><code>no crypto map &lt;name&gt;</code></td><td>config</td><td>Delete crypto map</td></tr>
+      </table>
+      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
+        Tunnel interfaces create virtual point-to-point links between routers over the existing underlay network.
+        Packets routed to a tunnel subnet are encapsulated and forwarded through the underlay to the peer.<br>
+        <b>Example (R1 side):</b><br>
+        <code>crypto isakmp policy 10</code> &rarr; <code>encryption aes</code> / <code>hash sha</code> / <code>authentication pre-share</code> / <code>group 14</code><br>
+        <code>crypto ipsec transform-set MYSET esp-aes esp-sha-hmac</code><br>
+        <code>interface tunnel 0</code> &rarr; <code>ip address 10.0.0.1 255.255.255.252</code> &rarr; <code>tunnel source GigabitEthernet0/0</code> &rarr; <code>tunnel destination 203.0.113.2</code><br>
+        <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code> &nbsp;&rarr;&nbsp; Route remote subnet via tunnel
+      </p>
       <h3>Show Commands</h3>
       <table>
         <tr><th>Command</th><th>Description</th></tr>
@@ -188,6 +227,9 @@
         <tr><td><code>show ip nat statistics</code></td><td>Show NAT statistics</td></tr>
         <tr><td><code>show firewall policy</code></td><td>Show firewall policy table (Firewall only)</td></tr>
         <tr><td><code>show access-lists</code></td><td>Show all ACLs and applied interfaces (R/FW/L3SW)</td></tr>
+        <tr><td><code>show crypto isakmp sa</code></td><td>Show ISAKMP policies (Router/FW)</td></tr>
+        <tr><td><code>show crypto ipsec sa</code></td><td>Show IPsec config and tunnel status (Router/FW)</td></tr>
+        <tr><td><code>show interfaces tunnel</code></td><td>Show tunnel interface details (Router/FW)</td></tr>
         <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
         <tr><td><code>show etherchannel summary</code></td><td>Show LACP bond group status (Server/PC)</td></tr>
         <tr><td><code>show packet-flow &lt;ip&gt;</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
@@ -208,6 +250,8 @@
         <tr><td>Extended ACLs (100-199) filter by source, destination, protocol, and port</td></tr>
         <tr><td>Switches become L3 when SVIs are configured: <code>interface vlan 10</code></td></tr>
         <tr><td>LACP bond: <code>bond-group Bond0</code> on paired interfaces for failover</td></tr>
+        <tr><td>VPN tunnel: <code>interface tunnel 0</code> + <code>tunnel source/destination</code> to create virtual links</td></tr>
+        <tr><td>Route remote subnets via tunnel IP: <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code></td></tr>
         <tr><td><b>Zoom:</b> Mouse wheel &nbsp; <b>Pan:</b> Drag empty area &nbsp; <b>Fit:</b> Double-click empty area</td></tr>
       </table>
     </div>

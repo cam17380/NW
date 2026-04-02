@@ -3,6 +3,17 @@ import { shortIfName, generateMAC, isValidIP } from '../../simulation/NetworkUti
 import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
 
+function findTunnelPeer(devices, srcDev, destIP) {
+  if (!destIP) return null;
+  for (const [id, dv] of Object.entries(devices)) {
+    if (dv === srcDev) continue;
+    for (const iface of Object.values(dv.interfaces)) {
+      if (iface.ip === destIP && iface.status === 'up') return id;
+    }
+  }
+  return null;
+}
+
 export function execShow(input, parts, store, termWrite, execPing, execTraceroute) {
   const lower = input.toLowerCase();
   const dev = store.getCurrentDevice();
@@ -219,6 +230,87 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  // ── VPN / Crypto show commands ──
+  if (lower === 'show crypto isakmp sa' || lower === 'show crypto isakmp policy') {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto || Object.keys(dev.crypto.isakmpPolicies).length === 0) {
+      termWrite('  (no ISAKMP policies configured)');
+      return;
+    }
+    for (const [num, p] of Object.entries(dev.crypto.isakmpPolicies).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))) {
+      termWrite(`ISAKMP Policy ${num}`);
+      termWrite(`  Encryption:      ${p.encryption}`);
+      termWrite(`  Hash:            ${p.hash}`);
+      termWrite(`  Authentication:  ${p.authentication}`);
+      termWrite(`  DH Group:        ${p.group}`);
+      termWrite(`  Lifetime:        ${p.lifetime} seconds`);
+      termWrite('');
+    }
+    return;
+  }
+
+  if (lower === 'show crypto ipsec sa' || lower === 'show crypto ipsec transform-set') {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.crypto) { termWrite('  (no IPsec configuration)'); return; }
+    // Transform sets
+    if (Object.keys(dev.crypto.transformSets).length > 0) {
+      termWrite('Transform Sets:');
+      for (const [name, ts] of Object.entries(dev.crypto.transformSets)) {
+        termWrite(`  ${name}: ${ts.transform1}${ts.transform2 ? ' ' + ts.transform2 : ''}`);
+      }
+      termWrite('');
+    }
+    // Crypto maps
+    if (Object.keys(dev.crypto.cryptoMaps).length > 0) {
+      termWrite('Crypto Maps:');
+      for (const [mapName, seqs] of Object.entries(dev.crypto.cryptoMaps)) {
+        for (const [seq, entry] of Object.entries(seqs).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))) {
+          termWrite(`  ${mapName} ${seq} ipsec-isakmp`);
+          if (entry.peer) termWrite(`    Peer: ${entry.peer}`);
+          if (entry.transformSet) termWrite(`    Transform set: ${entry.transformSet}`);
+          if (entry.matchACL) termWrite(`    Match ACL: ${entry.matchACL}`);
+        }
+      }
+      termWrite('');
+    }
+    // Tunnel interfaces with IPsec
+    let hasTunnel = false;
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (!ifName.startsWith('Tunnel') || !iface.tunnel) continue;
+      if (!hasTunnel) { termWrite('IPsec Tunnel Interfaces:'); hasTunnel = true; }
+      const t = iface.tunnel;
+      const peerDev = findTunnelPeer(store.getDevices(), dev, t.destination);
+      const status = t.source && t.destination && peerDev ? 'UP' : 'DOWN';
+      termWrite(`  ${ifName}: ${iface.ip || 'unassigned'} -> ${t.destination || 'unset'} (${t.mode}) [${status}]`);
+    }
+    if (!hasTunnel && Object.keys(dev.crypto.transformSets).length === 0 && Object.keys(dev.crypto.cryptoMaps).length === 0) {
+      termWrite('  (no IPsec configuration)');
+    }
+    return;
+  }
+
+  if (lower === 'show interfaces tunnel') {
+    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% tunnel interfaces are only available on routers/firewalls', 'error-line'); return; }
+    let hasTunnel = false;
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (!ifName.startsWith('Tunnel')) continue;
+      hasTunnel = true;
+      const state = iface.status === 'up' ? 'up' : 'administratively down';
+      termWrite(`${ifName} is ${state}, line protocol is ${iface.protocol}`);
+      if (iface.description) termWrite(`  Description: ${iface.description}`);
+      if (iface.ip) termWrite(`  Internet address is ${iface.ip}/${maskToCIDR(iface.mask)}`);
+      if (iface.tunnel) {
+        termWrite(`  Tunnel source: ${iface.tunnel.source || 'unset'}`);
+        termWrite(`  Tunnel destination: ${iface.tunnel.destination || 'unset'}`);
+        termWrite(`  Tunnel mode: ${iface.tunnel.mode || 'ipsec'}`);
+      }
+      if (iface.cryptoMap) termWrite(`  Crypto map: ${iface.cryptoMap}`);
+      termWrite('');
+    }
+    if (!hasTunnel) termWrite('  (no tunnel interfaces configured)');
+    return;
+  }
+
   if (lower === 'show etherchannel summary' || lower === 'show bond') {
     // Collect bond groups
     const bonds = {};
@@ -272,6 +364,12 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
           if (sp.accessVlan !== 1) termWrite(` switchport access vlan ${sp.accessVlan}`);
         }
       }
+      if (iface.tunnel) {
+        if (iface.tunnel.source) termWrite(` tunnel source ${iface.tunnel.source}`);
+        if (iface.tunnel.destination) termWrite(` tunnel destination ${iface.tunnel.destination}`);
+        if (iface.tunnel.mode) termWrite(` tunnel mode ${iface.tunnel.mode}`);
+      }
+      if (iface.cryptoMap) termWrite(` crypto map ${iface.cryptoMap}`);
       if (iface.bondGroup) termWrite(` bond-group ${iface.bondGroup}`);
       if (iface.natRole) termWrite(` ip nat ${iface.natRole}`);
       if (iface.accessGroup) {
@@ -311,6 +409,34 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         termWrite(`ip nat inside source list ${r.aclNum} pool ${r.poolName}`);
       }
       if (Object.keys(dev.nat.pools).length > 0 || dev.nat.staticEntries.length > 0 || dev.nat.dynamicRules.length > 0) {
+        termWrite('!');
+      }
+    }
+    // Crypto / VPN
+    if (dev.crypto) {
+      let hasCrypto = false;
+      for (const [num, p] of Object.entries(dev.crypto.isakmpPolicies || {})) {
+        if (!hasCrypto) { hasCrypto = true; }
+        termWrite(`crypto isakmp policy ${num}`);
+        termWrite(` encryption ${p.encryption}`);
+        termWrite(` hash ${p.hash}`);
+        termWrite(` authentication ${p.authentication}`);
+        termWrite(` group ${p.group}`);
+        termWrite(` lifetime ${p.lifetime}`);
+        termWrite('!');
+      }
+      for (const [name, ts] of Object.entries(dev.crypto.transformSets || {})) {
+        termWrite(`crypto ipsec transform-set ${name} ${ts.transform1}${ts.transform2 ? ' ' + ts.transform2 : ''}`);
+      }
+      for (const [mapName, seqs] of Object.entries(dev.crypto.cryptoMaps || {})) {
+        for (const [seq, entry] of Object.entries(seqs)) {
+          termWrite(`crypto map ${mapName} ${seq} ipsec-isakmp`);
+          if (entry.peer) termWrite(` set peer ${entry.peer}`);
+          if (entry.transformSet) termWrite(` set transform-set ${entry.transformSet}`);
+          if (entry.matchACL) termWrite(` match address ${entry.matchACL}`);
+        }
+      }
+      if (hasCrypto || Object.keys(dev.crypto.transformSets || {}).length > 0 || Object.keys(dev.crypto.cryptoMaps || {}).length > 0) {
         termWrite('!');
       }
     }
