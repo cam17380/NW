@@ -6,7 +6,7 @@ export class Store {
     this.eventBus = eventBus;
     this.devices = createDefaultDevices();
     this.links = createDefaultLinks();
-    this.currentDeviceId = 'R1';
+    this.currentDeviceId = Object.keys(this.devices)[0] || 'SW1';
     this.cliMode = 'user';       // user, privileged, config, config-if, config-vlan, config-isakmp, config-crypto-map
     this.currentInterface = '';
     this.currentVlanId = null;
