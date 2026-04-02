@@ -31,6 +31,9 @@ import { registerFirewallTests } from './test/tests/FirewallTests.js';
 import { registerNatTests } from './test/tests/NatTests.js';
 import { registerAclTests } from './test/tests/AclTests.js';
 import { registerPacketFlowTests } from './test/tests/PacketFlowTests.js';
+import { registerL3SwitchTests } from './test/tests/L3SwitchTests.js';
+import { registerBondTests } from './test/tests/BondTests.js';
+import { registerVpnTunnelTests } from './test/tests/VpnTunnelTests.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -185,6 +188,9 @@ registerFirewallTests(testRunner);
 registerNatTests(testRunner);
 registerAclTests(testRunner);
 registerPacketFlowTests(testRunner);
+registerL3SwitchTests(testRunner);
+registerBondTests(testRunner);
+registerVpnTunnelTests(testRunner);
 
 const testModeContainer = document.getElementById('testModeContainer');
 const testUI = new TestUI(testModeContainer, testRunner);
