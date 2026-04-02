@@ -11,26 +11,6 @@
 <header>
   <h1>Network Simulator</h1>
   <div class="device-tabs" id="deviceTabs"></div>
-  <div class="toolbar">
-    <div class="toolbar-dropdown">
-      <button class="toolbar-btn file">File ▾</button>
-      <div class="toolbar-dropdown-menu">
-        <button onclick="saveConfig()">Save</button>
-        <button onclick="loadConfig()">Load</button>
-        <div class="dropdown-sep"></div>
-        <button onclick="exportConfig()">Export JSON</button>
-        <button onclick="importConfig()">Import JSON</button>
-        <div class="dropdown-sep"></div>
-        <button onclick="exportScript()">Export Script</button>
-        <div class="dropdown-sep"></div>
-        <div class="dropdown-info" id="saveInfo"></div>
-      </div>
-    </div>
-    <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
-    <button class="toolbar-btn design" id="designToggle">Design Mode</button>
-    <button class="toolbar-btn test-mode" id="testModeBtn">Test Mode</button>
-    <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
-  </div>
 </header>
 <div class="toast" id="toast"></div>
 <div class="confirm-overlay" id="confirmOverlay">
@@ -45,6 +25,41 @@
 <input type="file" id="importFile" accept=".json" style="display:none">
 
 <div class="main-container">
+  <div class="terminal-panel">
+    <div class="toolbar">
+      <div class="toolbar-dropdown">
+        <button class="toolbar-btn file">File ▾</button>
+        <div class="toolbar-dropdown-menu">
+          <button onclick="saveConfig()">Save</button>
+          <button onclick="loadConfig()">Load</button>
+          <div class="dropdown-sep"></div>
+          <button onclick="exportConfig()">Export JSON</button>
+          <button onclick="importConfig()">Import JSON</button>
+          <div class="dropdown-sep"></div>
+          <button onclick="exportScript()">Export Script</button>
+          <div class="dropdown-sep"></div>
+          <div class="dropdown-info" id="saveInfo"></div>
+        </div>
+      </div>
+      <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
+      <button class="toolbar-btn design" id="designToggle">Design Mode</button>
+      <button class="toolbar-btn test-mode" id="testModeBtn">Test Mode</button>
+      <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
+    </div>
+    <div class="terminal-header">
+      <span id="terminalTitle">Terminal — Switch1</span>
+      <span id="modeIndicator">User EXEC</span>
+    </div>
+    <div class="terminal-output" id="termOutput"></div>
+    <div class="cmd-hints" id="cmdHints"></div>
+    <div class="terminal-input-area">
+      <span class="prompt-label" id="promptLabel">Switch1></span>
+      <input type="text" id="cmdInput" spellcheck="false" autofocus>
+    </div>
+  </div>
+
+  <div class="splitter" id="panelSplitter"></div>
+
   <div class="diagram-panel">
     <canvas id="netCanvas"></canvas>
     <div class="legend" id="legendArea">
@@ -255,21 +270,6 @@
         <tr><td>Route remote subnets via tunnel IP: <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code></td></tr>
         <tr><td><b>Zoom:</b> Mouse wheel &nbsp; <b>Pan:</b> Drag empty area &nbsp; <b>Fit:</b> Double-click empty area</td></tr>
       </table>
-    </div>
-  </div>
-
-  <div class="splitter" id="panelSplitter"></div>
-
-  <div class="terminal-panel">
-    <div class="terminal-header">
-      <span id="terminalTitle">Terminal — Router1</span>
-      <span id="modeIndicator">User EXEC</span>
-    </div>
-    <div class="terminal-output" id="termOutput"></div>
-    <div class="cmd-hints" id="cmdHints"></div>
-    <div class="terminal-input-area">
-      <span class="prompt-label" id="promptLabel">Router1></span>
-      <input type="text" id="cmdInput" spellcheck="false" autofocus>
     </div>
   </div>
 </div>

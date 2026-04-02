@@ -80,7 +80,10 @@ function refreshUI() {
   store.currentInterface = '';
   store.currentVlanId = null;
   terminal.clear();
-  terminal.write(`\n--- Connected to ${store.getCurrentDevice().hostname} ---\n`, 'success-line');
+  terminal.write('Welcome to Network Simulator!', 'success-line');
+  terminal.write('Practice Cisco IOS commands and watch the network respond.\n');
+  terminal.write('Type commands below or click "? Help" for reference.\n');
+  terminal.write(`Connected to ${store.getCurrentDevice().hostname}\n`, 'success-line');
   doUpdatePrompt();
   doUpdateTabs();
   renderer.draw();
