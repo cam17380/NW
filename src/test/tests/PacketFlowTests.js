@@ -9,13 +9,13 @@ export function registerPacketFlowTests(runner) {
     const { devices } = buildMultiHopTopology();
     const result = tracePacketFlow(devices, 'PC1', '10.0.2.10');
     assert.ok(result.reachable, 'Should be reachable');
-  });
+  }, buildMultiHopTopology);
 
   runner.test('tracePacketFlow: unreachable destination returns reachable=false', (assert) => {
     const { devices } = buildMultiHopTopology();
     const result = tracePacketFlow(devices, 'PC1', '172.16.0.1');
     assert.ok(!result.reachable, 'Should be unreachable');
-  });
+  }, buildMultiHopTopology);
 
   runner.test('tracePacketFlow: hops include all L3 devices', (assert) => {
     const { devices } = buildMultiHopTopology();
@@ -25,14 +25,14 @@ export function registerPacketFlowTests(runner) {
     assert.ok(hopDeviceIds.includes('R1'), 'Should include R1');
     assert.ok(hopDeviceIds.includes('R2'), 'Should include R2');
     assert.ok(hopDeviceIds.includes('SV1'), 'Should include Server1');
-  });
+  }, buildMultiHopTopology);
 
   runner.test('tracePacketFlow: last hop result is "reached"', (assert) => {
     const { devices } = buildMultiHopTopology();
     const result = tracePacketFlow(devices, 'PC1', '10.0.2.10');
     const lastHop = result.hops[result.hops.length - 1];
     assert.equal(lastHop.result, 'reached', 'Last hop should be "reached"');
-  });
+  }, buildMultiHopTopology);
 
   runner.test('tracePacketFlow: firewall drop shows result "dropped"', (assert) => {
     const { devices } = buildFirewallTopology();
@@ -43,7 +43,7 @@ export function registerPacketFlowTests(runner) {
     const fwHop = result.hops.find(h => h.deviceId === 'FW1');
     assert.ok(fwHop, 'Should have firewall hop');
     assert.equal(fwHop.result, 'dropped', 'Firewall hop should show "dropped"');
-  });
+  }, buildFirewallTopology);
 
   runner.test('tracePacketFlow: decisions include route-lookup', (assert) => {
     const { devices } = buildMultiHopTopology();
@@ -52,7 +52,7 @@ export function registerPacketFlowTests(runner) {
     assert.ok(r1Hop, 'Should have R1 hop');
     const routeDecision = r1Hop.decisions.find(d => d.type === 'route-lookup');
     assert.ok(routeDecision, 'R1 should have a route-lookup decision');
-  });
+  }, buildMultiHopTopology);
 
   runner.test('tracePacketFlow: ACL drop shows in decisions', (assert) => {
     const { devices } = buildAclTopology();
@@ -67,7 +67,7 @@ export function registerPacketFlowTests(runner) {
       const aclDecision = r1Hop.decisions.find(d => d.type === 'acl');
       assert.ok(aclDecision, 'Should have ACL decision');
     }
-  });
+  }, buildAclTopology);
 
   runner.test('tracePacketFlow: no source interface returns error', (assert) => {
     const { devices } = buildMultiHopTopology();
@@ -78,5 +78,5 @@ export function registerPacketFlowTests(runner) {
     assert.ok(!result.reachable, 'Should be unreachable');
     assert.ok(result.hops.length > 0, 'Should have at least one hop');
     assert.equal(result.hops[0].result, 'no-source', 'First hop should be no-source error');
-  });
+  }, buildMultiHopTopology);
 }

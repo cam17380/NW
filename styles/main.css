@@ -307,7 +307,6 @@ canvas { display: block; width: 100%; height: 100%; }
   padding: 10px 20px; background: #141b2d; border-bottom: 1px solid #1e2a3a;
 }
 .test-title { font-size: 16px; color: #b39ddb; font-weight: 600; }
-.test-header-actions { margin-left: auto; display: flex; gap: 8px; }
 .test-btn {
   padding: 6px 16px; border-radius: 4px; border: 1px solid #2a3a4a;
   cursor: pointer; font-size: 12px; font-family: 'Segoe UI', sans-serif;
@@ -344,47 +343,150 @@ canvas { display: block; width: 100%; height: 100%; }
 .test-progress-pct.all-passed { color: #69f0ae; }
 .test-progress-pct.has-failures { color: #ff6b6b; }
 
+.test-header-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
 .test-body { display: flex; flex: 1; overflow: hidden; }
+
+/* ─── Sidebar wrapper: filter bar + scrollable list ─── */
+.test-sidebar-wrapper {
+  display: flex; flex-direction: column; flex-shrink: 0;
+  width: 360px; background: #0d1117;
+}
+.test-filter-bar {
+  display: flex; gap: 2px; padding: 8px 8px 6px;
+  border-bottom: 1px solid #1e2a3a;
+}
+.test-filter-btn {
+  flex: 1; padding: 5px 0; border: 1px solid #2a3a4a; cursor: pointer;
+  font-size: 11px; font-family: 'Segoe UI', sans-serif; text-align: center;
+  background: #1a2332; color: #556; transition: all 0.15s; border-radius: 4px;
+}
+.test-filter-btn:hover { background: #223344; color: #8899aa; }
+.test-filter-btn.active { background: #2a3a4a; color: #b0c4de; border-color: #3a4a5a; }
+
 .test-sidebar {
-  width: 240px; flex-shrink: 0; overflow-y: auto; padding: 12px;
-  border-right: 1px solid #1e2a3a; background: #0d1117;
+  flex: 1; overflow-y: auto; padding: 8px;
 }
 .test-sidebar::-webkit-scrollbar { width: 5px; }
 .test-sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.test-cat-item {
-  padding: 8px 12px; border-radius: 6px; cursor: pointer;
-  font-size: 13px; color: #8899aa; transition: all 0.15s; margin-bottom: 4px;
-  display: flex; align-items: center; gap: 6px;
-}
-.test-cat-item:hover { background: #1a2332; color: #ccc; }
-.test-cat-item.has-failures { color: #ff6b6b; }
-.test-cat-count { font-size: 11px; color: #556; margin-left: auto; }
 
-.test-results {
-  flex: 1; overflow-y: auto; padding: 16px 20px;
+/* ─── Splitter between sidebar and detail ─── */
+.test-splitter {
+  width: 5px; cursor: col-resize; background: #1e2a3a;
+  flex-shrink: 0; transition: background 0.15s; z-index: 10;
 }
-.test-results::-webkit-scrollbar { width: 6px; }
-.test-results::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-.test-category { margin-bottom: 16px; }
-.test-category-header {
-  font-size: 14px; font-weight: 600; color: #b0c4de; padding: 8px 12px;
-  background: #141b2d; border-radius: 6px; margin-bottom: 6px;
+.test-splitter:hover, .test-splitter.active { background: #4fc3f7; }
+
+.test-cat-group { margin-bottom: 4px; }
+.test-cat-header {
+  padding: 7px 10px; border-radius: 6px; cursor: default;
+  font-size: 13px; font-weight: 600; color: #b0c4de; transition: all 0.15s;
   display: flex; align-items: center; gap: 6px;
+  background: #141b2d;
 }
-.test-category-body { padding-left: 8px; }
-.test-item {
-  padding: 6px 12px; border-radius: 4px; font-size: 13px;
-  margin-bottom: 3px; display: flex; align-items: flex-start; gap: 6px;
+.test-cat-header.has-failures { color: #ff6b6b; }
+.test-cat-name { flex: 1; }
+.test-cat-count { font-size: 11px; color: #556; }
+.test-cat-run {
+  background: none; border: 1px solid #2a3a4a; color: #69f0ae;
+  cursor: pointer; border-radius: 3px; font-size: 10px; padding: 1px 6px;
+  transition: all 0.15s; opacity: 0.6;
+}
+.test-cat-run:hover { opacity: 1; background: #1b3d1f; }
+
+.test-cat-tests { padding: 2px 0 4px 0; }
+.test-item-row {
+  padding: 5px 10px 5px 22px; border-radius: 4px; font-size: 12px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  color: #8899aa; transition: all 0.12s;
+}
+.test-item-row:hover { background: #1a2332; color: #ccc; }
+.test-item-row.selected { background: #1a3050; color: #4fc3f7; }
+.test-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.test-duration { font-size: 10px; color: #556; flex-shrink: 0; }
+
+/* ─── Detail panel ─── */
+.test-detail {
+  flex: 1; overflow-y: auto; padding: 16px 24px; background: #0a0e17;
+}
+.test-detail::-webkit-scrollbar { width: 6px; }
+.test-detail::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.test-detail-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: #334; font-size: 15px;
+}
+
+.test-detail-content { display: flex; flex-direction: column; gap: 16px; }
+.test-detail-header { display: flex; flex-direction: column; gap: 4px; }
+.test-detail-cat {
+  font-size: 11px; color: #b39ddb; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.test-detail-title {
+  font-size: 16px; font-weight: 600; color: #b0c4de; margin: 0;
   font-family: 'Consolas', 'Courier New', monospace;
 }
-.test-item.passed { color: #69f0ae; }
-.test-item.failed { color: #ff6b6b; background: rgba(255,107,107,0.06); flex-direction: column; }
-.test-item.pending { color: #556; }
-.test-error {
-  font-size: 12px; color: #ff9999; margin-top: 4px; padding: 6px 10px;
-  background: rgba(255,107,107,0.08); border-left: 3px solid #ff6b6b;
-  border-radius: 0 4px 4px 0; width: 100%;
+
+.test-detail-actions { display: flex; gap: 8px; }
+.test-btn.run-single { border-color: #69f0ae; color: #69f0ae; }
+.test-btn.run-single:hover:not(:disabled) { background: #1b3d1f; }
+.test-btn.open-sim { border-color: #b39ddb; color: #b39ddb; }
+.test-btn.open-sim:hover:not(:disabled) { background: #2a1a4a; }
+
+/* ─── Topology preview ─── */
+.test-topo-container {
+  border: 1px solid #1e2a3a; border-radius: 8px; overflow: hidden;
+  background: #0d1117; position: relative;
+  height: 300px; /* default, overridden by JS */
 }
+.test-topo-canvas { width: 100%; height: 100%; display: block; }
+.test-topo-resize {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 6px;
+  cursor: row-resize; background: transparent; transition: background 0.15s;
+}
+.test-topo-resize:hover, .test-topo-resize.active {
+  background: rgba(79, 195, 247, 0.5);
+}
+
+/* ─── Result box ─── */
+.test-result-box {
+  padding: 12px 16px; border-radius: 6px; font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.test-result-box.passed { background: rgba(105,240,174,0.08); color: #69f0ae; border: 1px solid rgba(105,240,174,0.2); }
+.test-result-box.failed { background: rgba(255,107,107,0.08); color: #ff6b6b; border: 1px solid rgba(255,107,107,0.2); }
+.test-result-box.pending { background: rgba(85,102,119,0.08); color: #556677; border: 1px solid rgba(85,102,119,0.2); }
+.test-result-box .test-duration { font-size: 12px; font-weight: 400; color: #8899aa; }
+.test-result-box .test-error {
+  width: 100%; margin-top: 8px;
+  font-size: 12px; font-weight: 400; color: #ff9999;
+  padding: 8px 12px; background: rgba(255,107,107,0.08);
+  border-left: 3px solid #ff6b6b; border-radius: 0 4px 4px 0;
+}
+
+/* ─── Execution log ─── */
+.test-log-section {
+  border: 1px solid #1e2a3a; border-radius: 6px; overflow: hidden;
+}
+.test-log-header {
+  padding: 8px 12px; font-size: 12px; font-weight: 600; color: #8899aa;
+  background: #141b2d; border-bottom: 1px solid #1e2a3a;
+}
+.test-log-body {
+  max-height: 260px; overflow-y: auto; padding: 4px 0;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;
+}
+.test-log-body::-webkit-scrollbar { width: 5px; }
+.test-log-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+.test-log-row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 3px 12px; line-height: 1.5;
+}
+.test-log-row.test-log-fail { background: rgba(255,107,107,0.06); }
+.test-log-type { color: #556; font-size: 11px; min-width: 60px; flex-shrink: 0; }
+.test-log-detail { color: #8899aa; word-break: break-all; }
+.test-log-fail .test-log-detail { color: #ff9999; }
+
 .test-icon { font-size: 13px; flex-shrink: 0; }
 .test-icon.pass { color: #69f0ae; }
 .test-icon.fail { color: #ff6b6b; }

@@ -18,7 +18,7 @@ export function registerArpTests(runner) {
     const { path, linkHints } = buildPingPath(devices, 'PC1', '192.168.1.11', true);
     const arps = computeArpResolutions(devices, path, linkHints);
     assert.ok(arps.length > 0, 'Should need at least one ARP resolution');
-  });
+  }, buildSimpleLanTopology);
 
   runner.test('ARP resolution targets correct IP', (assert) => {
     const { devices } = buildSimpleLanTopology();
@@ -36,7 +36,7 @@ export function registerArpTests(runner) {
         `ARP target should be PC2 or gateway, got ${pc1Arp.targetIP}`
       );
     }
-  });
+  }, buildSimpleLanTopology);
 
   runner.test('ARP returns correct MAC address', (assert) => {
     const { devices } = buildSimpleLanTopology();
@@ -49,7 +49,7 @@ export function registerArpTests(runner) {
       const expectedMAC = generateMAC(arp.targetId, arp.targetIf);
       assert.equal(arp.targetMAC, expectedMAC, `MAC should match for ${arp.targetId}:${arp.targetIf}`);
     }
-  });
+  }, buildSimpleLanTopology);
 
   runner.test('Second ping skips ARP (entry already exists)', (assert) => {
     const { devices } = buildSimpleLanTopology();
@@ -79,7 +79,7 @@ export function registerArpTests(runner) {
       const repeated = pc1Arps2.find(a => a.targetIP === firstTargetIP);
       assert.ok(!repeated, 'Second ping should skip ARP for already-learned target');
     }
-  });
+  }, buildSimpleLanTopology);
 
   runner.test('/16 subnet: ARP resolves across different 3rd octet', (assert) => {
     const { devices } = buildWideSubnetTopology();
@@ -95,7 +95,7 @@ export function registerArpTests(runner) {
     // There should be an ARP resolution for 172.16.1.10
     const arpForSV = arps.find(a => a.targetIP === '172.16.1.10');
     assert.ok(arpForSV, 'Should ARP for 172.16.1.10 across 3rd octet boundary');
-  });
+  }, buildWideSubnetTopology);
 
   runner.test('ARP broadcast reaches all devices on same VLAN segment', (assert) => {
     const { devices } = buildSimpleLanTopology();
@@ -109,5 +109,5 @@ export function registerArpTests(runner) {
       // Broadcast should reach multiple devices on the L2 segment
       assert.ok(firstArp.broadcastTargets.length >= 1, 'Broadcast should reach at least one device');
     }
-  });
+  }, buildSimpleLanTopology);
 }

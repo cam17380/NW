@@ -209,6 +209,33 @@ function exitTestMode() {
 }
 
 testUI.onBack = exitTestMode;
+
+testUI.onOpenInSimulator = (devices) => {
+  // Derive links from device interface connections
+  const links = [];
+  const seen = new Set();
+  for (const [id, dv] of Object.entries(devices)) {
+    for (const [ifName, iface] of Object.entries(dv.interfaces || {})) {
+      if (!iface.connected) continue;
+      const peerId = iface.connected.device;
+      const peerIf = iface.connected.iface;
+      if (!devices[peerId]) continue;
+      const key = [id, peerId].sort().join(':') + ':' + [ifName, peerIf].sort().join(':');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      links.push({ from: id, fromIf: ifName, to: peerId, toIf: peerIf });
+    }
+  }
+  // Ensure all devices have arpTable (required by simulator)
+  for (const dv of Object.values(devices)) {
+    if (!dv.arpTable) dv.arpTable = [];
+  }
+  store.setTopology(devices, links);
+  store.resetView();
+  exitTestMode();
+  refreshUI();
+};
+
 document.getElementById('testModeBtn').addEventListener('click', enterTestMode);
 
 // ─── Setup ───

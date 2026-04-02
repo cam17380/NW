@@ -11,18 +11,18 @@ export function registerBondTests(runner) {
     const partner = findBondPartner(devices.SV1, 'Ethernet0');
     assert.ok(partner, 'Should find bond partner for Ethernet0');
     assert.equal(partner.ifName, 'Ethernet1', 'Bond partner should be Ethernet1');
-  });
+  }, buildBondTopology);
 
   runner.test('No bond partner for non-bonded interface', (assert) => {
     const { devices } = buildBondTopology();
     const partner = findBondPartner(devices.PC1, 'Ethernet0');
     assert.equal(partner, null, 'PC1 Ethernet0 has no bond group');
-  });
+  }, buildBondTopology);
 
   runner.test('Normal: PC reaches bonded server (primary up)', (assert) => {
     const { devices } = buildBondTopology();
     assert.ok(canReach(devices, 'PC1', '192.168.1.10'), 'PC1 should reach bonded server');
-  });
+  }, buildBondTopology);
 
   runner.test('Failover: PC reaches server after primary goes down', (assert) => {
     const { devices } = buildBondTopology();
@@ -33,7 +33,7 @@ export function registerBondTests(runner) {
     devices.SW1.interfaces['GigabitEthernet0/2'].status = 'down';
     devices.SW1.interfaces['GigabitEthernet0/2'].protocol = 'down';
     assert.ok(canReach(devices, 'PC1', '192.168.1.10'), 'PC1 should still reach server via bond partner');
-  });
+  }, buildBondTopology);
 
   runner.test('deviceHasReachableIP detects bond failover', (assert) => {
     const { devices } = buildBondTopology();
@@ -41,14 +41,14 @@ export function registerBondTests(runner) {
     // Take down primary
     devices.SV1.interfaces['Ethernet0'].status = 'down';
     assert.ok(deviceHasReachableIP(devices.SV1, '192.168.1.10'), 'IP still reachable via bond partner');
-  });
+  }, buildBondTopology);
 
   runner.test('getUsableSrcIP returns IP even when primary is down', (assert) => {
     const { devices } = buildBondTopology();
     devices.SV1.interfaces['Ethernet0'].status = 'down';
     const srcIP = getUsableSrcIP(devices.SV1);
     assert.equal(srcIP, '192.168.1.10', 'Should return bonded IP via partner');
-  });
+  }, buildBondTopology);
 
   runner.test('Both interfaces down: server is unreachable', (assert) => {
     const { devices } = buildBondTopology();
@@ -61,10 +61,10 @@ export function registerBondTests(runner) {
     devices.SW1.interfaces['GigabitEthernet0/3'].status = 'down';
     devices.SW1.interfaces['GigabitEthernet0/3'].protocol = 'down';
     assert.ok(!canReach(devices, 'PC1', '192.168.1.10'), 'Server should be unreachable with both bond members down');
-  });
+  }, buildBondTopology);
 
   runner.test('Router reaches bonded server', (assert) => {
     const { devices } = buildBondTopology();
     assert.ok(canReach(devices, 'R1', '192.168.1.10'), 'Router should reach bonded server');
-  });
+  }, buildBondTopology);
 }
