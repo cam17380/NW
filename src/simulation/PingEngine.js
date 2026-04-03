@@ -58,7 +58,7 @@ export function execPing(targetIP, store, terminal, animatePing) {
   }
 }
 
-export function buildPingPath(devices, fromId, targetIP, reachable) {
+export function buildPingPath(devices, fromId, targetIP, reachable, proto, port) {
   const path = [fromId];
   const linkHints = [];  // linkHints[i] = {fromIf, toIf} for segment path[i]→path[i+1]
   const visited = new Set([fromId]);
@@ -88,7 +88,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
             const ingressSVI = 'Vlan' + ingressVlan;
             const svi = dv.interfaces[ingressSVI];
             if (svi && svi.ip && svi.status === 'up') {
-              if (!checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP)) break;
+              if (!checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP, proto, port)) break;
             }
           }
         }
@@ -109,7 +109,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       if (!egressSVI) break;
 
       // Outbound ACL on egress SVI
-      if (!checkInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP)) break;
+      if (!checkInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP, proto, port)) break;
 
       // Find target device in the egress VLAN
       const egressVlan = getSVIVlan(egressSVI);
@@ -157,37 +157,38 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
       continue;
     }
 
-    // Apply NAT at routers/firewalls — update curTargetIP for subsequent path decisions
-    if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && step > 0) {
+    // Firewall: policy + ACL on pre-NAT addresses, then NAT (CheckPoint/UTX200 order)
+    if (dv.type === 'firewall' && step > 0) {
+      if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP, proto, port)) break;
+      if (deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
+      const prevDevId = path[path.length - 2] || null;
+      const aclIngressIf = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
+      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP, proto, port)) break;
+      if (dv.nat && aclIngressIf) {
+        const natResult = applyNAT(dv, curSrcIP, curTargetIP, aclIngressIf);
+        curSrcIP = natResult.srcIP;
+        curTargetIP = natResult.dstIP;
+      }
+    }
+
+    // Non-firewall router: NAT first, then ACL (Cisco IOS order)
+    if (dv.type === 'router' && dv.nat && step > 0) {
       const prevDevId = path[path.length - 2] || null;
       let ingressIfName = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
       if (ingressIfName) {
         const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
         curSrcIP = natResult.srcIP;
         curTargetIP = natResult.dstIP;
-        // Non-firewall: check local after NAT
-        if (dv.type !== 'firewall') {
-          for (const iface of Object.values(dv.interfaces)) {
-            if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
-          }
+        for (const iface of Object.values(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
         }
       }
     }
-
-    // Inbound ACL check on ingress interface
-    if ((dv.type === 'router' || dv.type === 'firewall') && step > 0) {
+    if (dv.type === 'router' && step > 0) {
       const prevDevId = path[path.length - 2] || null;
       const aclIngressIf = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
-      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP)) break;
+      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP, proto, port)) break;
     }
-
-    // Firewall policy check — if denied, stop path here
-    if (dv.type === 'firewall' && step > 0) {
-      if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) break;
-    }
-
-    // Firewall local delivery: checked AFTER policy
-    if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
 
     // Check routing table first (specific route like /32 takes priority over connected /24)
     let nextHopIP = lookupRoute(dv, curTargetIP);
@@ -263,7 +264,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable) {
 
     // Outbound ACL check
     if ((dv.type === 'router' || dv.type === 'firewall') && exitIfName) {
-      if (!checkInterfaceACL(dv, exitIfName, 'out', curSrcIP, curTargetIP)) break;
+      if (!checkInterfaceACL(dv, exitIfName, 'out', curSrcIP, curTargetIP, proto, port)) break;
     }
 
     const neighbor = exitIf.connected;
@@ -544,7 +545,7 @@ export function execTraceroute(targetIP, store, terminal, animateTraceroute) {
 
 // ─── Packet flow trace (read-only diagnostics) ───
 
-export function tracePacketFlow(devices, fromId, targetIP) {
+export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
   const hops = [];
   const visited = new Set();
   let curId = fromId;
@@ -623,7 +624,7 @@ export function tracePacketFlow(devices, fromId, targetIP) {
             if (svi && svi.ip && svi.status === 'up') {
               hop.ingressIf = ingressSVI;
               hop.decisions.push({ type: 'ingress', text: `L3 received on ${ingressSVI} (${svi.ip})` });
-              const aclInInfo = describeInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP);
+              const aclInInfo = describeInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP, proto, port);
               if (aclInInfo.description) {
                 hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
               }
@@ -657,7 +658,7 @@ export function tracePacketFlow(devices, fromId, targetIP) {
         }
 
         // Outbound ACL on egress SVI
-        const aclOutInfo = describeInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP);
+        const aclOutInfo = describeInterfaceACL(dv, egressSVI, 'out', curSrcIP, curTargetIP, proto, port);
         if (aclOutInfo.description) {
           hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
         }
@@ -711,45 +712,10 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
     }
 
-    // NAT check (router/firewall, step > 0)
-    if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && step > 0 && hop.ingressIf) {
-      const natInfo = describeNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
-      if (natInfo.description) {
-        hop.decisions.push({ type: 'nat', text: natInfo.description });
-      }
-      if (natInfo.translated) {
-        curSrcIP = natInfo.srcIP;
-        curTargetIP = natInfo.dstIP;
-        // Re-check local after NAT (non-firewall only; firewall checks after policy)
-        if (dv.type !== 'firewall') {
-          for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-            if (iface.ip === curTargetIP && iface.status === 'up') {
-              hop.decisions.push({ type: 'local-check', text: `After NAT: ${curTargetIP} matches local interface ${ifName} -> REACHED` });
-              hop.result = 'reached';
-              hops.push(hop);
-              return { hops, reachable: true };
-            }
-          }
-        }
-      }
-    }
-
-    // Inbound ACL check on ingress interface
-    if ((dv.type === 'router' || dv.type === 'firewall') && step > 0 && hop.ingressIf) {
-      const aclInInfo = describeInterfaceACL(dv, hop.ingressIf, 'in', curSrcIP, curTargetIP);
-      if (aclInInfo.description) {
-        hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
-      }
-      if (!aclInInfo.allowed) {
-        hop.result = 'dropped';
-        hops.push(hop);
-        return { hops, reachable: false };
-      }
-    }
-
-    // Firewall policy check
+    // Firewall: policy + ACL on pre-NAT addresses, then NAT (CheckPoint/UTX200 order)
     if (dv.type === 'firewall' && step > 0) {
-      const fwInfo = describeFirewallCheck(dv, curSrcIP, curTargetIP);
+      // Firewall policy check (pre-NAT)
+      const fwInfo = describeFirewallCheck(dv, curSrcIP, curTargetIP, proto, port);
       if (fwInfo.description) {
         hop.decisions.push({ type: 'firewall', text: fwInfo.description });
       }
@@ -758,21 +724,75 @@ export function tracePacketFlow(devices, fromId, targetIP) {
         hops.push(hop);
         return { hops, reachable: false };
       }
+
+      // Firewall local delivery: checked AFTER policy
+      if (deviceHasReachableIP(dv, curTargetIP)) {
+        let localMatch = null;
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (iface.ip === curTargetIP) { localMatch = ifName; break; }
+        }
+        hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch} -> REACHED` });
+        hop.result = 'reached';
+        hops.push(hop);
+        return { hops, reachable: true };
+      }
+      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+
+      // Inbound ACL check (pre-NAT)
+      if (hop.ingressIf) {
+        const aclInInfo = describeInterfaceACL(dv, hop.ingressIf, 'in', curSrcIP, curTargetIP, proto, port);
+        if (aclInInfo.description) {
+          hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+        }
+        if (!aclInInfo.allowed) {
+          hop.result = 'dropped';
+          hops.push(hop);
+          return { hops, reachable: false };
+        }
+      }
+
+      // NAT (post-policy)
+      if (dv.nat && hop.ingressIf) {
+        const natInfo = describeNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
+        if (natInfo.description) {
+          hop.decisions.push({ type: 'nat', text: natInfo.description });
+        }
+        if (natInfo.translated) {
+          curSrcIP = natInfo.srcIP;
+          curTargetIP = natInfo.dstIP;
+        }
+      }
     }
 
-    // Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
-    if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) {
-      let localMatch = null;
-      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
-        if (iface.ip === curTargetIP) { localMatch = ifName; break; }
+    // Non-firewall router: NAT first, then ACL (Cisco IOS order)
+    if (dv.type !== 'firewall' && (dv.type === 'router') && dv.nat && step > 0 && hop.ingressIf) {
+      const natInfo = describeNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
+      if (natInfo.description) {
+        hop.decisions.push({ type: 'nat', text: natInfo.description });
       }
-      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} matches local interface ${localMatch} -> REACHED` });
-      hop.result = 'reached';
-      hops.push(hop);
-      return { hops, reachable: true };
+      if (natInfo.translated) {
+        curSrcIP = natInfo.srcIP;
+        curTargetIP = natInfo.dstIP;
+        for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+          if (iface.ip === curTargetIP && iface.status === 'up') {
+            hop.decisions.push({ type: 'local-check', text: `After NAT: ${curTargetIP} matches local interface ${ifName} -> REACHED` });
+            hop.result = 'reached';
+            hops.push(hop);
+            return { hops, reachable: true };
+          }
+        }
+      }
     }
-    if (dv.type === 'firewall') {
-      hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
+    if (dv.type !== 'firewall' && (dv.type === 'router') && step > 0 && hop.ingressIf) {
+      const aclInInfo = describeInterfaceACL(dv, hop.ingressIf, 'in', curSrcIP, curTargetIP, proto, port);
+      if (aclInInfo.description) {
+        hop.decisions.push({ type: 'acl', text: aclInInfo.description + (aclInInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
+      }
+      if (!aclInInfo.allowed) {
+        hop.result = 'dropped';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
     }
 
     // Route lookup
@@ -820,7 +840,7 @@ export function tracePacketFlow(devices, fromId, targetIP) {
       }
       // Outbound ACL check
       if (dv.type === 'router' || dv.type === 'firewall') {
-        const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP);
+        const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP, proto, port);
         if (aclOutInfo.description) {
           hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
         }
@@ -869,7 +889,7 @@ export function tracePacketFlow(devices, fromId, targetIP) {
     }
     // Outbound ACL check
     if (dv.type === 'router' || dv.type === 'firewall') {
-      const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP);
+      const aclOutInfo = describeInterfaceACL(dv, egressIf, 'out', curSrcIP, curTargetIP, proto, port);
       if (aclOutInfo.description) {
         hop.decisions.push({ type: 'acl', text: aclOutInfo.description + (aclOutInfo.allowed ? ' -> PERMIT' : ' -> DENY') });
       }

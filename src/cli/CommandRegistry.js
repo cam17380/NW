@@ -1,8 +1,8 @@
 // ─── Command tree and hint data for CLI modes ───
 
 export const commandTree = {
-  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'exit'],
-  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'clear arp', 'disable', 'exit'],
+  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'test access', 'exit'],
+  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'test access', 'clear arp', 'disable', 'exit'],
   config: ['hostname', 'interface', 'interface vlan', 'interface tunnel', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'crypto isakmp policy', 'crypto ipsec transform-set', 'crypto map', 'no crypto isakmp policy', 'no crypto ipsec transform-set', 'no crypto map', 'exit', 'end'],
   'config-if': ['ip address', 'no shutdown', 'shutdown', 'description', 'switchport mode access', 'switchport mode trunk', 'switchport access vlan', 'switchport trunk allowed vlan', 'ip nat inside', 'ip nat outside', 'no ip nat inside', 'no ip nat outside', 'ip access-group', 'no ip access-group', 'tunnel source', 'tunnel destination', 'tunnel mode', 'crypto map', 'no crypto map', 'bond-group', 'no bond-group', 'exit', 'end'],
   'config-vlan': ['name', 'exit', 'end'],
@@ -48,6 +48,7 @@ export function getCmdHintData(store) {
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
+      { label: 'test access <ip> <proto> [port]', fill: 'test access ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
     ],
     privileged: [
       { label: 'configure terminal', fill: 'configure terminal', cat: 'nav' },
@@ -70,6 +71,7 @@ export function getCmdHintData(store) {
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
+      { label: 'test access <ip> <proto> [port]', fill: 'test access ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
       { label: 'clear arp', fill: 'clear arp', cat: 'config', cond: () => dev().type !== 'switch' },
       { label: 'disable', fill: 'disable', cat: 'nav' },
       { label: 'exit', fill: 'exit', cat: 'nav' },

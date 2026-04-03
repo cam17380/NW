@@ -274,14 +274,14 @@ function findIngressIf(devices, dv, prevDevId) {
   return null;
 }
 
-export function canReach(devices, fromId, targetIP) {
+export function canReach(devices, fromId, targetIP, proto, port) {
   const visited = new Set();
   const srcDev = devices[fromId];
   const srcIP = getUsableSrcIP(srcDev);
-  return forwardPacket(devices, fromId, targetIP, visited, srcIP, null);
+  return forwardPacket(devices, fromId, targetIP, visited, srcIP, null, proto, port);
 }
 
-export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevId) {
+export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevId, proto, port) {
   if (visited.has(devId)) return false;
   visited.add(devId);
 
@@ -300,7 +300,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       const ingressVlan = findIngressVlan(devices, dv, prevDevId);
       if (ingressVlan != null) {
         const ingressSVI = findSVIForVlan(dv, ingressVlan);
-        if (ingressSVI && !checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP)) return false;
+        if (ingressSVI && !checkInterfaceACL(dv, ingressSVI, 'in', curSrcIP, curTargetIP, proto, port)) return false;
       }
     }
 
@@ -312,7 +312,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       for (const [ifName, iface] of Object.entries(dv.interfaces)) {
         if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
         if (getNetwork(iface.ip, iface.mask) === getNetwork(curTargetIP, iface.mask)) {
-          if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
+          if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP, proto, port)) return false;
           const vlan = getSVIVlan(ifName);
           return switchL2Deliver(devices, devId, vlan, curTargetIP);
         }
@@ -324,46 +324,57 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     for (const [ifName, iface] of Object.entries(dv.interfaces)) {
       if (!ifName.startsWith('Vlan') || !iface.ip || iface.status !== 'up') continue;
       if (getNetwork(iface.ip, iface.mask) === getNetwork(swNextHop, iface.mask)) {
-        if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP)) return false;
+        if (!checkInterfaceACL(dv, ifName, 'out', curSrcIP, curTargetIP, proto, port)) return false;
         const nextDevId = findDeviceByIP(devices, swNextHop);
         if (!nextDevId) return false;
         const vlan = getSVIVlan(ifName);
         if (!switchL2Deliver(devices, devId, vlan, swNextHop)) return false;
-        return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId);
+        return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId, proto, port);
       }
     }
     return false;
   }
 
-  // 1b. Apply NAT if this is a router/firewall with NAT config
-  if ((dv.type === 'router' || dv.type === 'firewall') && dv.nat && prevDevId !== null) {
+  // 1b. Firewall: evaluate policy and ACL on pre-NAT (original) addresses, then apply NAT
+  //     Real firewalls (CheckPoint/UTX200) inspect the original packet before NAT translation.
+  //     Non-firewall routers: apply NAT first, then ACL (Cisco IOS order).
+  if (dv.type === 'firewall' && prevDevId !== null) {
+    // Firewall policy check (pre-NAT)
+    if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP, proto, port)) return false;
+
+    // Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
+    if (deviceHasReachableIP(dv, curTargetIP)) return true;
+
+    // Inbound ACL check (pre-NAT)
+    const ingressIfName = findIngressIf(devices, dv, prevDevId);
+    if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP, proto, port)) return false;
+
+    // Apply NAT (post-policy)
+    if (dv.nat && ingressIfName) {
+      const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
+      curSrcIP = natResult.srcIP;
+      curTargetIP = natResult.dstIP;
+    }
+  }
+
+  // 1c. Non-firewall: apply NAT first, then ACL (router behavior)
+  if (dv.type !== 'firewall' && (dv.type === 'router') && dv.nat && prevDevId !== null) {
     const ingressIfName = findIngressIf(devices, dv, prevDevId);
     if (ingressIfName) {
       const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
       curSrcIP = natResult.srcIP;
       curTargetIP = natResult.dstIP;
-      // For non-firewall: check local delivery after NAT
-      if (dv.type !== 'firewall') {
-        for (const iface of Object.values(dv.interfaces)) {
-          if (iface.ip === curTargetIP && iface.status === 'up') return true;
-        }
+      for (const iface of Object.values(dv.interfaces)) {
+        if (iface.ip === curTargetIP && iface.status === 'up') return true;
       }
     }
   }
 
-  // 1c. Inbound ACL check on ingress interface
-  if (prevDevId !== null && (dv.type === 'router' || dv.type === 'firewall')) {
+  // 1d. Non-firewall: inbound ACL check (post-NAT for routers)
+  if (dv.type !== 'firewall' && prevDevId !== null && (dv.type === 'router')) {
     const ingressIfName = findIngressIf(devices, dv, prevDevId);
-    if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP)) return false;
+    if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP, proto, port)) return false;
   }
-
-  // 1d. Firewall policy check
-  if (dv.type === 'firewall' && prevDevId !== null) {
-    if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP)) return false;
-  }
-
-  // 1e. Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
-  if (dv.type === 'firewall' && deviceHasReachableIP(dv, curTargetIP)) return true;
 
   // 2. Check routing table for a specific route (e.g. /32 takes priority over connected /24)
   const nextHop = lookupRoute(dv, curTargetIP);
@@ -377,7 +388,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
         const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
         if (peerDevId && !visited.has(peerDevId)) {
           // Forward through underlay to the peer, then let the peer continue forwarding
-          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId);
+          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId, proto, port);
         }
       }
       return false;
@@ -391,7 +402,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       if (tunnelDest) {
         const peerDevId = findTunnelPeerDevice(devices, tunnelDest);
         if (peerDevId && !visited.has(peerDevId)) {
-          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId);
+          return forwardPacket(devices, peerDevId, curTargetIP, visited, curSrcIP, devId, proto, port);
         }
       }
       return false;
@@ -404,7 +415,7 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
       const net = getNetwork(ui.ip, ui.mask);
       const targetNet = getNetwork(curTargetIP, ui.mask);
       if (net === targetNet) {
-        if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP)) return false;
+        if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP, proto, port)) return false;
         return canReachL2(devices, devId, ui.ifName, curTargetIP);
       }
     }
@@ -416,11 +427,11 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     const net = getNetwork(ui.ip, ui.mask);
     const hopNet = getNetwork(nextHop, ui.mask);
     if (net === hopNet) {
-      if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP)) return false;
+      if ((dv.type === 'router' || dv.type === 'firewall') && !checkInterfaceACL(dv, ui.ifName, 'out', curSrcIP, curTargetIP, proto, port)) return false;
       const nextDevId = findDeviceByIP(devices, nextHop);
       if (!nextDevId) return false;
       if (!canReachL2(devices, devId, ui.ifName, nextHop)) return false;
-      return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId);
+      return forwardPacket(devices, nextDevId, curTargetIP, visited, curSrcIP, devId, proto, port);
     }
   }
   return false;
@@ -569,13 +580,14 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
 
 // ─── Firewall policy check ──────────────────────────────
 
-export function checkFirewallPolicies(dv, srcIP, dstIP) {
+export function checkFirewallPolicies(dv, srcIP, dstIP, proto, port) {
   if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) return true;
   const sorted = [...dv.policies].sort((a, b) => a.seq - b.seq);
   for (const p of sorted) {
     if (matchesWildcard(srcIP, p.src, p.srcWildcard) &&
         matchesWildcard(dstIP, p.dst, p.dstWildcard) &&
-        matchesProtocolField(p.protocol)) {
+        matchesProtocolField(p.protocol, proto) &&
+        matchesPortField(p.port, port)) {
       return p.action === 'permit';
     }
   }
@@ -590,9 +602,20 @@ function matchesWildcard(ip, network, wildcard) {
   return (ipN & ~wcN) === (netN & ~wcN);
 }
 
-function matchesProtocolField(protocol) {
-  // Current simulation is ICMP (ping) only; 'ip' matches all
-  return protocol === 'ip' || protocol === 'icmp';
+function matchesProtocolField(ruleProto, packetProto) {
+  // 'ip' in rule matches any protocol
+  if (ruleProto === 'ip') return true;
+  // If no packet protocol specified (legacy ping), match only ip/icmp rules
+  if (!packetProto) return ruleProto === 'icmp';
+  return ruleProto === packetProto;
+}
+
+function matchesPortField(rulePort, packetPort) {
+  // No port in rule means "any port" for that protocol
+  if (rulePort == null) return true;
+  // If packet has no port (e.g. icmp), rule with port doesn't match
+  if (packetPort == null) return false;
+  return Number(rulePort) === Number(packetPort);
 }
 
 // ─── NAT logic ──────────────────────────────────────────
@@ -611,7 +634,7 @@ export function matchesACL(aclEntries, ip) {
 }
 
 // Extended ACL evaluation: returns { matched, action, entry } for the first matching entry
-export function evaluateExtendedACL(aclEntries, srcIP, dstIP) {
+export function evaluateExtendedACL(aclEntries, srcIP, dstIP, proto, port) {
   if (!aclEntries || aclEntries.length === 0) return { matched: false, action: 'permit', entry: null };
   for (const entry of aclEntries) {
     // Extended entries have a 'protocol' field; standard entries do not
@@ -621,11 +644,12 @@ export function evaluateExtendedACL(aclEntries, srcIP, dstIP) {
         return { matched: true, action: entry.action, entry };
       }
     } else {
-      // Extended ACL entry — match source, destination, protocol
+      // Extended ACL entry — match source, destination, protocol, port
       const srcMatch = matchesWildcard(srcIP, entry.src, entry.srcWildcard);
       const dstMatch = matchesWildcard(dstIP, entry.dst, entry.dstWildcard);
-      const protoMatch = entry.protocol === 'ip' || entry.protocol === 'icmp'; // simulation uses ICMP
-      if (srcMatch && dstMatch && protoMatch) {
+      const protoMatch = matchesProtocolField(entry.protocol, proto);
+      const portMatch = matchesPortField(entry.port, port);
+      if (srcMatch && dstMatch && protoMatch && portMatch) {
         return { matched: true, action: entry.action, entry };
       }
     }
@@ -635,26 +659,26 @@ export function evaluateExtendedACL(aclEntries, srcIP, dstIP) {
 }
 
 // Check interface ACL (ip access-group): returns true if packet is permitted
-export function checkInterfaceACL(dv, ifName, direction, srcIP, dstIP) {
+export function checkInterfaceACL(dv, ifName, direction, srcIP, dstIP, proto, port) {
   const iface = dv.interfaces[ifName];
   if (!iface || !iface.accessGroup) return true;
   const aclNum = iface.accessGroup[direction];
   if (!aclNum) return true;
   const aclEntries = dv.accessLists[aclNum];
   if (!aclEntries || aclEntries.length === 0) return true;
-  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP);
+  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP, proto, port);
   return result.action === 'permit';
 }
 
 // Describe interface ACL check for diagnostics
-export function describeInterfaceACL(dv, ifName, direction, srcIP, dstIP) {
+export function describeInterfaceACL(dv, ifName, direction, srcIP, dstIP, proto, port) {
   const iface = dv.interfaces[ifName];
   if (!iface || !iface.accessGroup) return { allowed: true, description: null };
   const aclNum = iface.accessGroup[direction];
   if (!aclNum) return { allowed: true, description: null };
   const aclEntries = dv.accessLists[aclNum];
   if (!aclEntries || aclEntries.length === 0) return { allowed: true, description: null };
-  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP);
+  const result = evaluateExtendedACL(aclEntries, srcIP, dstIP, proto, port);
   const dirLabel = direction === 'in' ? 'inbound' : 'outbound';
   if (result.entry) {
     const e = result.entry;
@@ -662,7 +686,8 @@ export function describeInterfaceACL(dv, ifName, direction, srcIP, dstIP) {
     if (e.protocol) {
       const srcStr = e.src === 'any' ? 'any' : `${e.src} ${e.srcWildcard}`;
       const dstStr = e.dst === 'any' ? 'any' : `${e.dst} ${e.dstWildcard}`;
-      desc = `ACL ${aclNum} ${dirLabel} on ${ifName}: ${e.action} ${e.protocol} ${srcStr} -> ${dstStr}`;
+      const portStr = e.port != null ? ` eq ${e.port}` : '';
+      desc = `ACL ${aclNum} ${dirLabel} on ${ifName}: ${e.action} ${e.protocol} ${srcStr} -> ${dstStr}${portStr}`;
     } else {
       desc = `ACL ${aclNum} ${dirLabel} on ${ifName}: ${e.action} ${e.network} ${e.wildcard}`;
     }
@@ -823,7 +848,7 @@ export function describeRouteLookup(dv, targetIP) {
   return { nextHop: null, description: 'No matching route' };
 }
 
-export function describeFirewallCheck(dv, srcIP, dstIP) {
+export function describeFirewallCheck(dv, srcIP, dstIP, proto, port) {
   if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) {
     if (dv.type === 'firewall') return { allowed: false, description: 'No policies configured -> implicit DENY' };
     return { allowed: true, description: null };
@@ -832,11 +857,13 @@ export function describeFirewallCheck(dv, srcIP, dstIP) {
   for (const p of sorted) {
     if (matchesWildcard(srcIP, p.src, p.srcWildcard) &&
         matchesWildcard(dstIP, p.dst, p.dstWildcard) &&
-        matchesProtocolField(p.protocol)) {
+        matchesProtocolField(p.protocol, proto) &&
+        matchesPortField(p.port, port)) {
       const srcStr = p.src === 'any' ? 'any' : `${p.src} ${p.srcWildcard}`;
       const dstStr = p.dst === 'any' ? 'any' : `${p.dst} ${p.dstWildcard}`;
+      const portStr = p.port != null ? ` eq ${p.port}` : '';
       const result = p.action === 'permit' ? 'PERMIT' : 'DENY';
-      return { allowed: p.action === 'permit', description: `Policy seq ${p.seq}: ${p.action} ${srcStr} -> ${dstStr} ${p.protocol} -> ${result}` };
+      return { allowed: p.action === 'permit', description: `Policy seq ${p.seq}: ${p.action} ${srcStr} -> ${dstStr} ${p.protocol}${portStr} -> ${result}` };
     }
   }
   return { allowed: false, description: 'No matching policy -> implicit DENY' };
