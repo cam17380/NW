@@ -522,7 +522,18 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
   // Entering a switch — determine VLAN
   let vlan = 1;
   if (remoteIf.switchport) {
-    if (remoteIf.switchport.mode === 'access') vlan = remoteIf.switchport.accessVlan;
+    if (remoteIf.switchport.mode === 'access') {
+      vlan = remoteIf.switchport.accessVlan;
+    } else if (remoteIf.switchport.mode === 'trunk') {
+      // Trunk port: determine VLAN from the target IP's matching SVI on the switch
+      for (const [ifn, iff] of Object.entries(remoteDev.interfaces)) {
+        if (!ifn.startsWith('Vlan') || !iff.ip || iff.status !== 'up') continue;
+        if (getNetwork(iff.ip, iff.mask) === getNetwork(targetIP, iff.mask)) {
+          vlan = getSVIVlan(ifn);
+          break;
+        }
+      }
+    }
   }
 
   // BFS through switches
