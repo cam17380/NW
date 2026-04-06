@@ -1,7 +1,7 @@
 # Network Simulator Specification Document
 
-**Version:** 1.2
-**Last Updated:** 2026-04-01
+**Version:** 1.3
+**Last Updated:** 2026-04-06
 
 ---
 
@@ -16,6 +16,8 @@ This application is a Cisco IOS-style network simulator that runs in a web brows
 - Enable understanding of routing, NAT, firewall, and VLAN operations
 - Learn inter-VLAN routing via L3 switches (SVI)
 - Understand link redundancy with LACP/Bond
+- Learn site-to-site connectivity via IPsec VPN tunnels
+- Understand firewall NAT/policy processing order
 
 ### 1.2 System Requirements
 
@@ -117,10 +119,12 @@ Device {
       accessGroup: { in: number | null, out: number | null }  // R/FW only
       switchport: { mode, accessVlan, trunkAllowed }  // switch only
       bondGroup: string | null                         // Bond group name (LACP/active-backup)
+      tunnel: { source, destination, mode }            // tunnel IF (VPN) only
     }
   }
 
   routes: [{ network, mask, nextHop }]              // router/firewall/server/L3 switch
+  crypto: { isakmpPolicies, transformSets, cryptoMaps }  // router (VPN) only
   nat: { staticEntries, pools, dynamicRules, translations, stats }
   accessLists: {
     [1-99]:   [{ action, network, wildcard }]                                            // standard ACL
@@ -307,7 +311,8 @@ interface GigabitEthernet0/0
 | `show firewall policy` | Firewall policy list |
 | `show access-lists` | ACL list (entries and applied interfaces) |
 | `show arp` | ARP table |
-| `show packet-flow <ip>` | Detailed packet flow diagnostics (includes ACL checks) |
+| `show packet-flow <ip> [proto] [port]` | Detailed packet flow diagnostics (includes ACL/NAT/FW policy checks) |
+| `show interfaces tunnel` | Tunnel interface details (VPN) |
 | `show vlan brief` | VLAN summary (switch only) |
 | `show interfaces trunk` | Trunk port information (switch only) |
 | `show interfaces switchport` | Switchport configuration (switch only) |
@@ -319,6 +324,7 @@ interface GigabitEthernet0/0
 |---------|--------|
 | `ping <ip>` | Test connectivity to IP (with animation) |
 | `traceroute <ip>` | Trace route hop-by-hop |
+| `test access <ip> <proto> [port]` | Test firewall/ACL policy for specific protocol/port |
 | `clear arp` | Clear ARP cache |
 
 ---
@@ -355,15 +361,46 @@ interface GigabitEthernet0/0
 - Bond-aware routing and packet forwarding (Routing.js, PingEngine.js)
 - Bond group state is saved and restored in snapshots
 
+### 5.2.3 VPN Tunnel (IPsec)
+
+- **Tunnel interfaces**: `interface tunnel <id>` creates a tunnel IF on a router
+- **tunnel source/destination/mode**: Configure the physical source IF, peer IP, and encapsulation mode
+- **IPsec crypto configuration**: Define crypto parameters with `crypto isakmp policy`, `crypto ipsec transform-set`, and `crypto map`
+- **Routing**: Site-to-site communication is achieved via static routes using the tunnel subnet as the next-hop
+- **Packet forwarding**: When `forwardPacket` detects a tunnel match, the packet is forwarded directly to the peer device (logical path)
+- **Ping animation**: `buildPingPath` recursively builds the underlay (physical) path, animating through intermediate devices such as ISP routers
+- **ACL bypass**: Packets after tunnel decapsulation bypass ACLs on the physical WAN interface (same behavior as real equipment)
+
 ### 5.3 NAT Processing
 
-| Direction | Processing Order |
-|-----------|-----------------|
-| **Outside → Inside** | Search translation table, reverse-translate global IP to local IP |
-| **Inside → Outside** | (1) Check static NAT → (2) Dynamic NAT (ACL + pool allocation) |
+#### 5.3.1 NAT Direction and Functions
+
+| Direction | Function | Processing |
+|-----------|----------|-----------|
+| **DNAT (Outside → Inside)** | `applyDNAT` | Translate destination global IP to local IP via static NAT table |
+| **SNAT (Inside → Outside)** | `applySNAT` | (1) Static NAT source translation → (2) Dynamic NAT (ACL + pool allocation) |
+| **Combined (for routers)** | `applyNAT` | Execute DNAT → SNAT in one pass |
 
 - **Pool allocation**: Round-robin from available IPs
 - **Statistics**: Tracks hit/miss counts
+
+#### 5.3.2 Firewall NAT/Policy Processing Order
+
+Similar to real-world firewalls (CheckPoint/UTX200), the firewall applies DNAT and SNAT at different stages:
+
+```
+Packet arrives
+    ↓
+① DNAT (Destination NAT)       ← before policy evaluation
+    ↓
+② Firewall Policy evaluation   ← translated destination + original source
+    ↓
+③ SNAT (Source NAT / Hide NAT) ← after policy evaluation
+    ↓
+Packet forwarded
+```
+
+Routers (Cisco IOS style) continue to use the traditional `NAT (combined) → ACL` order.
 
 ### 5.4 ACL Filtering
 
@@ -378,13 +415,21 @@ ACLs are applied per-interface in the `in` (inbound) or `out` (outbound) directi
 - **Standard ACL**: Compares source IP only using wildcard mask
 - **Extended ACL**: Compares source IP, destination IP, and protocol (ip/tcp/udp/icmp). Port matching applies only when `eq` is specified
 
-**ACL check order in packet processing:**
-1. Packet arrives at interface → **inbound ACL** check
-2. NAT translation applied
-3. Firewall policy check (firewall only)
-4. Routing lookup
-5. Egress interface determined → **outbound ACL** check
-6. Packet forwarded
+**Router packet processing order:**
+1. Packet arrives at interface → NAT translation (DNAT + SNAT combined)
+2. **Inbound ACL** check
+3. Routing lookup
+4. Egress interface determined → **outbound ACL** check
+5. Packet forwarded
+
+**Firewall packet processing order:**
+1. Packet arrives at interface → **DNAT** (Destination NAT)
+2. **Firewall policy** check
+3. **Inbound ACL** check
+4. **SNAT** (Source NAT / Hide NAT)
+5. Routing lookup
+6. Egress interface determined → **outbound ACL** check
+7. Packet forwarded
 
 ### 5.5 Firewall Filtering
 
@@ -435,17 +480,21 @@ When executing ping, if the ARP table lacks an entry for an L3 hop, an ARP resol
 
 ### 5.8 Packet Flow Diagnostics
 
-The `show packet-flow <ip>` command displays detailed decisions at each hop:
+The `show packet-flow <ip> [proto] [port]` command displays detailed decisions at each hop:
 
 - Ingress interface
 - Local check (is destination on this device?)
-- **ACL check (inbound: ingress interface ACL permit/deny)**
-- NAT translation (before/after IPs)
-- Firewall check (policy permit/deny)
+- **DNAT translation** (firewall: destination NAT before policy evaluation)
+- **Firewall policy check** (evaluated with translated destination + original source)
+- **SNAT translation** (firewall: source NAT after policy evaluation)
+- **ACL check (inbound/outbound)**
 - Routing lookup (selected route and next-hop)
-- **ACL check (outbound: egress interface ACL permit/deny)**
+- **VPN tunnel encapsulation** (when tunnel match is detected)
 - Egress interface
 - L2 switching (VLAN-aware forwarding)
+- **L3 switch inter-VLAN routing** (forwarding between VLANs via SVI)
+
+The `test access <ip> <proto> [port]` command performs the same diagnostics as `show packet-flow` for a specific protocol/port. It is ideal for unit-testing individual firewall policy rules.
 
 ---
 
@@ -458,14 +507,14 @@ The `show packet-flow <ip>` command displays detailed decisions at each hop:
 │ Title | Device Tabs |    [File ▾] [Templates] [Design Mode] [Reset] │
 ├─────────────────────────────────────────────────────────────────────┤
 │                    │     │       │            │                      │
-│   Canvas           │  P  │  S    │            │   Terminal           │
-│  (Topology         │  a  │  p    │            │                      │
-│   Diagram)         │  l  │  l    │            │   Output Area        │
-│                    │  e  │  i    │            │   Hints Panel        │
-│   Legend (2 rows)  │  t  │  t    │            │   Input Prompt       │
-│   ? Help           │  t  │  t    │            │                      │
+│   Terminal         │  S  │  P    │            │   Canvas             │
+│                    │  p  │  a    │            │  (Topology           │
+│   Output Area      │  l  │  l    │            │   Diagram)           │
+│   Hints Panel      │  i  │  e    │            │                      │
+│   Input Prompt     │  t  │  t    │            │   Legend (2 rows)    │
+│                    │  t  │  t    │            │   ? Help             │
 │                    │  e  │  e    │            │                      │
-│                    │     │  r    │            │                      │
+│                    │  r  │       │            │                      │
 └────────────────────┴─────┴───────┴────────────┴──────────────────────┘
 ```
 
@@ -511,6 +560,7 @@ Open via Templates button to choose from pre-configured network templates for in
 | DMZ with Firewall | FW + R + SW x2 + SV x2 + PC x2 | Firewall policies, DMZ |
 | VLAN with Inter-VLAN Routing | R1 + SW1(VLAN10/20) + PC x4 | VLAN segregation, inter-VLAN routing |
 | NAT to Internet | R x2 + SW + SV + PC x2 | Dynamic NAT, ACLs |
+| Site-to-Site VPN | R x3 + SW x2 + PC x4 | IPsec tunnels, VPN routing |
 | Empty Canvas | None | Build from scratch |
 
 ---
@@ -555,7 +605,8 @@ Canvas/terminal boundary position saved in localStorage and restored on reload.
 |---------|---------------|----------------|
 | IP Version | IPv4 only | IPv4/IPv6 |
 | Routing Protocols | Static routes only | OSPF, BGP, EIGRP, etc. |
-| Firewall | Stateless (no connection tracking) | Stateful |
+| Firewall | Stateless, DNAT→Policy→SNAT order | Stateful |
+| VPN | IPsec tunnels (static IKE/SA definitions) | IKE negotiation, dynamic SA |
 | L2 Protocols | VLANs, basic switching, LACP/Bond (active-backup) | STP, LACP, LLDP, etc. |
 | L3 Switch | SVI (Light L3), inter-VLAN static routing | Full L3 switching, dynamic routing |
 | NAT | Static, dynamic (basic) | PAT, NAT-T, advanced features |
