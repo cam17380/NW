@@ -61,7 +61,7 @@ export class CLIEngine {
 
   _execUser(input, parts, cmd) {
     if (cmd === 'enable') { this.store.setCLIMode('privileged'); return; }
-    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute') {
+    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute' || cmd === 'test') {
       return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
     }
     this.terminal.write(`% Unknown command "${parts[0]}" in user mode`, 'error-line');
@@ -80,7 +80,7 @@ export class CLIEngine {
       this.terminal.write('% ARP cache cleared', 'success-line');
       return;
     }
-    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute') {
+    if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute' || cmd === 'test') {
       return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
     }
     this.terminal.write(`% Unknown command "${parts[0]}"`, 'error-line');

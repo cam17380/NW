@@ -101,6 +101,10 @@ const abbreviations = {
   'tun dest': 'tunnel destination',
   'tun destination': 'tunnel destination',
   'tun mode': 'tunnel mode',
+  // Test access
+  'te acc': 'test access',
+  'te access': 'test access',
+  'test acc': 'test access',
 };
 
 export function expandAbbrev(input) {

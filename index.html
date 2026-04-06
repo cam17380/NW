@@ -248,7 +248,8 @@
         <tr><td><code>show interfaces tunnel</code></td><td>Show tunnel interface details (Router/FW)</td></tr>
         <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
         <tr><td><code>show etherchannel summary</code></td><td>Show LACP bond group status (Server/PC)</td></tr>
-        <tr><td><code>show packet-flow &lt;ip&gt;</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
+        <tr><td><code>show packet-flow &lt;ip&gt; [proto] [port]</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
+        <tr><td><code>test access &lt;ip&gt; &lt;tcp|udp|icmp&gt; [port]</code></td><td>Test firewall/ACL policy for specific protocol/port</td></tr>
         <tr><td><code>clear arp</code></td><td>Clear ARP cache (privileged mode)</td></tr>
         <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT + FW aware)</td></tr>
         <tr><td><code>traceroute &lt;ip&gt;</code></td><td>Trace route hop-by-hop to destination</td></tr>
