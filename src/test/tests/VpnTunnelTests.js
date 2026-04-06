@@ -71,4 +71,31 @@ export function registerVpnTunnelTests(runner) {
     const nextHop = lookupRoute(devices.R2, '192.168.2.10');
     assert.equal(nextHop, null, 'Connected subnet should return null (directly connected)');
   }, buildVpnTopology);
+
+  runner.test('Ping animation path includes ISP router (physical underlay)', (assert) => {
+    const { devices } = buildVpnTopology();
+    const { path } = buildPingPath(devices, 'PC1', '192.168.2.10', true);
+    assert.includes(path, 'RISP', 'Animation path should include ISP router for underlay');
+    assert.includes(path, 'R2', 'Animation path should include Branch-Router');
+  }, buildVpnTopology);
+
+  runner.test('Tunnel decapsulation bypasses physical WAN ACL', (assert) => {
+    const { devices } = buildVpnTopology();
+    // Add an ACL on R2 WAN interface that would block the traffic
+    devices.R2.accessLists = {
+      100: [{ action: 'deny', protocol: 'ip', src: 'any', srcWildcard: '0.0.0.0', dst: 'any', dstWildcard: '0.0.0.0', port: null }]
+    };
+    devices.R2.interfaces['GigabitEthernet0/1'].accessGroup = { in: 100 };
+    // Traffic via tunnel should bypass the WAN ACL (decapsulated packets enter via Tunnel0)
+    const result = canReach(devices, 'PC1', '192.168.2.10');
+    assert.ok(result, 'Tunnel traffic should bypass physical WAN ACL');
+  }, buildVpnTopology);
+
+  runner.test('Ping animation path includes ISP on both directions', (assert) => {
+    const { devices } = buildVpnTopology();
+    const fwd = buildPingPath(devices, 'PC1', '192.168.2.10', true);
+    const rev = buildPingPath(devices, 'PC2', '192.168.1.10', true);
+    assert.includes(fwd.path, 'RISP', 'Forward path should include ISP');
+    assert.includes(rev.path, 'RISP', 'Reverse path should include ISP');
+  }, buildVpnTopology);
 }

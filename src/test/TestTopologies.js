@@ -459,6 +459,64 @@ export function buildBondTopology() {
   return { devices };
 }
 
+// ─── DNAT Firewall topology ───
+// FW with WAN(outside)/LAN(inside), static DNAT, Hide NAT, and policies
+// WAN side: ExternalPC -> FW -> LAN side: WebServer
+export function buildDnatFirewallTopology() {
+  const devices = {
+    FW1: {
+      type: 'firewall', hostname: 'FW1', x: 300, y: 100,
+      routes: [],
+      nat: {
+        staticEntries: [{ insideLocal: '192.168.1.10', insideGlobal: '203.0.113.10' }],
+        pools: { 'HIDE': { startIP: '203.0.113.20', endIP: '203.0.113.20', netmask: '255.255.255.0' } },
+        dynamicRules: [{ aclNum: 1, poolName: 'HIDE' }],
+        translations: [],
+        stats: { hits: 0, misses: 0 },
+      },
+      accessLists: {
+        '1': [{ action: 'permit', network: '192.168.1.0', wildcard: '0.0.0.255' }],
+      },
+      policies: [
+        { seq: 10, action: 'permit', src: 'any', srcWildcard: '0.0.0.0', dst: '192.168.1.10', dstWildcard: '0.0.0.0', protocol: 'tcp', port: 443 },
+        { seq: 20, action: 'permit', src: '192.168.1.0', srcWildcard: '0.0.0.255', dst: 'any', dstWildcard: '0.0.0.0', protocol: 'tcp', port: 80 },
+        { seq: 30, action: 'permit', src: 'any', srcWildcard: '0.0.0.0', dst: '192.168.1.0', dstWildcard: '0.0.0.255', protocol: 'icmp', port: null },
+        { seq: 40, action: 'permit', src: '192.168.1.0', srcWildcard: '0.0.0.255', dst: 'any', dstWildcard: '0.0.0.0', protocol: 'icmp', port: null },
+        { seq: 1000, action: 'deny', src: 'any', srcWildcard: '0.0.0.0', dst: 'any', dstWildcard: '0.0.0.0', protocol: 'ip', port: null },
+      ],
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '10.0.0.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'WAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' }, natRole: 'outside' },
+        'GigabitEthernet0/1': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW2', iface: 'GigabitEthernet0/1' }, natRole: 'inside' },
+      }
+    },
+    SW1: {
+      type: 'switch', hostname: 'WAN-SW', x: 100, y: 100,
+      vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'FW1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC_EXT', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    },
+    SW2: {
+      type: 'switch', hostname: 'LAN-SW', x: 500, y: 100,
+      vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'FW1', iface: 'GigabitEthernet0/1' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SV1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    },
+    PC_EXT: {
+      type: 'pc', hostname: 'ExternalPC', x: 100, y: 250, defaultGateway: '10.0.0.1',
+      interfaces: { 'Ethernet0': { ip: '10.0.0.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } }
+    },
+    SV1: {
+      type: 'server', hostname: 'WebSV', x: 500, y: 250, routes: [], defaultGateway: '192.168.1.1',
+      interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW2', iface: 'GigabitEthernet0/2' } } }
+    },
+  };
+  return { devices };
+}
+
 // ─── VPN / IPsec Tunnel topology ───
 export function buildVpnTopology() {
   const devices = {

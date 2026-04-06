@@ -1,9 +1,11 @@
 // ─── NAT Tests ───
-import { applyNAT, canReach, matchesACL } from '../../simulation/Routing.js';
-import { buildNatTopology } from '../TestTopologies.js';
+import { applyNAT, applyDNAT, applySNAT, canReach, matchesACL } from '../../simulation/Routing.js';
+import { buildNatTopology, buildDnatFirewallTopology } from '../TestTopologies.js';
 
 export function registerNatTests(runner) {
   runner.category('NAT');
+
+  // --- Existing combined NAT tests (router behavior) ---
 
   runner.test('Static NAT: inside local to inside global translation', (assert) => {
     const { devices } = buildNatTopology();
@@ -15,7 +17,6 @@ export function registerNatTests(runner) {
 
   runner.test('Static NAT: outside to inside (reverse) translation', (assert) => {
     const { devices } = buildNatTopology();
-    // First create the translation entry
     devices.R1.nat.translations.push({ insideLocal: '192.168.1.100', insideGlobal: '203.0.113.100', type: 'static' });
     const result = applyNAT(devices.R1, '8.8.8.8', '203.0.113.100', 'GigabitEthernet0/1');
     assert.ok(result.translated, 'Reverse NAT should translate');
@@ -24,7 +25,6 @@ export function registerNatTests(runner) {
 
   runner.test('Dynamic NAT: ACL match allocates from pool', (assert) => {
     const { devices } = buildNatTopology();
-    // PC1 (192.168.1.10) matches ACL 1 (192.168.1.0/24 permit)
     const result = applyNAT(devices.R1, '192.168.1.10', '8.8.8.8', 'GigabitEthernet0/0');
     assert.ok(result.translated, 'Dynamic NAT should translate');
     assert.equal(result.srcIP, '203.0.113.10', 'Should get first IP from pool');
@@ -32,9 +32,7 @@ export function registerNatTests(runner) {
 
   runner.test('Dynamic NAT: same source reuses existing translation', (assert) => {
     const { devices } = buildNatTopology();
-    // First allocation
     applyNAT(devices.R1, '192.168.1.10', '8.8.8.8', 'GigabitEthernet0/0');
-    // Second allocation for same source
     const result = applyNAT(devices.R1, '192.168.1.10', '8.8.4.4', 'GigabitEthernet0/0');
     assert.ok(result.translated, 'Should still translate');
     assert.equal(result.srcIP, '203.0.113.10', 'Should reuse the same global IP');
@@ -50,9 +48,57 @@ export function registerNatTests(runner) {
 
   runner.test('No NAT role: no translation occurs', (assert) => {
     const { devices } = buildNatTopology();
-    // Remove natRole from interfaces
     delete devices.R1.interfaces['GigabitEthernet0/0'].natRole;
     const result = applyNAT(devices.R1, '192.168.1.10', '8.8.8.8', 'GigabitEthernet0/0');
     assert.ok(!result.translated, 'Should not translate without NAT role');
+  }, buildNatTopology);
+
+  // --- DNAT/SNAT split tests ---
+
+  runner.test('applyDNAT: translates destination on outside interface', (assert) => {
+    const { devices } = buildDnatFirewallTopology();
+    const result = applyDNAT(devices.FW1, '10.0.0.10', '203.0.113.10', 'GigabitEthernet0/0');
+    assert.ok(result.translated, 'Should translate');
+    assert.equal(result.dstIP, '192.168.1.10', 'Dst should be inside local');
+    assert.equal(result.srcIP, '10.0.0.10', 'Src should be unchanged');
+  }, buildDnatFirewallTopology);
+
+  runner.test('applyDNAT: no translation on inside interface', (assert) => {
+    const { devices } = buildDnatFirewallTopology();
+    const result = applyDNAT(devices.FW1, '192.168.1.10', '203.0.113.10', 'GigabitEthernet0/1');
+    assert.ok(!result.translated, 'DNAT should not trigger on inside interface');
+  }, buildDnatFirewallTopology);
+
+  runner.test('applyDNAT: no translation for non-matching destination', (assert) => {
+    const { devices } = buildDnatFirewallTopology();
+    const result = applyDNAT(devices.FW1, '10.0.0.10', '203.0.113.99', 'GigabitEthernet0/0');
+    assert.ok(!result.translated, 'Non-matching global IP should not translate');
+  }, buildDnatFirewallTopology);
+
+  runner.test('applySNAT: translates source on inside interface (static)', (assert) => {
+    const { devices } = buildDnatFirewallTopology();
+    const result = applySNAT(devices.FW1, '192.168.1.10', '10.0.0.10', 'GigabitEthernet0/1');
+    assert.ok(result.translated, 'Should translate');
+    assert.equal(result.srcIP, '203.0.113.10', 'Src should be inside global');
+    assert.equal(result.dstIP, '10.0.0.10', 'Dst should be unchanged');
+  }, buildDnatFirewallTopology);
+
+  runner.test('applySNAT: no translation on outside interface', (assert) => {
+    const { devices } = buildDnatFirewallTopology();
+    const result = applySNAT(devices.FW1, '10.0.0.10', '192.168.1.10', 'GigabitEthernet0/0');
+    assert.ok(!result.translated, 'SNAT should not trigger on outside interface');
+  }, buildDnatFirewallTopology);
+
+  runner.test('applyNAT combined: router still does both DNAT and SNAT', (assert) => {
+    const { devices } = buildNatTopology();
+    // Inside->outside (SNAT)
+    const snat = applyNAT(devices.R1, '192.168.1.100', '8.8.8.8', 'GigabitEthernet0/0');
+    assert.ok(snat.translated, 'Combined should handle SNAT');
+    assert.equal(snat.srcIP, '203.0.113.100', 'Source should be global');
+    // Outside->inside (DNAT)
+    devices.R1.nat.translations.push({ insideLocal: '192.168.1.100', insideGlobal: '203.0.113.100', type: 'static' });
+    const dnat = applyNAT(devices.R1, '8.8.8.8', '203.0.113.100', 'GigabitEthernet0/1');
+    assert.ok(dnat.translated, 'Combined should handle DNAT');
+    assert.equal(dnat.dstIP, '192.168.1.100', 'Dst should be local');
   }, buildNatTopology);
 }
