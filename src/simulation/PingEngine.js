@@ -923,14 +923,20 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
     const nextDev2 = devices[exitIface.connected.device];
     if (nextDev2 && nextDev2.type === 'switch') {
       const swId = exitIface.connected.device;
-      visited.add(swId);
-      hops.push({ deviceId: swId, hostname: nextDev2.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
       const nhDevId = findDeviceByIP(devices, nextHop);
-      if (nhDevId && !visited.has(nhDevId)) {
-        prevDevId = swId;
-        curId = nhDevId;
+      // L3 switch: if next hop is the switch's own SVI, continue as L3 routing on the switch
+      if (nhDevId === swId && switchHasSVI(nextDev2)) {
+        prevDevId = curId;
+        curId = swId;
       } else {
-        return { hops, reachable: false };
+        visited.add(swId);
+        hops.push({ deviceId: swId, hostname: nextDev2.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
+        if (nhDevId && !visited.has(nhDevId)) {
+          prevDevId = swId;
+          curId = nhDevId;
+        } else {
+          return { hops, reachable: false };
+        }
       }
     } else {
       prevDevId = curId;
