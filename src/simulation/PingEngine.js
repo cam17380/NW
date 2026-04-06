@@ -65,6 +65,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
   let curId = fromId;
   let curTargetIP = targetIP;
   let curSrcIP = null;
+  let arrivedViaTunnel = false; // Skip physical ACL/NAT after tunnel decapsulation
 
   // Get source IP (bond-aware)
   const srcDev = devices[fromId];
@@ -172,10 +173,11 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
     }
 
     // Non-firewall router: NAT first, then ACL (Cisco IOS order)
-    if (dv.type === 'router' && dv.nat && step > 0) {
+    // Skip if packet arrived via tunnel (decapsulated packets bypass physical interface ACL/NAT)
+    if (dv.type === 'router' && step > 0 && !arrivedViaTunnel) {
       const prevDevId = path[path.length - 2] || null;
       let ingressIfName = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
-      if (ingressIfName) {
+      if (ingressIfName && dv.nat) {
         const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
         curSrcIP = natResult.srcIP;
         curTargetIP = natResult.dstIP;
@@ -183,12 +185,9 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
           if (iface.ip === curTargetIP && iface.status === 'up') return { path, linkHints };
         }
       }
+      if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP, proto, port)) break;
     }
-    if (dv.type === 'router' && step > 0) {
-      const prevDevId = path[path.length - 2] || null;
-      const aclIngressIf = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
-      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP, proto, port)) break;
-    }
+    arrivedViaTunnel = false;
 
     // Check routing table first (specific route like /32 takes priority over connected /24)
     let nextHopIP = lookupRoute(dv, curTargetIP);
@@ -221,6 +220,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
               visited.add(underlayPath.path[u]);
             }
             curId = peerDevId;
+            arrivedViaTunnel = true;
             continue;
           }
         }
@@ -241,6 +241,7 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
               visited.add(underlayPath.path[u]);
             }
             curId = peerDevId;
+            arrivedViaTunnel = true;
             continue;
           }
         }
@@ -274,7 +275,21 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
     if (neighborDev.type === 'switch') {
       // Determine the VLAN from the switch entry port
       const entrySwIf = neighborDev.interfaces[neighbor.iface];
-      const entryVlan = entrySwIf && entrySwIf.switchport ? (entrySwIf.switchport.mode === 'access' ? entrySwIf.switchport.accessVlan : null) : 1;
+      let entryVlan = 1;
+      if (entrySwIf && entrySwIf.switchport) {
+        if (entrySwIf.switchport.mode === 'access') {
+          entryVlan = entrySwIf.switchport.accessVlan;
+        } else if (entrySwIf.switchport.mode === 'trunk') {
+          // Trunk port: resolve VLAN from target IP matching the switch's SVI subnets
+          for (const [ifn, iff] of Object.entries(neighborDev.interfaces)) {
+            if (!ifn.startsWith('Vlan') || !iff.ip || iff.status !== 'up') continue;
+            if (getNetwork(iff.ip, iff.mask) === getNetwork(nextHopIP, iff.mask)) {
+              entryVlan = getSVIVlan(ifn);
+              break;
+            }
+          }
+        }
+      }
 
       // Always add switch to path (switches are L2 transit points, can appear multiple times)
       linkHints.push({ fromIf: exitIfName, toIf: neighbor.iface });
