@@ -19,7 +19,7 @@ export function updateTabs(store, switchDevice) {
       tab.style.borderColor = color;
       tab.style.color = color;
     }
-    const icon = dv.type === 'router' ? 'R' : dv.type === 'switch' ? 'S' : dv.type === 'firewall' ? 'FW' : dv.type === 'server' ? 'SV' : 'PC';
+    const icon = dv.type === 'router' ? 'R' : dv.type === 'switch' ? 'S' : dv.type === 'firewall' ? 'FW' : dv.type === 'server' ? 'SV' : dv.icon === 'printer' ? 'PC' : 'PC';
     tab.textContent = icon + ' ' + dv.hostname;
     tab.onclick = () => switchDevice(id);
     container.appendChild(tab);
