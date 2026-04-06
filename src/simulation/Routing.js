@@ -335,25 +335,33 @@ export function forwardPacket(devices, devId, targetIP, visited, srcIP, prevDevI
     return false;
   }
 
-  // 1b. Firewall: evaluate policy and ACL on pre-NAT (original) addresses, then apply NAT
-  //     Real firewalls (CheckPoint/UTX200) inspect the original packet before NAT translation.
-  //     Non-firewall routers: apply NAT first, then ACL (Cisco IOS order).
+  // 1b. Firewall: DNAT → policy → SNAT (CheckPoint/UTX200 order)
+  //     DNAT (destination NAT) is applied before policy evaluation.
+  //     SNAT (source NAT/Hide NAT) is applied after policy evaluation.
   if (dv.type === 'firewall' && prevDevId !== null) {
-    // Firewall policy check (pre-NAT)
+    const ingressIfName = findIngressIf(devices, dv, prevDevId);
+
+    // DNAT (pre-policy): translate destination IP
+    if (dv.nat && ingressIfName) {
+      const dnatResult = applyDNAT(dv, curSrcIP, curTargetIP, ingressIfName);
+      curSrcIP = dnatResult.srcIP;
+      curTargetIP = dnatResult.dstIP;
+    }
+
+    // Firewall policy check (post-DNAT, pre-SNAT)
     if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP, proto, port)) return false;
 
-    // Firewall local delivery: checked AFTER policy (traffic to FW's own IPs must pass policy)
+    // Firewall local delivery: checked AFTER policy
     if (deviceHasReachableIP(dv, curTargetIP)) return true;
 
-    // Inbound ACL check (pre-NAT)
-    const ingressIfName = findIngressIf(devices, dv, prevDevId);
+    // Inbound ACL check
     if (ingressIfName && !checkInterfaceACL(dv, ingressIfName, 'in', curSrcIP, curTargetIP, proto, port)) return false;
 
-    // Apply NAT (post-policy)
+    // SNAT (post-policy): translate source IP
     if (dv.nat && ingressIfName) {
-      const natResult = applyNAT(dv, curSrcIP, curTargetIP, ingressIfName);
-      curSrcIP = natResult.srcIP;
-      curTargetIP = natResult.dstIP;
+      const snatResult = applySNAT(dv, curSrcIP, curTargetIP, ingressIfName);
+      curSrcIP = snatResult.srcIP;
+      curTargetIP = snatResult.dstIP;
     }
   }
 
@@ -736,57 +744,66 @@ function findEgressInterface(dv, targetIP) {
   return null;
 }
 
-export function applyNAT(dv, srcIP, dstIP, ingressIfName) {
+// Destination NAT only (outside→inside: translate dstIP)
+// In real firewalls (CheckPoint/UTX200), DNAT is applied BEFORE policy evaluation.
+export function applyDNAT(dv, srcIP, dstIP, ingressIfName) {
   if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false };
+  const ingressRole = dv.interfaces[ingressIfName]?.natRole;
+  if (ingressRole !== 'outside') return { srcIP, dstIP, translated: false };
+  const match = dv.nat.translations?.find(t => t.insideGlobal === dstIP) ||
+                dv.nat.staticEntries.find(e => e.insideGlobal === dstIP);
+  if (match) {
+    if (dv.nat.stats) dv.nat.stats.hits++;
+    return { srcIP, dstIP: match.insideLocal, translated: true };
+  }
+  return { srcIP, dstIP, translated: false };
+}
 
+// Source NAT only (inside→outside: translate srcIP via static entries or dynamic/Hide NAT)
+// In real firewalls, SNAT is applied AFTER policy evaluation.
+export function applySNAT(dv, srcIP, dstIP, ingressIfName) {
+  if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false };
   const ingressRole = dv.interfaces[ingressIfName]?.natRole;
   if (!ingressRole) return { srcIP, dstIP, translated: false };
-
-  // Outside → Inside: check NAT table FIRST (before routing, since dstIP may be a global address)
-  if (ingressRole === 'outside') {
-    const match = dv.nat.translations.find(t => t.insideGlobal === dstIP) ||
-                  dv.nat.staticEntries.find(e => e.insideGlobal === dstIP);
-    if (match) {
-      dv.nat.stats.hits++;
-      return { srcIP, dstIP: match.insideLocal, translated: true };
-    }
-  }
-
   const egressIfName = findEgressInterface(dv, dstIP);
   if (!egressIfName) return { srcIP, dstIP, translated: false };
   const egressRole = dv.interfaces[egressIfName]?.natRole;
   if (!egressRole) return { srcIP, dstIP, translated: false };
-
-  // Inside → Outside: translate source IP
   if (ingressRole === 'inside' && egressRole === 'outside') {
     const staticMatch = dv.nat.staticEntries.find(e => e.insideLocal === srcIP);
     if (staticMatch) {
-      dv.nat.stats.hits++;
-      if (!dv.nat.translations.find(t => t.insideLocal === srcIP && t.type === 'static')) {
+      if (dv.nat.stats) dv.nat.stats.hits++;
+      if (dv.nat.translations && !dv.nat.translations.find(t => t.insideLocal === srcIP && t.type === 'static')) {
         dv.nat.translations.push({ insideLocal: srcIP, insideGlobal: staticMatch.insideGlobal, type: 'static' });
       }
       return { srcIP: staticMatch.insideGlobal, dstIP, translated: true };
     }
     for (const rule of dv.nat.dynamicRules) {
       if (matchesACL(dv.accessLists[rule.aclNum], srcIP)) {
-        const existing = dv.nat.translations.find(t => t.insideLocal === srcIP && t.type === 'dynamic');
+        const existing = dv.nat.translations?.find(t => t.insideLocal === srcIP && t.type === 'dynamic');
         if (existing) {
-          dv.nat.stats.hits++;
+          if (dv.nat.stats) dv.nat.stats.hits++;
           return { srcIP: existing.insideGlobal, dstIP, translated: true };
         }
-        const globalIP = allocateFromPool(dv.nat.pools[rule.poolName], dv.nat.translations);
+        const globalIP = allocateFromPool(dv.nat.pools[rule.poolName], dv.nat.translations || []);
         if (globalIP) {
-          dv.nat.translations.push({ insideLocal: srcIP, insideGlobal: globalIP, type: 'dynamic' });
-          dv.nat.stats.hits++;
+          if (dv.nat.translations) dv.nat.translations.push({ insideLocal: srcIP, insideGlobal: globalIP, type: 'dynamic' });
+          if (dv.nat.stats) dv.nat.stats.hits++;
           return { srcIP: globalIP, dstIP, translated: true };
         }
       }
     }
-    dv.nat.stats.misses++;
+    if (dv.nat.stats) dv.nat.stats.misses++;
     return { srcIP, dstIP, translated: false };
   }
-
   return { srcIP, dstIP, translated: false };
+}
+
+// Combined NAT (for routers — applies both DNAT and SNAT in one pass)
+export function applyNAT(dv, srcIP, dstIP, ingressIfName) {
+  const dnatResult = applyDNAT(dv, srcIP, dstIP, ingressIfName);
+  if (dnatResult.translated) return dnatResult;
+  return applySNAT(dv, dnatResult.srcIP, dnatResult.dstIP, ingressIfName);
 }
 
 // ─── Diagnostic helpers (read-only, no side effects) ────
@@ -880,24 +897,30 @@ export function describeFirewallCheck(dv, srcIP, dstIP, proto, port) {
   return { allowed: false, description: 'No matching policy -> implicit DENY' };
 }
 
-export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
+// Describe DNAT only (for diagnostic output)
+export function describeDNAT(dv, srcIP, dstIP, ingressIfName) {
   if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false, description: null };
   const ingressRole = dv.interfaces[ingressIfName]?.natRole;
   if (!ingressRole) return { srcIP, dstIP, translated: false, description: 'No NAT role on ingress interface' };
-
   if (ingressRole === 'outside') {
-    const match = dv.nat.translations.find(t => t.insideGlobal === dstIP) ||
+    const match = dv.nat.translations?.find(t => t.insideGlobal === dstIP) ||
                   dv.nat.staticEntries.find(e => e.insideGlobal === dstIP);
     if (match) {
       return { srcIP, dstIP: match.insideLocal, translated: true, description: `NAT outside->inside: dst ${dstIP} -> ${match.insideLocal}` };
     }
   }
+  return { srcIP, dstIP, translated: false, description: null };
+}
 
+// Describe SNAT only (for diagnostic output)
+export function describeSNAT(dv, srcIP, dstIP, ingressIfName) {
+  if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false, description: null };
+  const ingressRole = dv.interfaces[ingressIfName]?.natRole;
+  if (!ingressRole) return { srcIP, dstIP, translated: false, description: 'No NAT role on ingress interface' };
   const egressIfName = findEgressInterface(dv, dstIP);
-  if (!egressIfName) return { srcIP, dstIP, translated: false, description: 'NAT: no egress interface found' };
+  if (!egressIfName) return { srcIP, dstIP, translated: false, description: null };
   const egressRole = dv.interfaces[egressIfName]?.natRole;
   if (!egressRole) return { srcIP, dstIP, translated: false, description: null };
-
   if (ingressRole === 'inside' && egressRole === 'outside') {
     const staticMatch = dv.nat.staticEntries.find(e => e.insideLocal === srcIP);
     if (staticMatch) {
@@ -905,7 +928,7 @@ export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
     }
     for (const rule of dv.nat.dynamicRules) {
       if (matchesACL(dv.accessLists[rule.aclNum], srcIP)) {
-        const existing = dv.nat.translations.find(t => t.insideLocal === srcIP && t.type === 'dynamic');
+        const existing = dv.nat.translations?.find(t => t.insideLocal === srcIP && t.type === 'dynamic');
         if (existing) {
           return { srcIP: existing.insideGlobal, dstIP, translated: true, description: `NAT inside->outside: dynamic src ${srcIP} -> ${existing.insideGlobal}` };
         }
@@ -915,4 +938,14 @@ export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
     return { srcIP, dstIP, translated: false, description: 'NAT inside->outside: no matching rule' };
   }
   return { srcIP, dstIP, translated: false, description: null };
+}
+
+// Combined describe (for routers — both DNAT and SNAT)
+export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
+  if ((dv.type !== 'router' && dv.type !== 'firewall') || !dv.nat) return { srcIP, dstIP, translated: false, description: null };
+  const ingressRole = dv.interfaces[ingressIfName]?.natRole;
+  if (!ingressRole) return { srcIP, dstIP, translated: false, description: 'No NAT role on ingress interface' };
+  const dnatResult = describeDNAT(dv, srcIP, dstIP, ingressIfName);
+  if (dnatResult.translated) return dnatResult;
+  return describeSNAT(dv, dnatResult.srcIP, dnatResult.dstIP, ingressIfName);
 }

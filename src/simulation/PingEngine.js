@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP, findTunnelForTarget, findTunnelPeerDevice } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, applyDNAT, applySNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeDNAT, describeSNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP, findTunnelForTarget, findTunnelPeerDevice } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -158,17 +158,26 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
       continue;
     }
 
-    // Firewall: policy + ACL on pre-NAT addresses, then NAT (CheckPoint/UTX200 order)
+    // Firewall: DNAT → policy → SNAT (CheckPoint/UTX200 order)
     if (dv.type === 'firewall' && step > 0) {
-      if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP, proto, port)) break;
-      if (deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
       const prevDevId = path[path.length - 2] || null;
       const aclIngressIf = prevDevId ? findIngressIfViaSwitch(devices, dv, prevDevId) : null;
-      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP, proto, port)) break;
+      // DNAT (pre-policy)
       if (dv.nat && aclIngressIf) {
-        const natResult = applyNAT(dv, curSrcIP, curTargetIP, aclIngressIf);
-        curSrcIP = natResult.srcIP;
-        curTargetIP = natResult.dstIP;
+        const dnatResult = applyDNAT(dv, curSrcIP, curTargetIP, aclIngressIf);
+        curSrcIP = dnatResult.srcIP;
+        curTargetIP = dnatResult.dstIP;
+      }
+      // Policy check (post-DNAT, pre-SNAT)
+      if (!checkFirewallPolicies(dv, curSrcIP, curTargetIP, proto, port)) break;
+      if (deviceHasReachableIP(dv, curTargetIP)) return { path, linkHints };
+      // ACL check
+      if (aclIngressIf && !checkInterfaceACL(dv, aclIngressIf, 'in', curSrcIP, curTargetIP, proto, port)) break;
+      // SNAT (post-policy)
+      if (dv.nat && aclIngressIf) {
+        const snatResult = applySNAT(dv, curSrcIP, curTargetIP, aclIngressIf);
+        curSrcIP = snatResult.srcIP;
+        curTargetIP = snatResult.dstIP;
       }
     }
 
@@ -727,9 +736,21 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
       hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
     }
 
-    // Firewall: policy + ACL on pre-NAT addresses, then NAT (CheckPoint/UTX200 order)
+    // Firewall: DNAT → policy → SNAT (CheckPoint/UTX200 order)
     if (dv.type === 'firewall' && step > 0) {
-      // Firewall policy check (pre-NAT)
+      // DNAT (pre-policy): translate destination IP
+      if (dv.nat && hop.ingressIf) {
+        const dnatInfo = describeDNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
+        if (dnatInfo.description) {
+          hop.decisions.push({ type: 'nat', text: dnatInfo.description });
+        }
+        if (dnatInfo.translated) {
+          curSrcIP = dnatInfo.srcIP;
+          curTargetIP = dnatInfo.dstIP;
+        }
+      }
+
+      // Firewall policy check (post-DNAT, pre-SNAT)
       const fwInfo = describeFirewallCheck(dv, curSrcIP, curTargetIP, proto, port);
       if (fwInfo.description) {
         hop.decisions.push({ type: 'firewall', text: fwInfo.description });
@@ -753,7 +774,7 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
       }
       hop.decisions.push({ type: 'local-check', text: `Destination ${curTargetIP} is not on this device` });
 
-      // Inbound ACL check (pre-NAT)
+      // Inbound ACL check
       if (hop.ingressIf) {
         const aclInInfo = describeInterfaceACL(dv, hop.ingressIf, 'in', curSrcIP, curTargetIP, proto, port);
         if (aclInInfo.description) {
@@ -766,15 +787,15 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
         }
       }
 
-      // NAT (post-policy)
+      // SNAT (post-policy): translate source IP
       if (dv.nat && hop.ingressIf) {
-        const natInfo = describeNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
-        if (natInfo.description) {
-          hop.decisions.push({ type: 'nat', text: natInfo.description });
+        const snatInfo = describeSNAT(dv, curSrcIP, curTargetIP, hop.ingressIf);
+        if (snatInfo.description) {
+          hop.decisions.push({ type: 'nat', text: snatInfo.description });
         }
-        if (natInfo.translated) {
-          curSrcIP = natInfo.srcIP;
-          curTargetIP = natInfo.dstIP;
+        if (snatInfo.translated) {
+          curSrcIP = snatInfo.srcIP;
+          curTargetIP = snatInfo.dstIP;
         }
       }
     }
