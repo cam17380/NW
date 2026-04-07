@@ -1,7 +1,7 @@
 // ─── CLI Engine: Command dispatch and mode state machine ───
 import { expandAbbrev } from './Abbreviations.js';
 import { execShow } from './commands/ShowCommands.js';
-import { execConfig, execConfigVlan, execConfigIsakmp, execConfigCryptoMap } from './commands/ConfigCommands.js';
+import { execConfig, execConfigVlan, execConfigIsakmp, execConfigCryptoMap, execConfigDhcpPool } from './commands/ConfigCommands.js';
 import { execConfigIf } from './commands/InterfaceCommands.js';
 
 export class CLIEngine {
@@ -39,6 +39,7 @@ export class CLIEngine {
       case 'config-vlan': this._execConfigVlan(input, parts, cmd); break;
       case 'config-isakmp': this._execConfigIsakmp(input, parts, cmd); break;
       case 'config-crypto-map': this._execConfigCryptoMap(input, parts, cmd); break;
+      case 'config-dhcp-pool': this._execConfigDhcpPool(input, parts, cmd); break;
     }
 
     this.eventBus.emit('command:executed');
@@ -54,6 +55,7 @@ export class CLIEngine {
       case 'config-vlan': return h + '(config-vlan)#';
       case 'config-isakmp': return h + '(config-isakmp)#';
       case 'config-crypto-map': return h + '(config-crypto-map)#';
+      case 'config-dhcp-pool': return h + '(dhcp-config)#';
     }
   }
 
@@ -80,6 +82,9 @@ export class CLIEngine {
       this.terminal.write('% ARP cache cleared', 'success-line');
       return;
     }
+    if (input.toLowerCase() === 'renew dhcp') {
+      return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
+    }
     if (input.toLowerCase().startsWith('show') || cmd === 'ping' || cmd === 'traceroute' || cmd === 'test') {
       return execShow(input, parts, this.store, (t, c) => this.terminal.write(t, c), this._execPing, this._execTraceroute);
     }
@@ -104,5 +109,9 @@ export class CLIEngine {
 
   _execConfigCryptoMap(input, parts, cmd) {
     execConfigCryptoMap(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
+  }
+
+  _execConfigDhcpPool(input, parts, cmd) {
+    execConfigDhcpPool(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
   }
 }

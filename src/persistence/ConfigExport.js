@@ -99,12 +99,32 @@ export function exportCommandScript(store) {
       }
     }
 
+    // DHCP configuration
+    if (dev.dhcp) {
+      const hasDhcp = Object.keys(dev.dhcp.pools).length > 0 || dev.dhcp.excludedAddresses.length > 0;
+      if (hasDhcp) {
+        lines.push('!');
+        for (const excl of dev.dhcp.excludedAddresses) {
+          lines.push(`ip dhcp excluded-address ${excl.start}${excl.end !== excl.start ? ' ' + excl.end : ''}`);
+        }
+        for (const [name, pool] of Object.entries(dev.dhcp.pools)) {
+          lines.push(`ip dhcp pool ${name}`);
+          if (pool.network) lines.push(` network ${pool.network} ${pool.mask}`);
+          if (pool.defaultRouter) lines.push(` default-router ${pool.defaultRouter}`);
+          if (pool.dnsServer) lines.push(` dns-server ${pool.dnsServer}`);
+          if (pool.lease !== undefined && pool.lease !== 1) lines.push(` lease ${pool.lease === 0 ? 'infinite' : pool.lease}`);
+          lines.push(` exit`);
+        }
+      }
+    }
+
     // Interfaces
     lines.push('!');
     for (const [name, iface] of Object.entries(dev.interfaces)) {
       lines.push(`interface ${name}`);
       if (iface.description) lines.push(` description ${iface.description}`);
-      if (iface.ip) lines.push(` ip address ${iface.ip} ${iface.mask}`);
+      if (iface.dhcpClient) lines.push(` ip address dhcp`);
+      else if (iface.ip) lines.push(` ip address ${iface.ip} ${iface.mask}`);
       if (iface.tunnel) {
         if (iface.tunnel.source) lines.push(` tunnel source ${iface.tunnel.source}`);
         if (iface.tunnel.destination) lines.push(` tunnel destination ${iface.tunnel.destination}`);

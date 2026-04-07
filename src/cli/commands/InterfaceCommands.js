@@ -1,5 +1,5 @@
 // ─── Interface configuration commands ───
-import { isValidIP } from '../../simulation/NetworkUtils.js';
+import { isValidIP, getNetwork } from '../../simulation/NetworkUtils.js';
 import { findL2IPConflict } from '../../simulation/Routing.js';
 
 function parseTrunkAllowed(input) {
@@ -38,10 +38,40 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     termWrite(`%LINK-5-CHANGED: Interface ${currentInterface}, changed state to administratively down`, 'error-line');
     return;
   }
+  if (lower === 'ip address dhcp') {
+    if (dev.type !== 'pc') { termWrite('% DHCP client is only available on PCs', 'error-line'); return; }
+    iface.dhcpClient = true;
+    const result = tryDhcpAssign(devices, store.getCurrentDeviceId(), currentInterface);
+    if (result) {
+      iface.ip = result.ip; iface.mask = result.mask;
+      dev.defaultGateway = result.gateway; dev.dhcpGateway = true;
+      termWrite(`% DHCP: Acquired ${result.ip}/${result.mask} from ${result.serverName}`, 'success-line');
+      termWrite(`  Gateway: ${result.gateway}${result.dns ? '  DNS: ' + result.dns : ''}`);
+    } else {
+      iface.ip = ''; iface.mask = '';
+      termWrite('% DHCP: No DHCP server found — use "renew dhcp" to retry', 'error-line');
+    }
+    return;
+  }
+  if (lower === 'no ip address dhcp') {
+    if (iface.dhcpClient) {
+      releaseDhcpBinding(devices, store.getCurrentDeviceId(), currentInterface, iface.ip);
+      iface.dhcpClient = false; iface.ip = ''; iface.mask = '';
+      if (dev.dhcpGateway) { dev.defaultGateway = ''; delete dev.dhcpGateway; }
+      termWrite('% DHCP client disabled, IP released', 'success-line');
+    }
+    return;
+  }
   if (lower.startsWith('ip address')) {
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Incomplete command — usage: ip address <ip> <mask>', 'error-line'); return; }
     if (!isValidIP(args[2]) || !isValidIP(args[3])) { termWrite('% Invalid IP address or mask', 'error-line'); return; }
+    // Release DHCP binding if switching from DHCP to static
+    if (iface.dhcpClient) {
+      releaseDhcpBinding(devices, store.getCurrentDeviceId(), currentInterface, iface.ip);
+      iface.dhcpClient = false;
+      if (dev.dhcpGateway) { dev.defaultGateway = ''; delete dev.dhcpGateway; }
+    }
     iface.ip = args[2]; iface.mask = args[3];
     // Gratuitous ARP: detect duplicate IP on same L2 broadcast domain (warn, don't block)
     const conflict = findL2IPConflict(store.getDevices(), store.getCurrentDeviceId(), currentInterface, args[2]);
@@ -205,4 +235,159 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
   if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentInterface(''); return; }
   if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentInterface(''); return; }
   termWrite(`% Unknown command "${parts[0]}" in interface config mode`, 'error-line');
+}
+
+// ─── DHCP assignment helpers ───
+
+function ipToLong(ip) {
+  return ip.split('.').reduce((acc, o) => (acc << 8) + parseInt(o), 0) >>> 0;
+}
+
+function longToIP(n) {
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+}
+
+function isExcluded(ip, excludedAddresses) {
+  const ipN = ipToLong(ip);
+  for (const range of excludedAddresses) {
+    if (ipN >= ipToLong(range.start) && ipN <= ipToLong(range.end)) return true;
+  }
+  return false;
+}
+
+function portCarriesVlan(iface, vlan) {
+  if (!iface.switchport) return false;
+  if (iface.switchport.mode === 'access') return iface.switchport.accessVlan === vlan;
+  if (iface.switchport.mode === 'trunk') {
+    const allowed = iface.switchport.trunkAllowed;
+    return allowed === 'all' || (Array.isArray(allowed) && allowed.includes(vlan));
+  }
+  return false;
+}
+
+// Find all routers reachable on the same L2 broadcast domain via VLAN-aware BFS
+function findL2Routers(devices, pcDevId, pcIfName) {
+  const pcDev = devices[pcDevId];
+  const pcIf = pcDev.interfaces[pcIfName];
+  if (!pcIf || !pcIf.connected || pcIf.status !== 'up') return [];
+
+  const remote = pcIf.connected;
+  const remoteDev = devices[remote.device];
+  const remoteIf = remoteDev.interfaces[remote.iface];
+  if (!remoteIf || remoteIf.status !== 'up') return [];
+
+  // Direct connection to router
+  if (remoteDev.type === 'router') {
+    return [{ routerId: remote.device, routerDev: remoteDev }];
+  }
+
+  // Not a switch — no further L2 search
+  if (remoteDev.type !== 'switch') return [];
+
+  // Determine VLAN from the switch port the PC is connected to
+  let vlan = 1;
+  if (remoteIf.switchport) {
+    if (remoteIf.switchport.mode === 'access') vlan = remoteIf.switchport.accessVlan;
+  }
+
+  // BFS through switches
+  const visited = new Set([remote.device]);
+  const queue = [remote.device];
+  const routers = [];
+
+  while (queue.length > 0) {
+    const curId = queue.shift();
+    const curDev = devices[curId];
+
+    for (const [ifName, iface] of Object.entries(curDev.interfaces)) {
+      if (iface.status !== 'up' || !iface.connected || !iface.switchport) continue;
+      if (!portCarriesVlan(iface, vlan)) continue;
+
+      const peerId = iface.connected.device;
+      const peerDev = devices[peerId];
+      const peerIf = peerDev.interfaces[iface.connected.iface];
+      if (!peerIf || peerIf.status !== 'up') continue;
+
+      if (peerDev.type === 'router') {
+        if (!routers.some(r => r.routerId === peerId)) {
+          routers.push({ routerId: peerId, routerDev: peerDev });
+        }
+      } else if (peerDev.type === 'switch' && !visited.has(peerId)) {
+        visited.add(peerId);
+        queue.push(peerId);
+      }
+    }
+  }
+  return routers;
+}
+
+export function tryDhcpAssign(devices, pcDevId, pcIfName) {
+  const routers = findL2Routers(devices, pcDevId, pcIfName);
+
+  for (const { routerId, routerDev } of routers) {
+    if (!routerDev.dhcp) continue;
+    const excluded = routerDev.dhcp.excludedAddresses || [];
+
+    for (const [poolName, pool] of Object.entries(routerDev.dhcp.pools)) {
+      if (!pool.network || !pool.mask) continue;
+
+      // Find a router interface on the same subnet as the pool
+      let routerIfIP = null;
+      for (const [ifName, rif] of Object.entries(routerDev.interfaces)) {
+        if (rif.status !== 'up' || !rif.ip) continue;
+        if (getNetwork(rif.ip, pool.mask) === pool.network) {
+          routerIfIP = rif.ip;
+          break;
+        }
+      }
+      if (!routerIfIP) continue;
+
+      // Allocate lowest available IP
+      const netN = ipToLong(pool.network);
+      const maskN = ipToLong(pool.mask);
+      const broadcast = (netN | (~maskN >>> 0)) >>> 0;
+      const usedIPs = new Set(Object.keys(pool.bindings));
+      usedIPs.add(routerIfIP);
+
+      for (let ipN = netN + 1; ipN < broadcast; ipN++) {
+        const candidateIP = longToIP(ipN);
+        if (usedIPs.has(candidateIP)) continue;
+        if (isExcluded(candidateIP, excluded)) continue;
+        // Check no other device already uses this IP
+        let inUse = false;
+        for (const [did, dv] of Object.entries(devices)) {
+          if (did === pcDevId) continue;
+          for (const iface of Object.values(dv.interfaces)) {
+            if (iface.ip === candidateIP) { inUse = true; break; }
+          }
+          if (inUse) break;
+        }
+        if (inUse) continue;
+
+        pool.bindings[candidateIP] = pcDevId + '/' + pcIfName;
+        return {
+          ip: candidateIP,
+          mask: pool.mask,
+          gateway: pool.defaultRouter || routerIfIP,
+          dns: pool.dnsServer || '',
+          serverName: routerDev.hostname,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function releaseDhcpBinding(devices, pcDevId, pcIfName, ip) {
+  if (!ip) return;
+  const clientRef = pcDevId + '/' + pcIfName;
+  for (const [did, dv] of Object.entries(devices)) {
+    if (!dv.dhcp) continue;
+    for (const pool of Object.values(dv.dhcp.pools)) {
+      if (pool.bindings[ip] === clientRef) {
+        delete pool.bindings[ip];
+        return;
+      }
+    }
+  }
 }
