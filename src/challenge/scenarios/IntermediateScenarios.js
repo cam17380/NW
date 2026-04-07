@@ -1,0 +1,194 @@
+// ─── Intermediate Challenge Scenarios ───
+import { canReach, checkFirewallPolicies } from '../../simulation/Routing.js';
+
+function natBase() {
+  return { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } };
+}
+
+export const intermediateScenarios = [
+  // ─── 5. VLAN分離 ───
+  {
+    id: 'inter-vlan-isolation',
+    title: 'VLAN Isolation',
+    difficulty: 'intermediate',
+    category: 'VLAN',
+    description: 'Sales and Engineering teams share the same switch but must be isolated. Create VLANs and assign ports so each team can only communicate within its own VLAN.',
+    topology() {
+      const devices = {
+        SW1: {
+          type: 'switch', hostname: 'Switch1', x: 300, y: 200,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC2', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/3': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC3', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/4': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC4', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: { type: 'pc', hostname: 'Sales-PC1', x: 100, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.10.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
+        PC2: { type: 'pc', hostname: 'Sales-PC2', x: 250, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.10.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        PC3: { type: 'pc', hostname: 'Eng-PC1', x: 350, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.20.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } } },
+        PC4: { type: 'pc', hostname: 'Eng-PC2', x: 500, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.20.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } } },
+      };
+      return { devices };
+    },
+    objectives: [
+      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => canReach(devices, 'PC1', '192.168.10.11') },
+      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => canReach(devices, 'PC3', '192.168.20.11') },
+      { text: 'Sales-PC1 cannot ping Eng-PC1', check: (devices) => !canReach(devices, 'PC1', '192.168.20.10') },
+    ],
+    hints: [
+      { text: 'Create VLAN 10 (Sales) and VLAN 20 (Engineering) on the switch.' },
+      { text: 'Switch1: enable > configure terminal > vlan 10 > name Sales > exit > vlan 20 > name Engineering > exit' },
+      { text: 'Assign ports: interface Gi0/1 > switchport access vlan 10. Same for Gi0/2. Gi0/3 and Gi0/4 go to vlan 20.' },
+    ],
+  },
+
+  // ─── 6. VLAN間ルーティング ───
+  {
+    id: 'inter-vlan-routing',
+    title: 'Inter-VLAN Routing with L3 Switch',
+    difficulty: 'intermediate',
+    category: 'VLAN',
+    description: 'Sales and Engineering are on separate VLANs. Configure SVIs on the L3 switch so they can communicate across VLANs.',
+    topology() {
+      const devices = {
+        SW1: {
+          type: 'switch', hostname: 'L3-Switch', x: 300, y: 200,
+          vlans: { 1: { name: 'default' }, 10: { name: 'Sales' }, 20: { name: 'Engineering' } },
+          routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 10, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC2', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 20, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: { type: 'pc', hostname: 'Sales-PC', x: 150, y: 400, defaultGateway: '192.168.10.1', interfaces: { 'Ethernet0': { ip: '192.168.10.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
+        PC2: { type: 'pc', hostname: 'Eng-PC', x: 450, y: 400, defaultGateway: '192.168.20.1', interfaces: { 'Ethernet0': { ip: '192.168.20.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+      };
+      return { devices };
+    },
+    objectives: [
+      { text: 'Sales-PC can ping Eng-PC (192.168.20.10)', check: (devices) => canReach(devices, 'PC1', '192.168.20.10') },
+      { text: 'Eng-PC can ping Sales-PC (192.168.10.10)', check: (devices) => canReach(devices, 'PC2', '192.168.10.10') },
+    ],
+    hints: [
+      { text: 'An L3 switch needs SVI (Switch Virtual Interface) for each VLAN to route between them.' },
+      { text: 'On L3-Switch: enable > configure terminal > interface vlan 10 > ip address 192.168.10.1 255.255.255.0 > no shutdown > exit' },
+      { text: 'Same for VLAN 20: interface vlan 20 > ip address 192.168.20.1 255.255.255.0 > no shutdown' },
+    ],
+    congratsMessage: 'You can now route between VLANs using an L3 switch!',
+  },
+
+  // ─── 7. NATでインターネットへ ───
+  {
+    id: 'inter-nat',
+    title: 'NAT to the Internet',
+    difficulty: 'intermediate',
+    category: 'NAT',
+    description: 'Your internal network (192.168.1.0/24) needs to access an external server. Configure dynamic NAT on Router1 to translate internal addresses.',
+    topology() {
+      const devices = {
+        R1: {
+          type: 'router', hostname: 'Router1', x: 300, y: 150,
+          routes: [{ network: '0.0.0.0', mask: '0.0.0.0', nextHop: '203.0.113.1' }],
+          nat: natBase(), accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '203.0.113.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'WAN', connected: { device: 'ISP', iface: 'GigabitEthernet0/0' } },
+          }
+        },
+        ISP: {
+          type: 'router', hostname: 'ISP', x: 500, y: 150,
+          routes: [{ network: '203.0.113.0', mask: '255.255.255.252', nextHop: '203.0.113.2' }],
+          nat: natBase(), accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '203.0.113.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '8.8.8.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SV1', iface: 'Ethernet0' } },
+          }
+        },
+        SW1: {
+          type: 'switch', hostname: 'Switch1', x: 300, y: 300,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: { type: 'pc', hostname: 'PC1', x: 300, y: 430, defaultGateway: '192.168.1.1', interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        SV1: { type: 'server', hostname: 'WebServer', x: 650, y: 150, routes: [], defaultGateway: '8.8.8.1', interfaces: { 'Ethernet0': { ip: '8.8.8.8', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'ISP', iface: 'GigabitEthernet0/1' } } } },
+      };
+      return { devices };
+    },
+    objectives: [
+      { text: 'PC1 can ping WebServer (8.8.8.8)', check: (devices) => canReach(devices, 'PC1', '8.8.8.8') },
+    ],
+    hints: [
+      { text: 'You need: (1) NAT inside/outside interfaces, (2) ACL to match internal IPs, (3) NAT pool, (4) dynamic NAT rule.' },
+      { text: 'On Router1: interface Gi0/0 > ip nat inside > exit > interface Gi0/1 > ip nat outside > exit' },
+      { text: 'access-list 1 permit 192.168.1.0 0.0.0.255' },
+      { text: 'ip nat pool MYPOOL 203.0.113.2 203.0.113.2 netmask 255.255.255.252' },
+      { text: 'ip nat inside source list 1 pool MYPOOL' },
+    ],
+  },
+
+  // ─── 8. ACLでセキュリティ ───
+  {
+    id: 'inter-acl',
+    title: 'Access Control Lists',
+    difficulty: 'intermediate',
+    category: 'ACL',
+    description: 'Server1 should only accept TCP port 443 (HTTPS) from the internal network. Block all other inbound traffic using an extended ACL on the router.',
+    topology() {
+      const devices = {
+        R1: {
+          type: 'router', hostname: 'Router1', x: 300, y: 100,
+          routes: [], nat: natBase(), accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '10.0.0.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'DMZ', connected: { device: 'SW2', iface: 'GigabitEthernet0/1' } },
+          }
+        },
+        SW1: {
+          type: 'switch', hostname: 'LAN-SW', x: 150, y: 250,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        SW2: {
+          type: 'switch', hostname: 'DMZ-SW', x: 450, y: 250,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SV1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: { type: 'pc', hostname: 'PC1', x: 150, y: 400, defaultGateway: '192.168.1.1', interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        SV1: { type: 'server', hostname: 'Server1', x: 450, y: 400, routes: [], defaultGateway: '10.0.0.1', interfaces: { 'Ethernet0': { ip: '10.0.0.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW2', iface: 'GigabitEthernet0/2' } } } },
+      };
+      return { devices };
+    },
+    objectives: [
+      { text: 'PC1 can reach Server1 on TCP 443 (test access 10.0.0.10 tcp 443)',
+        check: (devices) => {
+          // Check if ACL on Gi0/1 out allows tcp 443
+          const r1 = devices.R1;
+          if (!r1.accessLists || !Object.keys(r1.accessLists).length) return false;
+          const gi01 = r1.interfaces['GigabitEthernet0/1'];
+          if (!gi01.accessGroup) return false;
+          return canReach(devices, 'PC1', '10.0.0.10', 'tcp', 443);
+        }
+      },
+      { text: 'PC1 cannot reach Server1 on TCP 80 (blocked by ACL)',
+        check: (devices) => !canReach(devices, 'PC1', '10.0.0.10', 'tcp', 80)
+      },
+    ],
+    hints: [
+      { text: 'Create an extended ACL (100-199) that permits TCP 443 and denies everything else.' },
+      { text: 'Router1: access-list 100 permit tcp 192.168.1.0 0.0.0.255 10.0.0.0 0.0.0.255 eq 443' },
+      { text: 'Apply outbound on Gi0/1: interface Gi0/1 > ip access-group 100 out' },
+    ],
+    congratsMessage: 'You secured the server with an ACL allowing only HTTPS!',
+  },
+];
