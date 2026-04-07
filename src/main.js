@@ -34,6 +34,12 @@ import { registerPacketFlowTests } from './test/tests/PacketFlowTests.js';
 import { registerL3SwitchTests } from './test/tests/L3SwitchTests.js';
 import { registerBondTests } from './test/tests/BondTests.js';
 import { registerVpnTunnelTests } from './test/tests/VpnTunnelTests.js';
+import { ChallengeEngine } from './challenge/ChallengeEngine.js';
+import { ChallengeUI } from './challenge/ChallengeUI.js';
+import { ChallengeSelector } from './challenge/ChallengeSelector.js';
+import { beginnerScenarios } from './challenge/scenarios/BeginnerScenarios.js';
+import { intermediateScenarios } from './challenge/scenarios/IntermediateScenarios.js';
+import { advancedScenarios } from './challenge/scenarios/AdvancedScenarios.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -253,6 +259,37 @@ initSplitter(
   document.querySelector('.diagram-panel'),
   () => renderer.resize()
 );
+
+// ─── Challenge Mode ───
+const challengeEngine = new ChallengeEngine();
+challengeEngine.registerScenarios(beginnerScenarios);
+challengeEngine.registerScenarios(intermediateScenarios);
+challengeEngine.registerScenarios(advancedScenarios);
+
+const challengeUI = new ChallengeUI(challengeEngine);
+challengeUI.mount(document.body);
+challengeUI.onCheck = () => {
+  const result = challengeEngine.check(store.getDevices());
+  if (result.allPassed) {
+    showToast('Challenge Complete!', 'success');
+  }
+  challengeUI.render();
+};
+challengeUI.onQuit = () => refreshUI();
+
+const challengeSelector = new ChallengeSelector(challengeEngine);
+challengeSelector.mount(document.body);
+challengeSelector.onSelect = (scenarioId) => {
+  challengeEngine.start(scenarioId, store);
+  refreshUI();
+  challengeUI.show();
+  const d = store.getCurrentDevice();
+  terminal.write(`--- Challenge started: ${challengeEngine.current.title} ---\n`, 'success-line');
+  terminal.write(`${challengeEngine.current.description}\n`);
+  terminal.write(`--- Connected to ${d.hostname} ---\n`, 'success-line');
+};
+
+window.showChallenges = () => challengeSelector.show();
 
 // ─── Initial render ───
 renderer.resize();

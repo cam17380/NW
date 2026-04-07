@@ -34,6 +34,7 @@ export class DevicePalette {
       { type: 'firewall', label: 'Firewall', icon: 'FW' },
       { type: 'server', label: 'Server', icon: 'SV' },
       { type: 'pc', label: 'PC', icon: 'PC' },
+      { type: 'pc', label: 'Printer', icon: 'PRN', deviceIcon: 'printer' },
     ];
 
     for (const dt of deviceTypes) {
@@ -53,7 +54,8 @@ export class DevicePalette {
       item.appendChild(label);
 
       item.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', dt.type);
+        const data = dt.deviceIcon ? dt.type + ':' + dt.deviceIcon : dt.type;
+        e.dataTransfer.setData('text/plain', data);
         e.dataTransfer.effectAllowed = 'copy';
       });
 

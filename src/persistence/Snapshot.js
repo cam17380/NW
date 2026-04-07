@@ -7,6 +7,7 @@ export function getSnapshot(devices, links) {
     snap[id] = {
       type: dv.type,
       hostname: dv.hostname,
+      icon: dv.icon || undefined,
       x: dv.x,
       y: dv.y,
       routes: dv.routes ? JSON.parse(JSON.stringify(dv.routes)) : undefined,
@@ -49,6 +50,7 @@ export function applySnapshot(store, snap) {
     for (const [id, saved] of Object.entries(snap.devices)) {
       const dv = createDevice(saved.type, id, saved.x, saved.y);
       dv.hostname = saved.hostname;
+      if (saved.icon !== undefined) dv.icon = saved.icon;
       if (saved.routes !== undefined) dv.routes = saved.routes;
       if (saved.defaultGateway !== undefined) dv.defaultGateway = saved.defaultGateway;
       if (saved.vlans !== undefined) dv.vlans = saved.vlans;
@@ -101,6 +103,7 @@ export function applySnapshot(store, snap) {
     const dv = store.getDevice(id);
     if (!dv) continue;
     dv.hostname = saved.hostname;
+    if (saved.icon !== undefined) dv.icon = saved.icon;
     if (saved.routes !== undefined) dv.routes = saved.routes;
     if (saved.defaultGateway !== undefined) dv.defaultGateway = saved.defaultGateway;
     if (saved.vlans !== undefined) dv.vlans = saved.vlans;

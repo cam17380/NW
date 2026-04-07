@@ -1,5 +1,6 @@
 // ─── Interface configuration commands ───
 import { isValidIP } from '../../simulation/NetworkUtils.js';
+import { findL2IPConflict } from '../../simulation/Routing.js';
 
 function parseTrunkAllowed(input) {
   const trimmed = input.trim().toLowerCase();
@@ -42,6 +43,11 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     if (args.length < 4) { termWrite('% Incomplete command — usage: ip address <ip> <mask>', 'error-line'); return; }
     if (!isValidIP(args[2]) || !isValidIP(args[3])) { termWrite('% Invalid IP address or mask', 'error-line'); return; }
     iface.ip = args[2]; iface.mask = args[3];
+    // Gratuitous ARP: detect duplicate IP on same L2 broadcast domain (warn, don't block)
+    const conflict = findL2IPConflict(store.getDevices(), store.getCurrentDeviceId(), currentInterface, args[2]);
+    if (conflict) {
+      termWrite(`%IP-4-DUPADDR: Duplicate address ${args[2]} on ${currentInterface}, sourced by ${conflict.hostname} ${conflict.ifName}`, 'error-line');
+    }
     return;
   }
   if (cmd === 'description') {

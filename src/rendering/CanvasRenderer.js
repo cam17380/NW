@@ -1,5 +1,5 @@
 // ─── Canvas Renderer: Main drawing orchestrator ───
-import { drawRouter, drawSwitch, drawPC, drawFirewall, drawServer } from './DeviceRenderer.js';
+import { drawRouter, drawSwitch, drawPC, drawPrinter, drawFirewall, drawServer } from './DeviceRenderer.js';
 import { drawLink, getDeviceEdgePoint } from './LinkRenderer.js';
 
 export class CanvasRenderer {
@@ -119,6 +119,7 @@ export class CanvasRenderer {
       else if (dv.type === 'switch') drawSwitch(ctx, x, y, dv, isSelected);
       else if (dv.type === 'firewall') drawFirewall(ctx, x, y, dv, isSelected);
       else if (dv.type === 'server') drawServer(ctx, x, y, dv, isSelected);
+      else if (dv.icon === 'printer') drawPrinter(ctx, x, y, dv, isSelected);
       else drawPC(ctx, x, y, dv, isSelected);
 
       ctx.shadowBlur = 0;

@@ -32,11 +32,11 @@ export function registerFirewallTests(runner) {
     assert.ok(result, 'PC1 should reach WebServer (policy permits ICMP)');
   }, buildFirewallTopology);
 
-  runner.test('No policies configured: all traffic passes (no inspection)', (assert) => {
+  runner.test('No policies configured: implicit deny all', (assert) => {
     const { devices } = buildFirewallTopology();
     devices.FW1.policies = [];
     const result = checkFirewallPolicies(devices.FW1, '192.168.1.10', '172.16.0.10', 'icmp', null);
-    assert.ok(result, 'No policies means no inspection (pass-through)');
+    assert.ok(!result, 'No policies should mean implicit deny');
   }, buildFirewallTopology);
 
   runner.test('Policy sequence order: lower seq evaluated first', (assert) => {

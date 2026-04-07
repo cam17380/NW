@@ -54,6 +54,49 @@ export function drawPC(ctx, x, y, dv, selected) {
   ctx.stroke();
 }
 
+export function drawPrinter(ctx, x, y, dv, selected) {
+  const w = 34, h = 22;
+  const color = getDeviceBorderColor(dv);
+  // Printer body
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - h / 2 + 2, w, h, 3);
+  ctx.fillStyle = selected ? '#1a3a5c' : '#1a2332';
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Paper input tray (top)
+  ctx.beginPath();
+  ctx.moveTo(x - 10, y - h / 2 + 2);
+  ctx.lineTo(x - 8, y - h / 2 - 6);
+  ctx.lineTo(x + 8, y - h / 2 - 6);
+  ctx.lineTo(x + 10, y - h / 2 + 2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Paper output slot (front, bottom)
+  ctx.beginPath();
+  ctx.moveTo(x - 12, y + h / 2 + 2);
+  ctx.lineTo(x - 10, y + h / 2 + 7);
+  ctx.lineTo(x + 10, y + h / 2 + 7);
+  ctx.lineTo(x + 12, y + h / 2 + 2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Paper lines on output
+  ctx.beginPath();
+  ctx.moveTo(x - 6, y + h / 2 + 4);
+  ctx.lineTo(x + 6, y + h / 2 + 4);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  // LED dot
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x + w / 2 - 6, y, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawFirewall(ctx, x, y, dv, selected) {
   // Shield shape
   const w = 22, h = 30;
