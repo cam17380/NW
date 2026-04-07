@@ -175,6 +175,15 @@ window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
 window.showTemplates = showTemplateSelector;
 window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
+window.exportImage = () => {
+  const dataURL = renderer.exportImage();
+  if (!dataURL) { showToast('No devices to export', 'error'); return; }
+  const a = document.createElement('a');
+  a.href = dataURL;
+  a.download = `netsim-topology-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+  showToast('Topology image exported', 'success');
+};
 
 // ─── Setup ───
 initTemplateSelector(store, refreshUI);

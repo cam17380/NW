@@ -852,6 +852,82 @@ export class CanvasRenderer {
       }
     });
   }
+
+  exportImage() {
+    const devices = this.store.getDevices();
+    const devList = Object.values(devices);
+    if (devList.length === 0) return null;
+
+    // Calculate bounding box of all devices
+    const margin = 80;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const dv of devList) {
+      minX = Math.min(minX, dv.x);
+      minY = Math.min(minY, dv.y);
+      maxX = Math.max(maxX, dv.x);
+      maxY = Math.max(maxY, dv.y);
+    }
+    minX -= margin; minY -= margin;
+    maxX += margin; maxY += margin;
+
+    const imgW = Math.max(maxX - minX, 200);
+    const imgH = Math.max(maxY - minY, 200);
+    const scale = 2; // High-res output
+
+    // Create offscreen canvas
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = imgW * scale;
+    offCanvas.height = imgH * scale;
+    const ctx = offCanvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+
+    // Set up coordinate transform: scale and offset so devices fit
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.translate(-minX, -minY);
+
+    const links = this.store.getLinks();
+
+    // Draw links
+    for (const link of links) {
+      const fromDev = devices[link.from];
+      const toDev = devices[link.to];
+      if (!fromDev || !toDev) continue;
+      drawLink(ctx, fromDev, toDev, link, devices, null, (x) => x, (y) => y);
+    }
+
+    // Draw devices
+    for (const [id, dv] of Object.entries(devices)) {
+      if (dv.type === 'router') drawRouter(ctx, dv.x, dv.y, dv, false);
+      else if (dv.type === 'switch') drawSwitch(ctx, dv.x, dv.y, dv, false);
+      else if (dv.type === 'firewall') drawFirewall(ctx, dv.x, dv.y, dv, false);
+      else if (dv.type === 'server') drawServer(ctx, dv.x, dv.y, dv, false);
+      else if (dv.icon === 'printer') drawPrinter(ctx, dv.x, dv.y, dv, false);
+      else drawPC(ctx, dv.x, dv.y, dv, false);
+
+      // Hostname label
+      ctx.font = 'bold 13px Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#c8d6e5';
+      ctx.fillText(dv.hostname, dv.x, dv.y + 40);
+
+      // IP labels
+      ctx.font = '10px Segoe UI, sans-serif';
+      ctx.fillStyle = '#8899aa';
+      let ipOffset = 52;
+      for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+        if (iface.ip && iface.ip !== '') {
+          ctx.fillText(iface.ip, dv.x, dv.y + ipOffset);
+          ipOffset += 12;
+          if (ipOffset > 76) break; // Max 3 IPs
+        }
+      }
+    }
+
+    return offCanvas.toDataURL('image/png');
+  }
 }
 
 function drawPingParticle(ctx, x, y, color, alpha) {
