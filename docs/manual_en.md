@@ -1,7 +1,7 @@
 # Network Simulator Operation Manual
 
-**Version:** 1.2
-**Last Updated:** 2026-04-01
+**Version:** 1.3
+**Last Updated:** 2026-04-06
 
 ---
 
@@ -26,8 +26,8 @@ This manual covers how to launch the network simulator and provides step-by-step
 | Area | Description |
 |------|-------------|
 | **Header** | Application title, device tabs, toolbar buttons |
-| **Canvas (left)** | Network topology visualization with devices and links |
-| **Terminal (right)** | CLI command input and output |
+| **Terminal (left)** | CLI command input and output |
+| **Canvas (right)** | Network topology visualization with devices and links |
 
 ### 3.2 Device Tabs
 
@@ -327,12 +327,34 @@ FW(config)# no firewall policy 20        # Delete specific policy
 FW(config)# no firewall policy all       # Delete all policies
 ```
 
-### 9.3 Important Notes
+### 9.3 NAT/Policy Processing Order
+
+On firewalls, the order of NAT and policy application is important:
+
+```
+① DNAT (Destination NAT)  → ② Policy evaluation → ③ SNAT (Source NAT)
+```
+
+- **Destination NAT (DNAT)** is applied **before** policy evaluation
+- Policies are evaluated with the **post-DNAT destination IP** and **pre-SNAT source IP**
+- **Source NAT (SNAT / Hide NAT)** is applied **after** policy evaluation
+
+Example: External access to a web server
+```
+External PC (10.0.0.10) → FW WAN IP (10.1.2.11:443)
+  ① DNAT: dst 10.1.2.11 → 192.168.1.10
+  ② Policy: permit any -> 192.168.1.10 tcp/443 → PERMIT
+  ③ SNAT: none
+  → Reaches 192.168.1.10 (WebSV)
+```
+
+### 9.4 Important Notes
 
 - Policies are evaluated in ascending sequence number order
 - The first matching rule is applied
 - If no rule matches, an implicit **deny all** applies
 - The firewall is stateless (return traffic must also be explicitly permitted)
+- Use the `test access` command to verify policy decisions for specific protocols/ports
 
 ---
 
@@ -420,26 +442,42 @@ Router(config-if)# no ip access-group 100 in    # Remove inbound ACL
 
 ### 11.1 The show packet-flow Command
 
-Displays detailed decision-making at each hop as a packet travels to its destination.
+Displays detailed decision-making at each hop as a packet travels to its destination. When protocol and port are omitted, the packet is evaluated as ICMP.
 
 ```
 Router# show packet-flow 10.0.0.1
+Router# show packet-flow 192.168.1.11 tcp 443
 ```
 
-### 11.2 Reading the Output
+### 11.2 The test access Command
+
+Performs the same diagnostics as `show packet-flow` for a specific protocol/port. Ideal for unit-testing firewall policies and ACL rules.
 
 ```
-=== Packet-Flow to 10.0.0.1 ===
-[R1] 192.168.1.1
-  ├ Check: Is destination local? → No
-  ├ NAT: No translation
-  ├ Route: 10.0.0.0/24 via 192.168.2.2
-  └ Forward: GigabitEthernet0/1 → R2
+PC# test access 192.168.1.11 tcp 443
+PC# test access 10.161.32.122 tcp 80
+PC# test access 192.168.1.11 icmp
+```
 
-[R2] 192.168.2.2
-  ├ Check: Is destination local? → No
-  ├ Route: 10.0.0.0/24 via directly connected
-  └ Forward: GigabitEthernet0/0 → destination
+### 11.3 Reading the Output
+
+```
+Packet flow: PC1 (192.168.1.10) -> 192.168.1.11 (TCP/443)
+
+[Hop 1] PC1 (Pc)
+├ Destination 192.168.1.11 is not on this device
+├ Using default gateway 192.168.1.1
+└ Exit Ethernet0 -> next hop 192.168.1.1
+
+[Hop 2] UTX200 (Firewall) via Gi0/1
+├ Received on GigabitEthernet0/1 (192.168.0.2)
+├ NAT outside->inside: dst 10.1.2.11 -> 192.168.1.11
+├ Policy seq 10: permit any -> 192.168.1.11 tcp eq 443 -> PERMIT
+├ Destination 192.168.1.11 is not on this device
+├ Directly connected on GigabitEthernet0/2 (192.168.1.0/24)
+└ Exit GigabitEthernet0/2 -> L2 delivery to 192.168.1.11
+
+Result: ACCESS PERMITTED (TCP/443) - 5 hops
 ```
 
 | Symbol | Meaning |
@@ -448,6 +486,14 @@ Router# show packet-flow 10.0.0.1
 | `└` | Forwarding decision |
 | `✗` | Error (unreachable, etc.) |
 | `~` | L2 switching |
+
+### 11.4 Firewall NAT/Policy Display Order
+
+At firewall hops, the output follows the same processing order as real equipment:
+
+1. **DNAT (Destination NAT)** -- translate destination IP from external to internal
+2. **Policy evaluation** -- evaluated with translated destination + original source
+3. **SNAT (Source NAT / Hide NAT)** -- translate source IP from internal to external
 
 ---
 
@@ -614,51 +660,108 @@ This displays the bond group name, member interfaces, and which NIC is currently
 
 ---
 
-## 15. Canvas Zoom / Pan
+## 15. VPN (IPsec Tunnel) Configuration Guide
 
-### 15.1 Zoom
+### 15.1 Overview
+
+Configure tunnel interfaces on routers to simulate site-to-site VPN connections via IPsec tunnels. Use the "Site-to-Site VPN" template to load a pre-configured topology instantly.
+
+### 15.2 VPN Configuration Steps
+
+```
+Router> enable
+Router# configure terminal
+
+! 1. Configure IKE policy
+Router(config)# crypto isakmp policy 10
+Router(config)# encryption aes
+Router(config)# hash sha
+Router(config)# authentication pre-share
+Router(config)# group 14
+Router(config)# exit
+
+! 2. Configure IPsec transform set
+Router(config)# crypto ipsec transform-set VPN-SET esp-aes esp-sha-hmac
+
+! 3. Configure tunnel interface
+Router(config)# interface tunnel 0
+Router(config-if)# ip address 10.0.0.1 255.255.255.252
+Router(config-if)# tunnel source GigabitEthernet0/1
+Router(config-if)# tunnel destination 198.51.100.2
+Router(config-if)# tunnel mode ipsec
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+! 4. Configure static route for VPN traffic
+Router(config)# ip route 192.168.2.0 255.255.255.0 10.0.0.2
+Router(config)# end
+```
+
+### 15.3 Verifying VPN Status
+
+```
+Router# show interfaces tunnel
+Router# show ip route
+Router# show running-config
+```
+
+### 15.4 Testing VPN Connectivity
+
+```
+PC1# ping 192.168.2.10
+PC1# show packet-flow 192.168.2.10
+PC1# traceroute 192.168.2.10
+```
+
+The ping animation displays all hops including the tunnel underlay (physical path). `show packet-flow` shows the tunnel encapsulation point.
+
+---
+
+## 16. Canvas Zoom / Pan
+
+### 16.1 Zoom
 
 - **Mouse wheel up**: Zoom in (centered on cursor position)
 - **Mouse wheel down**: Zoom out (centered on cursor position)
 - Zoom range: **20% to 400%**
 - Current zoom percentage is displayed at the **bottom-left** of the canvas
 
-### 15.2 Pan
+### 16.2 Pan
 
 - **Drag on empty canvas area**: Pan the view
 - **Middle mouse button drag**: Pan the view (works anywhere, even over devices)
 
-### 15.3 Fit View
+### 16.3 Fit View
 
 - **Double-click on empty canvas area**: Automatically adjusts zoom and pan to fit all devices in view
 
 ---
 
-## 16. Saving and Loading Configurations
+## 17. Saving and Loading Configurations
 
 All file operations are accessed from the "**File ▾**" dropdown menu in the toolbar.
 
-### 16.1 Manual Save
+### 17.1 Manual Save
 
 Click "File ▾" > "Save" to save all current configurations to the browser's localStorage.
 
-### 16.2 Manual Load
+### 17.2 Manual Load
 
 Click "File ▾" > "Load" to restore the last saved configuration.
 
-### 16.3 JSON Export
+### 17.3 JSON Export
 
 1. Click "File ▾" > "Export JSON"
 2. A JSON configuration file is automatically downloaded
 3. Keep this file as a backup or for use in other environments
 
-### 16.4 JSON Import
+### 17.4 JSON Import
 
 1. Click "File ▾" > "Import JSON"
 2. Select a JSON file in the file dialog
 3. The configuration is loaded and the topology is restored
 
-### 16.5 Command Script Export
+### 17.5 Command Script Export
 
 1. Click "File ▾" > "Export Script"
 2. A text file with CLI commands for all devices is downloaded
@@ -678,7 +781,7 @@ ip route 10.0.0.0 255.255.255.0 192.168.2.2
 end
 ```
 
-### 16.6 Loading from Templates
+### 17.6 Loading from Templates
 
 1. Click the "Templates" button in the toolbar
 2. A template selection screen appears
@@ -690,9 +793,10 @@ Available templates:
 - **DMZ with Firewall** — FW + R + SW x2 + SV x2 + PC x2
 - **VLAN with Inter-VLAN Routing** — R1 + SW1(VLAN10/20) + PC x4
 - **NAT to Internet** — R x2 + SW + SV + PC x2
+- **Site-to-Site VPN** — R x3 + SW x2 + PC x4 (IPsec tunnels, crypto pre-configured)
 - **Empty Canvas** — Start from scratch
 
-### 16.7 Reset
+### 17.7 Reset
 
 1. Click the "Reset" button in the toolbar
 2. A confirmation dialog appears
@@ -700,9 +804,9 @@ Available templates:
 
 ---
 
-## 17. Troubleshooting
+## 18. Troubleshooting
 
-### 17.1 Ping Fails
+### 18.1 Ping Fails
 
 | Check | Command |
 |-------|---------|
@@ -714,8 +818,9 @@ Available templates:
 | Is a firewall policy blocking traffic? | `show firewall policy` |
 | Is NAT configured correctly? | `show ip nat translations` |
 | Identify the cause with packet flow diagnostics | `show packet-flow <destination-ip>` |
+| Test firewall policy for specific protocol/port | `test access <destination-ip> tcp 443` |
 
-### 17.2 VLAN Not Working
+### 18.2 VLAN Not Working
 
 | Check | Command |
 |-------|---------|
@@ -725,7 +830,7 @@ Available templates:
 | Are both ports in the same VLAN? | `show vlan brief` on both switches |
 | Is ARP crossing a VLAN boundary? | `clear arp` then `ping` to observe ARP visualization |
 
-### 17.3 NAT Not Working
+### 18.3 NAT Not Working
 
 | Check | Command |
 |-------|---------|
@@ -734,7 +839,7 @@ Available templates:
 | Are IPs available in the NAT pool? | `show ip nat statistics` |
 | Are static NAT entries correct? | `show ip nat translations` |
 
-### 17.4 ACL Blocking Traffic
+### 18.4 ACL Blocking Traffic
 
 | Check | Command |
 |-------|---------|
@@ -745,7 +850,7 @@ Available templates:
 
 ---
 
-## 18. Keyboard Shortcuts
+## 19. Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -756,7 +861,7 @@ Available templates:
 
 ---
 
-## 19. Frequently Asked Questions (FAQ)
+## 20. Frequently Asked Questions (FAQ)
 
 **Q: Will my configuration be lost if I close the browser?**
 A: The auto-save feature preserves your configuration in localStorage. However, clearing browser data will erase it. Use JSON export to back up important configurations.

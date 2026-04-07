@@ -503,53 +503,52 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
     if (dev.type === 'switch' && !hasSVI) { termWrite('% packet-flow is not available on L2 switches', 'error-line'); return; }
     const targetIP = parts[2];
-    if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: show packet-flow <target-ip>', 'error-line'); return; }
+    if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: show packet-flow <target-ip> [tcp|udp|icmp] [port]', 'error-line'); return; }
 
-    const devices = store.getDevices();
-    const currentId = store.getCurrentDeviceId();
-    const { hops, reachable } = tracePacketFlow(devices, currentId, targetIP);
-
-    // Find source IP
-    let srcIP = '?';
-    for (const iface of Object.values(dev.interfaces)) {
-      if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
-    }
-
-    termWrite(`\nPacket flow: ${dev.hostname} (${srcIP}) -> ${targetIP}\n`);
-    termWrite('─'.repeat(60));
-
-    for (let i = 0; i < hops.length; i++) {
-      const hop = hops[i];
-      const typeLabel = hop.deviceType.charAt(0).toUpperCase() + hop.deviceType.slice(1);
-      const via = hop.ingressIf ? ` via ${shortIfName(hop.ingressIf)}` : '';
-      termWrite(`\n[Hop ${i + 1}] ${hop.hostname} (${typeLabel})${via}`);
-      for (const d of hop.decisions) {
-        const prefix = d.type === 'error' ? '  ✗ ' :
-                       d.type === 'forward' ? '  └ ' :
-                       d.type === 'firewall' ? '  ├ ' :
-                       d.type === 'acl' ? '  ├ ' :
-                       d.type === 'l2-switch' ? '  ~ ' : '  ├ ';
-        const cls = d.type === 'error' ? 'error-line' :
-                    d.type === 'firewall' && d.text.includes('DENY') ? 'error-line' :
-                    d.type === 'acl' && d.text.includes('DENY') ? 'error-line' :
-                    d.type === 'forward' ? 'success-line' :
-                    d.type === 'local-check' && d.text.includes('REACHED') ? 'success-line' : '';
-        termWrite(`${prefix}${d.text}`, cls);
+    // Optional protocol and port
+    let proto = undefined;
+    let port = undefined;
+    if (parts[3]) {
+      const p = parts[3].toLowerCase();
+      if (['tcp', 'udp', 'icmp'].includes(p)) {
+        proto = p;
+        if (parts[4] && proto !== 'icmp') {
+          const pn = parseInt(parts[4], 10);
+          if (pn >= 1 && pn <= 65535) port = pn;
+          else { termWrite('% Port must be 1-65535', 'error-line'); return; }
+        }
       }
     }
 
-    termWrite('\n' + '─'.repeat(60));
-    if (reachable) {
-      termWrite(`Result: Packet delivered successfully (${hops.length} hop${hops.length > 1 ? 's' : ''})`, 'success-line');
-    } else {
-      const lastHop = hops[hops.length - 1];
-      const reason = lastHop?.result === 'dropped' ? 'DROPPED by firewall policy' :
-                     lastHop?.result === 'no-route' ? 'No route to host' :
-                     lastHop?.result === 'loop' ? 'Routing loop detected' :
-                     lastHop?.result === 'no-source' ? 'No source interface' : 'Unreachable';
-      termWrite(`Result: ${reason} at ${lastHop?.hostname || 'unknown'}`, 'error-line');
+    const devices = store.getDevices();
+    const currentId = store.getCurrentDeviceId();
+    const { hops, reachable } = tracePacketFlow(devices, currentId, targetIP, proto, port);
+
+    renderPacketFlowResult(dev, targetIP, proto, port, hops, reachable, termWrite);
+    return;
+  }
+
+  if (lower.startsWith('test access ')) {
+    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (dev.type === 'switch' && !hasSVI) { termWrite('% test access is not available on L2 switches', 'error-line'); return; }
+    // test access <ip> <proto> [port]
+    const targetIP = parts[2];
+    if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: test access <target-ip> <tcp|udp|icmp> [port]', 'error-line'); return; }
+    if (!parts[3]) { termWrite('% Usage: test access <target-ip> <tcp|udp|icmp> [port]', 'error-line'); return; }
+    const proto = parts[3].toLowerCase();
+    if (!['tcp', 'udp', 'icmp'].includes(proto)) { termWrite('% Protocol must be tcp, udp, or icmp', 'error-line'); return; }
+    let port = undefined;
+    if (proto !== 'icmp' && parts[4]) {
+      const pn = parseInt(parts[4], 10);
+      if (pn >= 1 && pn <= 65535) port = pn;
+      else { termWrite('% Port must be 1-65535', 'error-line'); return; }
     }
-    termWrite('');
+
+    const devices = store.getDevices();
+    const currentId = store.getCurrentDeviceId();
+    const { hops, reachable } = tracePacketFlow(devices, currentId, targetIP, proto, port);
+
+    renderPacketFlowResult(dev, targetIP, proto, port, hops, reachable, termWrite);
     return;
   }
 
@@ -565,4 +564,51 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
   termWrite(`% Unknown show command`, 'error-line');
+}
+
+// ─── Shared renderer for packet-flow / test access output ───
+
+function renderPacketFlowResult(dev, targetIP, proto, port, hops, reachable, termWrite) {
+  let srcIP = '?';
+  for (const iface of Object.values(dev.interfaces)) {
+    if (iface.status === 'up' && iface.ip) { srcIP = iface.ip; break; }
+  }
+
+  const protoLabel = proto ? proto.toUpperCase() : 'ICMP';
+  const portLabel = port != null ? `/${port}` : '';
+  termWrite(`\nPacket flow: ${dev.hostname} (${srcIP}) -> ${targetIP} (${protoLabel}${portLabel})\n`);
+  termWrite('─'.repeat(60));
+
+  for (let i = 0; i < hops.length; i++) {
+    const hop = hops[i];
+    const typeLabel = hop.deviceType.charAt(0).toUpperCase() + hop.deviceType.slice(1);
+    const via = hop.ingressIf ? ` via ${shortIfName(hop.ingressIf)}` : '';
+    termWrite(`\n[Hop ${i + 1}] ${hop.hostname} (${typeLabel})${via}`);
+    for (const d of hop.decisions) {
+      const prefix = d.type === 'error' ? '  ✗ ' :
+                     d.type === 'forward' ? '  └ ' :
+                     d.type === 'firewall' ? '  ├ ' :
+                     d.type === 'acl' ? '  ├ ' :
+                     d.type === 'l2-switch' ? '  ~ ' : '  ├ ';
+      const cls = d.type === 'error' ? 'error-line' :
+                  d.type === 'firewall' && d.text.includes('DENY') ? 'error-line' :
+                  d.type === 'acl' && d.text.includes('DENY') ? 'error-line' :
+                  d.type === 'forward' ? 'success-line' :
+                  d.type === 'local-check' && d.text.includes('REACHED') ? 'success-line' : '';
+      termWrite(`${prefix}${d.text}`, cls);
+    }
+  }
+
+  termWrite('\n' + '─'.repeat(60));
+  if (reachable) {
+    termWrite(`Result: ACCESS PERMITTED (${protoLabel}${portLabel}) - ${hops.length} hop${hops.length > 1 ? 's' : ''}`, 'success-line');
+  } else {
+    const lastHop = hops[hops.length - 1];
+    const reason = lastHop?.result === 'dropped' ? `DROPPED by ${lastHop.decisions.some(d => d.type === 'firewall') ? 'firewall policy' : 'ACL'}` :
+                   lastHop?.result === 'no-route' ? 'No route to host' :
+                   lastHop?.result === 'loop' ? 'Routing loop detected' :
+                   lastHop?.result === 'no-source' ? 'No source interface' : 'Unreachable';
+    termWrite(`Result: ACCESS DENIED (${protoLabel}${portLabel}) - ${reason} at ${lastHop?.hostname || 'unknown'}`, 'error-line');
+  }
+  termWrite('');
 }

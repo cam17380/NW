@@ -27,8 +27,8 @@ export function initSplitter(splitterEl, terminalPanel, diagramPanel, onResize) 
 
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-    // Terminal is on the right: dragging left increases terminal width
-    const delta = startX - e.clientX;
+    // Terminal is on the left: dragging right increases terminal width
+    const delta = e.clientX - startX;
     let newWidth = startWidth + delta;
 
     // Enforce minimums

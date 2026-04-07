@@ -183,11 +183,16 @@ export class DesignController {
   _onDrop(e) {
     if (!this.store.designMode) return;
     e.preventDefault();
-    const type = e.dataTransfer.getData('text/plain');
+    const rawData = e.dataTransfer.getData('text/plain');
+    const [type, deviceIcon] = rawData.split(':');
     if (!['router', 'switch', 'firewall', 'server', 'pc'].includes(type)) return;
     const pos = this.canvasToLogical(e.clientX, e.clientY);
     const id = this.store.addDevice(type, pos.x, pos.y);
-    showToast(`Added ${type}: ${id}`, 'success');
+    if (deviceIcon) {
+      const dv = this.store.getDevice(id);
+      if (dv) dv.icon = deviceIcon;
+    }
+    showToast(`Added ${deviceIcon || type}: ${id}`, 'success');
   }
 
   // ─── Link creation (called from palette link tool or device click) ───
