@@ -49,18 +49,20 @@ export const beginnerScenarios = [
     ],
   },
 
-  // ─── 2. 2台のPCを繋ごう ───
+  // ─── 2. DHCPでIPアドレスを自動取得 ───
   {
-    id: 'beginner-two-pcs',
-    title: 'Connect Two PCs',
+    id: 'beginner-dhcp',
+    title: 'DHCP Auto-Configuration',
     difficulty: 'beginner',
-    category: 'Routing',
-    description: 'Two PCs are connected to a router via a switch. Configure both PCs so they can communicate with each other.',
+    category: 'DHCP',
+    description: 'A router is connected to two PCs via a switch. Configure a DHCP server on the router so both PCs can automatically obtain IP addresses and ping each other.',
     topology() {
       const devices = {
         R1: {
           type: 'router', hostname: 'Router1', x: 300, y: 100,
           routes: [], nat: natBase(), accessLists: {},
+          crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
+          dhcp: { pools: {}, excludedAddresses: [] },
           interfaces: {
             'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
           }
@@ -86,14 +88,27 @@ export const beginnerScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can ping PC2', check: (devices) => canReach(devices, 'PC1', devices.PC2.interfaces.Ethernet0.ip) && devices.PC2.interfaces.Ethernet0.ip !== '' },
-      { text: 'PC2 can ping PC1', check: (devices) => canReach(devices, 'PC2', devices.PC1.interfaces.Ethernet0.ip) && devices.PC1.interfaces.Ethernet0.ip !== '' },
+      { text: 'DHCP pool is configured on Router1',
+        check: (devices) => devices.R1.dhcp && Object.keys(devices.R1.dhcp.pools).length > 0 &&
+          Object.values(devices.R1.dhcp.pools).some(p => p.network && p.mask) },
+      { text: 'Router1\'s IP (192.168.1.1) is excluded from DHCP',
+        check: (devices) => devices.R1.dhcp && devices.R1.dhcp.excludedAddresses.some(e => {
+          const s = e.start.split('.').map(Number); const eN = e.end.split('.').map(Number);
+          const gw = [192, 168, 1, 1];
+          return gw.every((v, i) => v >= s[i] && v <= eN[i]);
+        }) },
+      { text: 'PC1 obtained IP via DHCP', check: (devices) => devices.PC1.interfaces.Ethernet0.dhcpClient && devices.PC1.interfaces.Ethernet0.ip !== '' },
+      { text: 'PC2 obtained IP via DHCP', check: (devices) => devices.PC2.interfaces.Ethernet0.dhcpClient && devices.PC2.interfaces.Ethernet0.ip !== '' },
+      { text: 'PC1 can ping PC2', check: (devices) => devices.PC2.interfaces.Ethernet0.ip !== '' && canReach(devices, 'PC1', devices.PC2.interfaces.Ethernet0.ip) },
     ],
     hints: [
-      { text: 'Both PCs need IP addresses in the same subnet as Router1 (192.168.1.0/24).' },
-      { text: 'On PC1: enable > configure terminal > interface Ethernet0 > ip address 192.168.1.10 255.255.255.0' },
-      { text: 'On PC2: same steps, but use a different IP like 192.168.1.11' },
+      { text: 'First, configure a DHCP pool on Router1: ip dhcp pool LAN' },
+      { text: 'In the pool, set: network 192.168.1.0 255.255.255.0 and default-router 192.168.1.1' },
+      { text: 'Exclude the router\'s own IP: ip dhcp excluded-address 192.168.1.1' },
+      { text: 'On each PC: interface Ethernet0 > ip address dhcp' },
+      { text: 'Use "show ip dhcp binding" on Router1 to verify assignments' },
     ],
+    congratsMessage: 'You configured a DHCP server and both PCs auto-acquired IPs!',
   },
 
   // ─── 3. デフォルトゲートウェイ ───

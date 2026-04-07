@@ -10,6 +10,7 @@ export function createDevice(type, id, x, y) {
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
       crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
+      dhcp: { pools: {}, excludedAddresses: [] },
       interfaces: {
         'GigabitEthernet0/0': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },
         'GigabitEthernet0/1': { ip: '', mask: '', status: 'down', protocol: 'down', description: '', connected: null },

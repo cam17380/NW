@@ -39,13 +39,14 @@
           <button onclick="exportScript()">Export Script</button>
           <button onclick="exportImage()">Export Image</button>
           <div class="dropdown-sep"></div>
+          <button onclick="confirmReset()">Reset Topology</button>
+          <div class="dropdown-sep"></div>
           <div class="dropdown-info" id="saveInfo"></div>
         </div>
       </div>
       <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
       <button class="toolbar-btn challenge" id="challengeBtn" onclick="showChallenges()">Challenge</button>
       <button class="toolbar-btn design" id="designToggle">Design Mode</button>
-      <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
     </div>
     <div class="terminal-header">
       <span id="terminalTitle">Terminal — Switch1</span>
@@ -144,6 +145,21 @@
       <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
         Interfaces in the same bond group act as active-backup. If the primary (IP-holding) interface goes down, traffic automatically fails over to the partner.
       </p>
+      <h3>DHCP Commands</h3>
+      <table>
+        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
+        <tr><td><code>ip dhcp pool &lt;name&gt;</code></td><td>config</td><td>Create DHCP pool and enter dhcp-config mode (Router)</td></tr>
+        <tr><td><code>network &lt;ip&gt; &lt;mask&gt;</code></td><td>dhcp-config</td><td>Set pool network and mask</td></tr>
+        <tr><td><code>default-router &lt;ip&gt;</code></td><td>dhcp-config</td><td>Set default gateway for clients</td></tr>
+        <tr><td><code>dns-server &lt;ip&gt;</code></td><td>dhcp-config</td><td>Set DNS server for clients</td></tr>
+        <tr><td><code>lease &lt;days&gt; | infinite</code></td><td>dhcp-config</td><td>Set lease duration (default: 1 day)</td></tr>
+        <tr><td><code>ip dhcp excluded-address &lt;start&gt; [end]</code></td><td>config</td><td>Exclude address(es) from DHCP pools (Router)</td></tr>
+        <tr><td><code>ip address dhcp</code></td><td>config-if</td><td>Enable DHCP client on interface (PC)</td></tr>
+        <tr><td><code>renew dhcp</code></td><td>privileged</td><td>Re-acquire IP from DHCP server (PC)</td></tr>
+        <tr><td><code>show ip dhcp pool</code></td><td>show</td><td>Display DHCP pool configuration (Router)</td></tr>
+        <tr><td><code>show ip dhcp binding</code></td><td>show</td><td>Display DHCP address bindings (Router)</td></tr>
+      </table>
+
       <h3>NAT Commands (Router / Firewall)</h3>
       <table>
         <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
@@ -248,6 +264,8 @@
         <tr><td><code>show crypto isakmp sa</code></td><td>Show ISAKMP policies (Router/FW)</td></tr>
         <tr><td><code>show crypto ipsec sa</code></td><td>Show IPsec config and tunnel status (Router/FW)</td></tr>
         <tr><td><code>show interfaces tunnel</code></td><td>Show tunnel interface details (Router/FW)</td></tr>
+        <tr><td><code>show ip dhcp pool</code></td><td>Show DHCP pool configuration (Router)</td></tr>
+        <tr><td><code>show ip dhcp binding</code></td><td>Show DHCP address bindings (Router)</td></tr>
         <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
         <tr><td><code>show etherchannel summary</code></td><td>Show LACP bond group status (Server/PC)</td></tr>
         <tr><td><code>show packet-flow &lt;ip&gt; [proto] [port]</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
@@ -271,6 +289,8 @@
         <tr><td>LACP bond: <code>bond-group Bond0</code> on paired interfaces for failover</td></tr>
         <tr><td>VPN tunnel: <code>interface tunnel 0</code> + <code>tunnel source/destination</code> to create virtual links</td></tr>
         <tr><td>Route remote subnets via tunnel IP: <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code></td></tr>
+        <tr><td>DHCP: Configure pool on router, then <code>ip address dhcp</code> on PC to auto-assign IP</td></tr>
+        <tr><td><code>renew dhcp</code> on PC to re-acquire IP if server wasn't ready</td></tr>
         <tr><td><code>test access &lt;ip&gt; tcp 443</code> — test specific protocol/port against firewall policies and ACLs</td></tr>
         <tr><td><code>show packet-flow &lt;ip&gt; tcp 443</code> — trace with specific protocol/port (default: ICMP)</td></tr>
         <tr><td>Duplicate IP detection: setting an IP already used on the same L2 segment shows a syslog-style warning</td></tr>
