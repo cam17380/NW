@@ -204,7 +204,10 @@ challengeUI.onCheck = () => {
   }
   challengeUI.render();
 };
-challengeUI.onQuit = () => refreshUI();
+challengeUI.onQuit = () => {
+  document.getElementById('challengeBtn').classList.remove('active');
+  refreshUI();
+};
 
 const challengeSelector = new ChallengeSelector(challengeEngine);
 challengeSelector.mount(document.body);
@@ -212,6 +215,7 @@ challengeSelector.onSelect = (scenarioId) => {
   challengeEngine.start(scenarioId, store);
   refreshUI();
   challengeUI.show();
+  document.getElementById('challengeBtn').classList.add('active');
   const d = store.getCurrentDevice();
   terminal.write(`--- Challenge started: ${challengeEngine.current.title} ---\n`, 'success-line');
   terminal.write(`${challengeEngine.current.description}\n`);
