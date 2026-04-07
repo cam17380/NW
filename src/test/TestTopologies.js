@@ -596,3 +596,74 @@ export function buildVpnTopology() {
   };
   return { devices };
 }
+
+// ─── DHCP topology: Router with DHCP pool, switch, two PCs (no IP) ───
+export function buildDhcpTopology() {
+  const devices = {
+    R1: {
+      type: 'router', hostname: 'Router1', x: 300, y: 50,
+      routes: [], nat: natBase(), accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
+      dhcp: {
+        pools: {
+          LAN: { network: '192.168.1.0', mask: '255.255.255.0', defaultRouter: '192.168.1.1', dnsServer: '8.8.8.8', lease: 1, bindings: {} }
+        },
+        excludedAddresses: [{ start: '192.168.1.1', end: '192.168.1.10' }]
+      },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+      }
+    },
+    SW1: {
+      type: 'switch', hostname: 'Switch1', x: 300, y: 200,
+      vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/3': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC2', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/4': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SV1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    },
+    PC1: {
+      type: 'pc', hostname: 'PC1', x: 100, y: 350, defaultGateway: '',
+      interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } }
+    },
+    PC2: {
+      type: 'pc', hostname: 'PC2', x: 300, y: 350, defaultGateway: '',
+      interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } }
+    },
+    SV1: {
+      type: 'server', hostname: 'Server1', x: 500, y: 350, routes: [], defaultGateway: '192.168.1.1',
+      interfaces: { 'Ethernet0': { ip: '192.168.1.5', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } }
+    },
+  };
+  return { devices };
+}
+
+// ─── DHCP topology without pool (for "no server" test) ───
+export function buildDhcpNoPoolTopology() {
+  const devices = {
+    R1: {
+      type: 'router', hostname: 'Router1', x: 300, y: 50,
+      routes: [], nat: natBase(), accessLists: {},
+      crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },
+      dhcp: { pools: {}, excludedAddresses: [] },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+      }
+    },
+    SW1: {
+      type: 'switch', hostname: 'Switch1', x: 300, y: 200,
+      vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    },
+    PC1: {
+      type: 'pc', hostname: 'PC1', x: 100, y: 350, defaultGateway: '',
+      interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } }
+    },
+  };
+  return { devices };
+}
