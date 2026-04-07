@@ -20,7 +20,7 @@ import { InterfacePicker } from './design/InterfacePicker.js';
 import { ContextMenu } from './design/ContextMenu.js';
 import { initSplitter } from './ui/Splitter.js';
 import { initTemplateSelector, showTemplateSelector } from './ui/TemplateSelector.js';
-import { downloadCommandScript } from './persistence/ConfigExport.js';
+import { downloadCommandScript, downloadYamahaScript } from './persistence/ConfigExport.js';
 import { showToast } from './ui/Toast.js';
 import { ChallengeEngine } from './challenge/ChallengeEngine.js';
 import { ChallengeUI } from './challenge/ChallengeUI.js';
@@ -175,6 +175,7 @@ window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
 window.showTemplates = showTemplateSelector;
 window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
+window.exportYamaha = () => { downloadYamahaScript(store); showToast('YAMAHA script exported', 'success'); };
 window.exportImage = () => {
   const dataURL = renderer.exportImage();
   if (!dataURL) { showToast('No devices to export', 'error'); return; }
