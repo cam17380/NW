@@ -889,13 +889,23 @@ export class CanvasRenderer {
     ctx.translate(-minX, -minY);
 
     const links = this.store.getLinks();
+    const identity = (x) => x;
 
-    // Draw links
+    // Draw links (with parallel offset for same-pair links)
+    const pairCount = {};
+    const pairIndex = {};
     for (const link of links) {
-      const fromDev = devices[link.from];
-      const toDev = devices[link.to];
-      if (!fromDev || !toDev) continue;
-      drawLink(ctx, fromDev, toDev, link, devices, null, (x) => x, (y) => y);
+      const key = [link.from, link.to].sort().join('::');
+      pairCount[key] = (pairCount[key] || 0) + 1;
+    }
+    for (const link of links) {
+      if (!devices[link.from] || !devices[link.to]) continue;
+      const key = [link.from, link.to].sort().join('::');
+      const total = pairCount[key];
+      if (!pairIndex[key]) pairIndex[key] = 0;
+      const idx = pairIndex[key]++;
+      const offset = total > 1 ? (idx - (total - 1) / 2) * 20 : 0;
+      drawLink(ctx, link, devices, identity, identity, offset, idx);
     }
 
     // Draw devices
