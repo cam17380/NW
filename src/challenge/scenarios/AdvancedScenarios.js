@@ -13,14 +13,16 @@ export const advancedScenarios = [
     title: 'Firewall Policy',
     difficulty: 'advanced',
     category: 'Firewall',
-    description: 'A DMZ web server needs to be accessible on HTTPS (TCP 443) from the internal LAN, but all other traffic must be blocked. Configure the firewall policies.',
+    description: 'A DMZ web server is currently open to all traffic. Restrict the firewall so only HTTPS (TCP 443) from the internal LAN is allowed. Remove the permit-all policy and add specific rules.',
     topology() {
       const devices = {
         FW1: {
           type: 'firewall', hostname: 'Firewall1', x: 300, y: 100,
           routes: [{ network: '192.168.1.0', mask: '255.255.255.0', nextHop: '10.0.1.2' }],
           nat: natBase(), accessLists: {},
-          policies: [],  // Empty — user must configure
+          policies: [
+            { seq: 100, action: 'permit', src: 'any', srcWildcard: '0.0.0.0', dst: 'any', dstWildcard: '0.0.0.0', protocol: 'ip', port: null },
+          ],  // Permit all — user must restrict
           interfaces: {
             'GigabitEthernet0/0': { ip: '10.0.1.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'Inside', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },
             'GigabitEthernet0/1': { ip: '172.16.0.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'DMZ', connected: { device: 'SW2', iface: 'GigabitEthernet0/1' } },
@@ -57,8 +59,11 @@ export const advancedScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can reach WebServer on TCP 443 (HTTPS)',
+      { text: 'PC1 can reach WebServer on TCP 443 (HTTPS) with specific policy',
         check: (devices) => {
+          // Must not have a permit-all policy (user should have replaced it with specific rules)
+          const hasPermitAll = devices.FW1.policies.some(p => p.src === 'any' && p.dst === 'any' && p.protocol === 'ip' && p.action === 'permit');
+          if (hasPermitAll) return false;
           const trace = tracePacketFlow(devices, 'PC1', '172.16.0.10', 'tcp', 443);
           return trace.reachable;
         }
@@ -74,8 +79,9 @@ export const advancedScenarios = [
       },
     ],
     hints: [
-      { text: 'Use "firewall policy" commands on Firewall1 to permit only HTTPS.' },
-      { text: 'Firewall1: enable > configure terminal > firewall policy 10 permit 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 tcp 443' },
+      { text: 'Currently policy seq 100 permits all traffic. You need to remove it and add a specific HTTPS rule.' },
+      { text: 'Firewall1: no firewall policy 100  (remove the permit-all rule)' },
+      { text: 'firewall policy 10 permit 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 tcp 443' },
       { text: 'The implicit deny at the end blocks everything else. No need to add an explicit deny.' },
     ],
   },
