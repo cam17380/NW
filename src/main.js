@@ -196,7 +196,7 @@ challengeEngine.registerScenarios(intermediateScenarios);
 challengeEngine.registerScenarios(advancedScenarios);
 
 const challengeUI = new ChallengeUI(challengeEngine);
-challengeUI.mount(document.getElementById('challengePanelSlot'));
+challengeUI.mount(document.body);
 challengeUI.onCheck = () => {
   const result = challengeEngine.check(store.getDevices());
   if (result.allPassed) {
