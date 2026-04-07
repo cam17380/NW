@@ -1,5 +1,5 @@
 // ─── Advanced Challenge Scenarios ───
-import { canReach, checkFirewallPolicies } from '../../simulation/Routing.js';
+import { canReach } from '../../simulation/Routing.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
 
 function natBase() {
@@ -69,8 +69,12 @@ export const advancedScenarios = [
           return !trace.reachable;
         }
       },
-      { text: 'PC1 cannot ping WebServer (ICMP blocked)',
-        check: (devices) => !canReach(devices, 'PC1', '172.16.0.10')
+      { text: 'PC1 cannot ping WebServer (ICMP blocked by implicit deny)',
+        check: (devices) => {
+          // Only valid after user adds at least one policy (otherwise empty = pass-through)
+          if (!devices.FW1.policies || devices.FW1.policies.length === 0) return false;
+          return !canReach(devices, 'PC1', '172.16.0.10');
+        }
       },
     ],
     hints: [

@@ -1,5 +1,5 @@
 // ─── Intermediate Challenge Scenarios ───
-import { canReach, checkFirewallPolicies } from '../../simulation/Routing.js';
+import { canReach } from '../../simulation/Routing.js';
 
 function natBase() {
   return { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } };
@@ -25,22 +25,23 @@ export const intermediateScenarios = [
             'GigabitEthernet0/4': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC4', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
           }
         },
-        PC1: { type: 'pc', hostname: 'Sales-PC1', x: 100, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.10.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
-        PC2: { type: 'pc', hostname: 'Sales-PC2', x: 250, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.10.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
-        PC3: { type: 'pc', hostname: 'Eng-PC1', x: 350, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.20.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } } },
-        PC4: { type: 'pc', hostname: 'Eng-PC2', x: 500, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.20.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } } },
+        PC1: { type: 'pc', hostname: 'Sales-PC1', x: 100, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
+        PC2: { type: 'pc', hostname: 'Sales-PC2', x: 250, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        PC3: { type: 'pc', hostname: 'Eng-PC1', x: 350, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.20', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } } },
+        PC4: { type: 'pc', hostname: 'Eng-PC2', x: 500, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.21', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } } },
       };
       return { devices };
     },
     objectives: [
-      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => canReach(devices, 'PC1', '192.168.10.11') },
-      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => canReach(devices, 'PC3', '192.168.20.11') },
-      { text: 'Sales-PC1 cannot ping Eng-PC1', check: (devices) => !canReach(devices, 'PC1', '192.168.20.10') },
+      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => canReach(devices, 'PC1', '192.168.1.11') },
+      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => canReach(devices, 'PC3', '192.168.1.21') },
+      { text: 'Sales-PC1 cannot ping Eng-PC1 (VLAN isolation)', check: (devices) => !canReach(devices, 'PC1', '192.168.1.20') },
     ],
     hints: [
-      { text: 'Create VLAN 10 (Sales) and VLAN 20 (Engineering) on the switch.' },
+      { text: 'Currently all PCs are on VLAN 1 and can reach each other. You need to separate them into two VLANs.' },
       { text: 'Switch1: enable > configure terminal > vlan 10 > name Sales > exit > vlan 20 > name Engineering > exit' },
-      { text: 'Assign ports: interface Gi0/1 > switchport access vlan 10. Same for Gi0/2. Gi0/3 and Gi0/4 go to vlan 20.' },
+      { text: 'Assign Sales ports: interface Gi0/1 > switchport access vlan 10 > exit > interface Gi0/2 > switchport access vlan 10' },
+      { text: 'Assign Eng ports: interface Gi0/3 > switchport access vlan 20 > exit > interface Gi0/4 > switchport access vlan 20' },
     ],
   },
 
@@ -93,13 +94,13 @@ export const intermediateScenarios = [
           routes: [{ network: '0.0.0.0', mask: '0.0.0.0', nextHop: '203.0.113.1' }],
           nat: natBase(), accessLists: {},
           interfaces: {
-            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
-            'GigabitEthernet0/1': { ip: '203.0.113.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'WAN', connected: { device: 'ISP', iface: 'GigabitEthernet0/0' } },
+            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' }, natRole: 'inside' },
+            'GigabitEthernet0/1': { ip: '203.0.113.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'WAN', connected: { device: 'ISP', iface: 'GigabitEthernet0/0' }, natRole: 'outside' },
           }
         },
         ISP: {
           type: 'router', hostname: 'ISP', x: 500, y: 150,
-          routes: [{ network: '203.0.113.0', mask: '255.255.255.252', nextHop: '203.0.113.2' }],
+          routes: [],  // No return route to 192.168.1.0/24 — NAT is required for replies
           nat: natBase(), accessLists: {},
           interfaces: {
             'GigabitEthernet0/0': { ip: '203.0.113.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },
@@ -120,12 +121,14 @@ export const intermediateScenarios = [
       return { devices };
     },
     objectives: [
+      { text: 'NAT dynamic rule is configured on Router1',
+        check: (devices) => devices.R1.nat && devices.R1.nat.dynamicRules && devices.R1.nat.dynamicRules.length > 0
+      },
       { text: 'PC1 can ping WebServer (8.8.8.8)', check: (devices) => canReach(devices, 'PC1', '8.8.8.8') },
     ],
     hints: [
-      { text: 'You need: (1) NAT inside/outside interfaces, (2) ACL to match internal IPs, (3) NAT pool, (4) dynamic NAT rule.' },
-      { text: 'On Router1: interface Gi0/0 > ip nat inside > exit > interface Gi0/1 > ip nat outside > exit' },
-      { text: 'access-list 1 permit 192.168.1.0 0.0.0.255' },
+      { text: 'NAT inside/outside interfaces are already configured. You need: (1) ACL to match internal IPs, (2) NAT pool, (3) dynamic NAT rule.' },
+      { text: 'Router1: enable > configure terminal > access-list 1 permit 192.168.1.0 0.0.0.255' },
       { text: 'ip nat pool MYPOOL 203.0.113.2 203.0.113.2 netmask 255.255.255.252' },
       { text: 'ip nat inside source list 1 pool MYPOOL' },
     ],
