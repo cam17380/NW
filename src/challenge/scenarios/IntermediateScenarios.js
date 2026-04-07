@@ -12,7 +12,7 @@ export const intermediateScenarios = [
     title: 'VLAN Isolation',
     difficulty: 'intermediate',
     category: 'VLAN',
-    description: 'Sales and Engineering teams share the same switch. Create VLANs, assign ports, and configure IP addresses so each team can communicate within its own VLAN but not across teams.',
+    description: 'Sales and Engineering teams share the same switch and can all communicate. Create VLANs and assign ports so each team is isolated — same subnet, but different VLANs.',
     topology() {
       const devices = {
         SW1: {
@@ -25,33 +25,23 @@ export const intermediateScenarios = [
             'GigabitEthernet0/4': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC4', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
           }
         },
-        PC1: { type: 'pc', hostname: 'Sales-PC1', x: 100, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
-        PC2: { type: 'pc', hostname: 'Sales-PC2', x: 250, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
-        PC3: { type: 'pc', hostname: 'Eng-PC1', x: 350, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } } },
-        PC4: { type: 'pc', hostname: 'Eng-PC2', x: 500, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } } },
+        PC1: { type: 'pc', hostname: 'Sales-PC1', x: 100, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } } } },
+        PC2: { type: 'pc', hostname: 'Sales-PC2', x: 250, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.11', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        PC3: { type: 'pc', hostname: 'Eng-PC1', x: 350, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.20', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/3' } } } },
+        PC4: { type: 'pc', hostname: 'Eng-PC2', x: 500, y: 350, defaultGateway: '', interfaces: { 'Ethernet0': { ip: '192.168.1.21', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/4' } } } },
       };
       return { devices };
     },
     objectives: [
-      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => {
-        const ip = devices.PC2?.interfaces?.Ethernet0?.ip;
-        return ip && ip !== '' && canReach(devices, 'PC1', ip);
-      }},
-      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => {
-        const ip = devices.PC4?.interfaces?.Ethernet0?.ip;
-        return ip && ip !== '' && canReach(devices, 'PC3', ip);
-      }},
-      { text: 'Sales-PC1 cannot ping Eng-PC1 (VLAN isolation)', check: (devices) => {
-        const ip = devices.PC3?.interfaces?.Ethernet0?.ip;
-        if (!ip || ip === '') return false;  // Not configured yet
-        return !canReach(devices, 'PC1', ip);
-      }},
+      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => canReach(devices, 'PC1', '192.168.1.11') },
+      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => canReach(devices, 'PC3', '192.168.1.21') },
+      { text: 'Sales-PC1 cannot ping Eng-PC1 (VLAN isolation)', check: (devices) => !canReach(devices, 'PC1', '192.168.1.20') },
     ],
     hints: [
-      { text: 'First create VLANs, then assign ports, then configure IPs on each PC.' },
-      { text: 'Switch1: vlan 10 > name Sales > exit > vlan 20 > name Engineering > exit' },
-      { text: 'Assign ports: interface Gi0/1 > switchport access vlan 10 (same for Gi0/2). Gi0/3 and Gi0/4 go to vlan 20.' },
-      { text: 'Set IPs: Sales PCs use 192.168.10.x/24, Eng PCs use 192.168.20.x/24 (different subnets per VLAN).' },
+      { text: 'Currently all PCs are on VLAN 1 and can reach each other. You need to separate them into two VLANs.' },
+      { text: 'Switch1: enable > configure terminal > vlan 10 > name Sales > exit > vlan 20 > name Engineering > exit' },
+      { text: 'Assign Sales ports: interface Gi0/1 > switchport access vlan 10 > exit > interface Gi0/2 > switchport access vlan 10' },
+      { text: 'Assign Eng ports: interface Gi0/3 > switchport access vlan 20 > exit > interface Gi0/4 > switchport access vlan 20' },
     ],
   },
 
