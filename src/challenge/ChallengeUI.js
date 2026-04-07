@@ -8,11 +8,11 @@ export class ChallengeUI {
     this.onCheck = null;  // Callback to trigger check (passes devices)
   }
 
-  mount(container) {
+  mount(slotElement) {
     this.el = document.createElement('div');
     this.el.id = 'challengePanel';
     this.el.style.display = 'none';
-    container.appendChild(this.el);
+    slotElement.appendChild(this.el);
 
     this.engine.onUpdate = () => this.render();
   }
