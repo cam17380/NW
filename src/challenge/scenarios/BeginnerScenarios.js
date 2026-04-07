@@ -156,12 +156,12 @@ export const beginnerScenarios = [
     title: 'Static Routes',
     difficulty: 'beginner',
     category: 'Routing',
-    description: 'Two routers connect two subnets. Router2 doesn\'t know how to reach PC1\'s subnet. Add a static route on Router2.',
+    description: 'Two routers connect two subnets, but neither router knows how to reach the other subnet. Add static routes on both routers.',
     topology() {
       const devices = {
         R1: {
           type: 'router', hostname: 'Router1', x: 200, y: 100,
-          routes: [{ network: '10.0.0.0', mask: '255.255.255.0', nextHop: '172.16.0.2' }],
+          routes: [],  // Missing route to 10.0.0.0/24 — user must add
           nat: natBase(), accessLists: {},
           interfaces: {
             'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
@@ -210,8 +210,9 @@ export const beginnerScenarios = [
     ],
     hints: [
       { text: 'Use "show packet-flow 10.0.0.10" on PC1 to see where the packet gets stuck.' },
-      { text: 'Router2 needs a static route to reach 192.168.1.0/24 via Router1.' },
-      { text: 'On Router2: enable > configure terminal > ip route 192.168.1.0 255.255.255.0 172.16.0.1' },
+      { text: 'Each router needs a static route to reach the remote subnet via the other router.' },
+      { text: 'On Router1: ip route 10.0.0.0 255.255.255.0 172.16.0.2' },
+      { text: 'On Router2: ip route 192.168.1.0 255.255.255.0 172.16.0.1' },
     ],
     congratsMessage: 'You mastered static routing between two subnets!',
   },

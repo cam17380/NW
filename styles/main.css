@@ -495,8 +495,9 @@ canvas { display: block; width: 100%; height: 100%; }
 .test-icon.pending { color: #556; }
 
 /* ─── Challenge Mode ─── */
-.toolbar-btn.challenge { background: #1b5e20; border-color: #69f0ae; color: #69f0ae; }
-.toolbar-btn.challenge:hover { background: #2e7d32; }
+.toolbar-btn.challenge { border-color: #69f0ae; }
+.toolbar-btn.challenge:hover { background: #2e7d32; color: #69f0ae; }
+.toolbar-btn.challenge.active { background: #1b5e20; border-color: #69f0ae; color: #69f0ae; }
 
 /* Challenge Panel (floating draggable window) */
 #challengePanel {

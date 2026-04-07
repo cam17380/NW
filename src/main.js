@@ -187,6 +187,15 @@ window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
 window.showTemplates = showTemplateSelector;
 window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
+window.exportImage = () => {
+  const dataURL = renderer.exportImage();
+  if (!dataURL) { showToast('No devices to export', 'error'); return; }
+  const a = document.createElement('a');
+  a.href = dataURL;
+  a.download = `netsim-topology-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+  showToast('Topology image exported', 'success');
+};
 
 // ─── Test Mode ───
 const testRunner = new TestRunner();
@@ -275,7 +284,10 @@ challengeUI.onCheck = () => {
   }
   challengeUI.render();
 };
-challengeUI.onQuit = () => refreshUI();
+challengeUI.onQuit = () => {
+  document.getElementById('challengeBtn').classList.remove('active');
+  refreshUI();
+};
 
 const challengeSelector = new ChallengeSelector(challengeEngine);
 challengeSelector.mount(document.body);
@@ -283,6 +295,7 @@ challengeSelector.onSelect = (scenarioId) => {
   challengeEngine.start(scenarioId, store);
   refreshUI();
   challengeUI.show();
+  document.getElementById('challengeBtn').classList.add('active');
   const d = store.getCurrentDevice();
   terminal.write(`--- Challenge started: ${challengeEngine.current.title} ---\n`, 'success-line');
   terminal.write(`${challengeEngine.current.description}\n`);

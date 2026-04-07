@@ -37,12 +37,13 @@
           <button onclick="importConfig()">Import JSON</button>
           <div class="dropdown-sep"></div>
           <button onclick="exportScript()">Export Script</button>
+          <button onclick="exportImage()">Export Image</button>
           <div class="dropdown-sep"></div>
           <div class="dropdown-info" id="saveInfo"></div>
         </div>
       </div>
       <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
-      <button class="toolbar-btn challenge" onclick="showChallenges()">Challenge</button>
+      <button class="toolbar-btn challenge" id="challengeBtn" onclick="showChallenges()">Challenge</button>
       <button class="toolbar-btn design" id="designToggle">Design Mode</button>
       <button class="toolbar-btn test-mode" id="testModeBtn">Test Mode</button>
       <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
@@ -190,6 +191,7 @@
         <b>proto</b>: <code>ip</code> (all), <code>icmp</code>, <code>tcp</code>, <code>udp</code> &nbsp;
         <b>port</b>: optional (tcp/udp only) &nbsp;
         Implicit <b>deny all</b> at end (stateless — return traffic must also be permitted)<br>
+        <b>NAT/Policy order:</b> DNAT (destination NAT) &rarr; Policy evaluation &rarr; SNAT (source NAT/Hide NAT)<br>
         <b>Example 1:</b> <code>firewall policy 10 permit 192.168.1.0 0.0.0.255 any any icmp</code> &nbsp;→&nbsp; Allow ICMP from 192.168.1.0/24 to anywhere<br>
         <b>Example 2:</b> <code>firewall policy 20 permit any any 10.0.0.1 0.0.0.0 tcp 443</code> &nbsp;→&nbsp; Allow HTTPS to host 10.0.0.1<br>
         <b>Example 3:</b> <code>firewall policy 999 deny any any any any ip</code> &nbsp;→&nbsp; Explicit deny all (same as implicit default)
@@ -270,6 +272,10 @@
         <tr><td>LACP bond: <code>bond-group Bond0</code> on paired interfaces for failover</td></tr>
         <tr><td>VPN tunnel: <code>interface tunnel 0</code> + <code>tunnel source/destination</code> to create virtual links</td></tr>
         <tr><td>Route remote subnets via tunnel IP: <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code></td></tr>
+        <tr><td><code>test access &lt;ip&gt; tcp 443</code> — test specific protocol/port against firewall policies and ACLs</td></tr>
+        <tr><td><code>show packet-flow &lt;ip&gt; tcp 443</code> — trace with specific protocol/port (default: ICMP)</td></tr>
+        <tr><td>Duplicate IP detection: setting an IP already used on the same L2 segment shows a syslog-style warning</td></tr>
+        <tr><td><b>Challenge Mode:</b> Click "Challenge" button for guided learning scenarios with hints</td></tr>
         <tr><td><b>Zoom:</b> Mouse wheel &nbsp; <b>Pan:</b> Drag empty area &nbsp; <b>Fit:</b> Double-click empty area</td></tr>
       </table>
     </div>

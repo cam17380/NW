@@ -12,7 +12,7 @@ export const intermediateScenarios = [
     title: 'VLAN Isolation',
     difficulty: 'intermediate',
     category: 'VLAN',
-    description: 'Sales and Engineering teams share the same switch but must be isolated. Create VLANs and assign ports so each team can only communicate within its own VLAN.',
+    description: 'Sales and Engineering teams share the same switch and can all communicate. Create VLANs and assign ports so each team is isolated — same subnet, but different VLANs.',
     topology() {
       const devices = {
         SW1: {
@@ -86,12 +86,12 @@ export const intermediateScenarios = [
     title: 'NAT to the Internet',
     difficulty: 'intermediate',
     category: 'NAT',
-    description: 'Your internal network (192.168.1.0/24) needs to access an external server. Configure dynamic NAT on Router1 to translate internal addresses.',
+    description: 'Your internal network (192.168.1.0/24) needs to access an external server. Configure a default route and dynamic NAT on Router1.',
     topology() {
       const devices = {
         R1: {
           type: 'router', hostname: 'Router1', x: 300, y: 150,
-          routes: [{ network: '0.0.0.0', mask: '0.0.0.0', nextHop: '203.0.113.1' }],
+          routes: [],  // No default route — user must add
           nat: natBase(), accessLists: {},
           interfaces: {
             'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' }, natRole: 'inside' },
@@ -127,8 +127,9 @@ export const intermediateScenarios = [
       { text: 'PC1 can ping WebServer (8.8.8.8)', check: (devices) => canReach(devices, 'PC1', '8.8.8.8') },
     ],
     hints: [
-      { text: 'NAT inside/outside interfaces are already configured. You need: (1) ACL to match internal IPs, (2) NAT pool, (3) dynamic NAT rule.' },
-      { text: 'Router1: enable > configure terminal > access-list 1 permit 192.168.1.0 0.0.0.255' },
+      { text: 'You need: (1) default route to ISP, (2) ACL to match internal IPs, (3) NAT pool, (4) dynamic NAT rule.' },
+      { text: 'Router1: ip route 0.0.0.0 0.0.0.0 203.0.113.1' },
+      { text: 'access-list 1 permit 192.168.1.0 0.0.0.255' },
       { text: 'ip nat pool MYPOOL 203.0.113.2 203.0.113.2 netmask 255.255.255.252' },
       { text: 'ip nat inside source list 1 pool MYPOOL' },
     ],
