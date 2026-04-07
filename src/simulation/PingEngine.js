@@ -1,6 +1,6 @@
 // ─── Ping path building and execution ───
 import { getNetwork, generateMAC } from './NetworkUtils.js';
-import { canReach, lookupRoute, findDeviceByIP, applyNAT, applyDNAT, applySNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeDNAT, describeSNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP, findTunnelForTarget, findTunnelPeerDevice } from './Routing.js';
+import { canReach, lookupRoute, findDeviceByIP, applyNAT, applyDNAT, applySNAT, checkFirewallPolicies, checkInterfaceACL, describeRouteLookup, describeFirewallCheck, describeNAT, describeDNAT, describeSNAT, describeInterfaceACL, switchHasSVI, getSVIVlan, switchL2Deliver, getUsableSrcIP, getUsableInterfaces, deviceHasReachableIP, findTunnelForTarget, findTunnelPeerDevice, findL2IPConflict } from './Routing.js';
 
 export function execPing(targetIP, store, terminal, animatePing) {
   const devices = store.getDevices();
@@ -32,6 +32,20 @@ export function execPing(targetIP, store, terminal, animatePing) {
     const reqDev = devices[arp.requesterId];
     terminal.write(`ARP: ${reqDev.hostname} — Who has ${arp.targetIP}? Tell ${arp.requesterIP}`, 'info-line');
     terminal.write(`ARP: ${arp.targetIP} is at ${arp.targetMAC}`, 'info-line');
+  }
+
+  // Duplicate IP detection: check if source IP has a conflict in the same L2 domain
+  if (srcIP !== targetIP && !deviceHasReachableIP(d, targetIP)) {
+    // Find the source interface
+    for (const [ifName, iff] of Object.entries(d.interfaces)) {
+      if (iff.ip === srcIP && iff.status === 'up' && iff.connected) {
+        const conflict = findL2IPConflict(devices, currentDeviceId, ifName, srcIP);
+        if (conflict) {
+          terminal.write(`%IP-4-DUPADDR: Duplicate address ${srcIP} on ${ifName}, sourced by ${conflict.hostname} ${conflict.ifName}`, 'error-line');
+        }
+        break;
+      }
+    }
   }
 
   // Learn ARP entries along the path

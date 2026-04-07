@@ -950,3 +950,66 @@ export function describeNAT(dv, srcIP, dstIP, ingressIfName) {
   if (dnatResult.translated) return dnatResult;
   return describeSNAT(dv, dnatResult.srcIP, dnatResult.dstIP, ingressIfName);
 }
+
+// ─── L2 broadcast domain IP conflict detection ───
+// Check if targetIP is assigned to another device within the same L2 domain
+// as selfDevId/selfIfName. Returns { hostname, ifName, deviceId } or null.
+export function findL2IPConflict(devices, selfDevId, selfIfName, targetIP) {
+  const selfDev = devices[selfDevId];
+  const selfIf = selfDev?.interfaces[selfIfName];
+  if (!selfIf) return null;
+
+  // Check other interfaces on same device
+  for (const [ifName, iff] of Object.entries(selfDev.interfaces)) {
+    if (ifName !== selfIfName && iff.ip === targetIP) {
+      return { hostname: selfDev.hostname, ifName, deviceId: selfDevId };
+    }
+  }
+
+  if (!selfIf.connected) return null;
+  const peer = selfIf.connected;
+  const peerDev = devices[peer.device];
+  if (!peerDev) return null;
+
+  // Direct connection to non-switch
+  if (peerDev.type !== 'switch') {
+    for (const [ifName, iff] of Object.entries(peerDev.interfaces)) {
+      if (iff.ip === targetIP) return { hostname: peerDev.hostname, ifName, deviceId: peer.device };
+    }
+    return null;
+  }
+
+  // BFS through switch fabric (VLAN-aware)
+  const peerIf = peerDev.interfaces[peer.iface];
+  let vlan = 1;
+  if (peerIf?.switchport?.mode === 'access') vlan = peerIf.switchport.accessVlan;
+
+  const visited = new Set([peer.device]);
+  const queue = [peer.device];
+
+  while (queue.length > 0) {
+    const swId = queue.shift();
+    const sw = devices[swId];
+    for (const [, iff] of Object.entries(sw.interfaces)) {
+      if (iff.status !== 'up' || !iff.connected || !iff.switchport) continue;
+      let carries = false;
+      if (iff.switchport.mode === 'access' && iff.switchport.accessVlan === vlan) carries = true;
+      if (iff.switchport.mode === 'trunk') {
+        const allowed = iff.switchport.trunkAllowed;
+        if (allowed === 'all' || (Array.isArray(allowed) && allowed.includes(vlan))) carries = true;
+      }
+      if (!carries) continue;
+      const connDev = devices[iff.connected.device];
+      if (!connDev) continue;
+      if (connDev.type === 'switch') {
+        if (!visited.has(iff.connected.device)) { visited.add(iff.connected.device); queue.push(iff.connected.device); }
+      } else {
+        if (iff.connected.device === selfDevId) continue;
+        for (const [rIfName, rIf] of Object.entries(connDev.interfaces)) {
+          if (rIf.ip === targetIP) return { hostname: connDev.hostname, ifName: rIfName, deviceId: iff.connected.device };
+        }
+      }
+    }
+  }
+  return null;
+}
