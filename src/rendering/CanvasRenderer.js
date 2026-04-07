@@ -880,9 +880,7 @@ export class CanvasRenderer {
     offCanvas.height = imgH * scale;
     const ctx = offCanvas.getContext('2d');
 
-    // Background
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+    // Transparent background (PNG alpha channel)
 
     // Set up coordinate transform: scale and offset so devices fit
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
