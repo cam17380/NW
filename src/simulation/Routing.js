@@ -600,7 +600,8 @@ export function canReachL2(devices, srcDevId, srcIfName, targetIP) {
 // ─── Firewall policy check ──────────────────────────────
 
 export function checkFirewallPolicies(dv, srcIP, dstIP, proto, port) {
-  if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) return true;
+  if (dv.type !== 'firewall') return true;
+  if (!dv.policies || dv.policies.length === 0) return false; // implicit deny all
   const sorted = [...dv.policies].sort((a, b) => a.seq - b.seq);
   for (const p of sorted) {
     if (matchesWildcard(srcIP, p.src, p.srcWildcard) &&
@@ -877,9 +878,9 @@ export function describeRouteLookup(dv, targetIP) {
 }
 
 export function describeFirewallCheck(dv, srcIP, dstIP, proto, port) {
-  if (dv.type !== 'firewall' || !dv.policies || dv.policies.length === 0) {
-    if (dv.type === 'firewall') return { allowed: false, description: 'No policies configured -> implicit DENY' };
-    return { allowed: true, description: null };
+  if (dv.type !== 'firewall') return { allowed: true, description: null };
+  if (!dv.policies || dv.policies.length === 0) {
+    return { allowed: false, description: 'No policies configured -> implicit DENY' };
   }
   const sorted = [...dv.policies].sort((a, b) => a.seq - b.seq);
   for (const p of sorted) {

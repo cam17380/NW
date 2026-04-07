@@ -70,11 +70,7 @@ export const advancedScenarios = [
         }
       },
       { text: 'PC1 cannot ping WebServer (ICMP blocked by implicit deny)',
-        check: (devices) => {
-          // Only valid after user adds at least one policy (otherwise empty = pass-through)
-          if (!devices.FW1.policies || devices.FW1.policies.length === 0) return false;
-          return !canReach(devices, 'PC1', '172.16.0.10');
-        }
+        check: (devices) => !canReach(devices, 'PC1', '172.16.0.10')
       },
     ],
     hints: [
