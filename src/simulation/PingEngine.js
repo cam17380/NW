@@ -328,6 +328,8 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
       }
 
       if (!targetDevId || visited.has(targetDevId)) break;
+      // VLAN-aware: verify target is reachable on this VLAN
+      if (!switchL2Deliver(devices, neighbor.device, entryVlan, nextHopIP)) break;
 
       const swPath = bfsSwitchPath(devices, neighbor.device, targetDevId, entryVlan);
       for (const sid of swPath) {
@@ -722,7 +724,26 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
         continue;
       }
 
-      // Pure L2 switch transit
+      // Pure L2 switch transit — VLAN-aware delivery check
+      let transitVlan = 1;
+      if (hop.ingressIf) {
+        const inSwIf = dv.interfaces[hop.ingressIf];
+        if (inSwIf && inSwIf.switchport) {
+          if (inSwIf.switchport.mode === 'access') transitVlan = inSwIf.switchport.accessVlan;
+          else if (inSwIf.switchport.mode === 'trunk') {
+            for (const [ifn, iff] of Object.entries(dv.interfaces)) {
+              if (!ifn.startsWith('Vlan') || !iff.ip || iff.status !== 'up') continue;
+              if (getNetwork(iff.ip, iff.mask) === getNetwork(curTargetIP, iff.mask)) { transitVlan = getSVIVlan(ifn); break; }
+            }
+          }
+        }
+      }
+      if (!switchL2Deliver(devices, curId, transitVlan, curTargetIP)) {
+        hop.decisions.push({ type: 'error', text: `Destination ${curTargetIP} not reachable on VLAN ${transitVlan}` });
+        hop.result = 'no-route';
+        hops.push(hop);
+        return { hops, reachable: false };
+      }
       hop.decisions.push({ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' });
       hop.result = 'transit';
       hops.push(hop);
@@ -910,8 +931,25 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
       const nextDev = devices[exitIface.connected.device];
       if (nextDev && nextDev.type === 'switch') {
         const swId = exitIface.connected.device;
+        // Determine entry VLAN on the switch
+        const swEntryIf = nextDev.interfaces[exitIface.connected.iface];
+        let entryVlan = 1;
+        if (swEntryIf && swEntryIf.switchport) {
+          if (swEntryIf.switchport.mode === 'access') entryVlan = swEntryIf.switchport.accessVlan;
+          else if (swEntryIf.switchport.mode === 'trunk') {
+            for (const [ifn, iff] of Object.entries(nextDev.interfaces)) {
+              if (!ifn.startsWith('Vlan') || !iff.ip || iff.status !== 'up') continue;
+              if (getNetwork(iff.ip, iff.mask) === getNetwork(curTargetIP, iff.mask)) { entryVlan = getSVIVlan(ifn); break; }
+            }
+          }
+        }
         visited.add(swId);
         hops.push({ deviceId: swId, hostname: nextDev.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
+        // VLAN-aware: verify target is reachable on this VLAN
+        if (!switchL2Deliver(devices, swId, entryVlan, curTargetIP)) {
+          hops[hops.length - 1].decisions.push({ type: 'error', text: `Destination ${curTargetIP} not reachable on VLAN ${entryVlan}` });
+          return { hops, reachable: false };
+        }
         const l2Target = findDeviceByIP(devices, curTargetIP);
         if (l2Target && !visited.has(l2Target)) {
           prevDevId = swId;
@@ -966,13 +1004,25 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
         prevDevId = curId;
         curId = swId;
       } else {
+        // Determine entry VLAN on the switch
+        const swEntryIf2 = nextDev2.interfaces[exitIface.connected.iface];
+        let nhVlan = 1;
+        if (swEntryIf2 && swEntryIf2.switchport) {
+          if (swEntryIf2.switchport.mode === 'access') nhVlan = swEntryIf2.switchport.accessVlan;
+          else if (swEntryIf2.switchport.mode === 'trunk') {
+            for (const [ifn, iff] of Object.entries(nextDev2.interfaces)) {
+              if (!ifn.startsWith('Vlan') || !iff.ip || iff.status !== 'up') continue;
+              if (getNetwork(iff.ip, iff.mask) === getNetwork(nextHop, iff.mask)) { nhVlan = getSVIVlan(ifn); break; }
+            }
+          }
+        }
         visited.add(swId);
         hops.push({ deviceId: swId, hostname: nextDev2.hostname, deviceType: 'switch', ingressIf: exitIface.connected.iface, decisions: [{ type: 'l2-switch', text: 'L2 transit (forwarding by MAC address)' }], result: 'transit' });
-        if (nhDevId && !visited.has(nhDevId)) {
+        if (nhDevId && !visited.has(nhDevId) && switchL2Deliver(devices, swId, nhVlan, nextHop)) {
           prevDevId = swId;
           curId = nhDevId;
         } else {
-          hops[hops.length - 1].decisions.push({ type: 'error', text: `Next hop ${nextHop} not found on L2 segment` });
+          hops[hops.length - 1].decisions.push({ type: 'error', text: `Next hop ${nextHop} not reachable on VLAN ${nhVlan}` });
           return { hops, reachable: false };
         }
       }
