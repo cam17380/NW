@@ -369,6 +369,8 @@ export function buildPingPath(devices, fromId, targetIP, reachable, proto, port)
       visited.add(targetDevId);
       curId = targetDevId;
     } else {
+      // Direct connection — verify next hop is reachable on connected device
+      if (!deviceHasReachableIP(neighborDev, nextHopIP)) break;
       if (visited.has(neighbor.device)) break;
       linkHints.push({ fromIf: exitIfName, toIf: neighbor.iface });
       path.push(neighbor.device);
@@ -970,12 +972,20 @@ export function tracePacketFlow(devices, fromId, targetIP, proto, port) {
           prevDevId = swId;
           curId = nhDevId;
         } else {
+          hops[hops.length - 1].decisions.push({ type: 'error', text: `Next hop ${nextHop} not found on L2 segment` });
           return { hops, reachable: false };
         }
       }
     } else {
+      // Direct connection — verify next hop is reachable on connected device
+      const connDevId = exitIface.connected.device;
+      if (!deviceHasReachableIP(devices[connDevId], nextHop)) {
+        hop.decisions.push({ type: 'error', text: `Next hop ${nextHop} is not reachable (no ARP response)` });
+        hop.result = 'no-route';
+        return { hops, reachable: false };
+      }
       prevDevId = curId;
-      curId = exitIface.connected.device;
+      curId = connDevId;
     }
   }
 
