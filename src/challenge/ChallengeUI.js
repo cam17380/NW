@@ -21,10 +21,11 @@ export class ChallengeUI {
   show() {
     if (this.el) {
       this.el.style.display = '';
-      // Reset position to top-right
-      this.el.style.top = '48px';
-      this.el.style.right = '16px';
-      this.el.style.left = '';
+      // Reset position to center of screen
+      this.el.style.right = '';
+      this.el.style.left = '50%';
+      this.el.style.top = '50%';
+      this.el.style.transform = 'translate(-50%, -50%)';
     }
     this.render();
   }
@@ -45,7 +46,9 @@ export class ChallengeUI {
       offsetX = e.clientX - rect.left;
       offsetY = e.clientY - rect.top;
       this.el.style.right = '';
+      this.el.style.transform = '';
       this.el.style.left = rect.left + 'px';
+      this.el.style.top = rect.top + 'px';
       this.el.style.cursor = 'grabbing';
       e.preventDefault();
     });
