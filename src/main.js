@@ -28,6 +28,15 @@ import { ChallengeSelector } from './challenge/ChallengeSelector.js';
 import { beginnerScenarios } from './challenge/scenarios/BeginnerScenarios.js';
 import { intermediateScenarios } from './challenge/scenarios/IntermediateScenarios.js';
 import { advancedScenarios } from './challenge/scenarios/AdvancedScenarios.js';
+import { LearnEngine } from './learn/LearnEngine.js';
+import { LearnSelector } from './learn/LearnSelector.js';
+import { LearnUI } from './learn/LearnUI.js';
+import { lessonIPAddress } from './learn/lessons/Lesson_IPAddress.js';
+import { lessonSubnetMask } from './learn/lessons/Lesson_SubnetMask.js';
+import { lessonNetworkBroadcast } from './learn/lessons/Lesson_NetworkBroadcast.js';
+import { lessonEthernetSwitch } from './learn/lessons/Lesson_EthernetSwitch.js';
+import { lessonPacketStructure } from './learn/lessons/Lesson_PacketStructure.js';
+import { lessonRouting } from './learn/lessons/Lesson_Routing.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -233,6 +242,25 @@ challengeSelector.onSelect = (scenarioId) => {
 };
 
 window.showChallenges = () => challengeSelector.show();
+
+// ─── Learn Mode ───
+const learnEngine = new LearnEngine();
+learnEngine.registerLessons([lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast, lessonEthernetSwitch, lessonPacketStructure, lessonRouting]);
+
+const learnUI = new LearnUI(learnEngine);
+learnUI.mount(document.body);
+learnUI.onQuit = () => {
+  showToast('Lesson completed!', 'success');
+};
+
+const learnSelector = new LearnSelector(learnEngine);
+learnSelector.mount(document.body);
+learnSelector.onSelect = (lessonId) => {
+  learnEngine.start(lessonId);
+  learnUI.show();
+};
+
+window.showLessons = () => learnSelector.show();
 
 // ─── Initial render ───
 renderer.resize();
