@@ -19,6 +19,10 @@ export class CLIEngine {
   setUpdateTabs(fn) { this._updateTabs = fn; }
 
   executeCommand(rawInput) {
+    if (!this.store.getCurrentDevice()) {
+      this.terminal.write('No device selected.\n', 'error-line');
+      return;
+    }
     const prompt = this._getPrompt();
     this.terminal.writeCmd(prompt, rawInput);
 
@@ -46,7 +50,9 @@ export class CLIEngine {
   }
 
   _getPrompt() {
-    const h = this.store.getCurrentDevice().hostname;
+    const dev = this.store.getCurrentDevice();
+    if (!dev) return '>';
+    const h = dev.hostname;
     switch (this.store.getCLIMode()) {
       case 'user': return h + '>';
       case 'privileged': return h + '#';

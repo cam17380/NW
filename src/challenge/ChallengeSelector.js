@@ -1,4 +1,5 @@
 // ─── Challenge Selector: scenario selection modal ───
+import { t } from '../i18n/I18n.js';
 
 export class ChallengeSelector {
   constructor(engine) {
@@ -39,24 +40,24 @@ export class ChallengeSelector {
     this.el.innerHTML = `
       <div class="challenge-selector-modal">
         <div class="challenge-selector-header">
-          <h2>Challenge Mode</h2>
-          <span class="challenge-progress-badge">${completedCount} / ${totalCount} completed</span>
-          <button class="challenge-selector-close">✕</button>
+          <h2>${t('ui.challengeMode')}</h2>
+          <span class="challenge-progress-badge">${t('ui.completed', { n: completedCount, total: totalCount })}</span>
+          <button class="challenge-selector-close">\u2715</button>
         </div>
         <div class="challenge-selector-filters">
           <div class="challenge-filter-group">
-            <label>Difficulty:</label>
+            <label>${t('ui.difficulty')}</label>
             <select class="challenge-filter-select" data-filter="difficulty">
-              <option value="all" ${this.filterDifficulty === 'all' ? 'selected' : ''}>All</option>
-              <option value="beginner" ${this.filterDifficulty === 'beginner' ? 'selected' : ''}>Beginner</option>
-              <option value="intermediate" ${this.filterDifficulty === 'intermediate' ? 'selected' : ''}>Intermediate</option>
-              <option value="advanced" ${this.filterDifficulty === 'advanced' ? 'selected' : ''}>Advanced</option>
+              <option value="all" ${this.filterDifficulty === 'all' ? 'selected' : ''}>${t('ui.all')}</option>
+              <option value="beginner" ${this.filterDifficulty === 'beginner' ? 'selected' : ''}>${t('ui.beginner')}</option>
+              <option value="intermediate" ${this.filterDifficulty === 'intermediate' ? 'selected' : ''}>${t('ui.intermediate')}</option>
+              <option value="advanced" ${this.filterDifficulty === 'advanced' ? 'selected' : ''}>${t('ui.advanced')}</option>
             </select>
           </div>
           <div class="challenge-filter-group">
-            <label>Category:</label>
+            <label>${t('ui.category')}</label>
             <select class="challenge-filter-select" data-filter="category">
-              <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>All</option>
+              <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>${t('ui.all')}</option>
               ${categories.map(c => `<option value="${c}" ${this.filterCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
             </select>
           </div>
@@ -100,18 +101,18 @@ export class ChallengeSelector {
   _renderCard(s) {
     const completed = this.engine.isCompleted(s.id);
     const diffColor = { beginner: '#69f0ae', intermediate: '#ffa726', advanced: '#ef5350' }[s.difficulty] || '#888';
-    const diffLabel = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' }[s.difficulty] || s.difficulty;
+    const diffLabel = { beginner: t('ui.beginner'), intermediate: t('ui.intermediate'), advanced: t('ui.advanced') }[s.difficulty] || s.difficulty;
 
     return `
       <div class="challenge-card ${completed ? 'completed' : ''}" data-id="${s.id}">
         <div class="challenge-card-header">
           <span class="challenge-badge" style="background:${diffColor}">${diffLabel}</span>
           <span class="challenge-card-category">${s.category}</span>
-          ${completed ? '<span class="challenge-card-check">✔</span>' : ''}
+          ${completed ? '<span class="challenge-card-check">\u2714</span>' : ''}
         </div>
         <div class="challenge-card-title">${s.title}</div>
         <div class="challenge-card-desc">${s.description}</div>
-        <div class="challenge-card-meta">${s.objectives.length} objective${s.objectives.length > 1 ? 's' : ''} · ${s.hints.length} hint${s.hints.length > 1 ? 's' : ''}</div>
+        <div class="challenge-card-meta">${t('ui.objectives', { n: s.objectives.length, s: s.objectives.length > 1 ? 's' : '' })} \u00b7 ${t('ui.hints', { n: s.hints.length, s: s.hints.length > 1 ? 's' : '' })}</div>
       </div>
     `;
   }

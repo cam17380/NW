@@ -38,6 +38,7 @@ export function updateCmdHints(store) {
 
 export function updatePrompt(store) {
   const dev = store.getCurrentDevice();
+  if (!dev) return;
   const cliMode = store.getCLIMode();
 
   const h = dev.hostname;

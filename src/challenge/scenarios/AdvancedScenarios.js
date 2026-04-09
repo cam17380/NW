@@ -1,3 +1,4 @@
+import { t } from '../../i18n/I18n.js';
 // ─── Advanced Challenge Scenarios ───
 import { canReach } from '../../simulation/Routing.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
@@ -10,10 +11,10 @@ export const advancedScenarios = [
   // ─── 9. ファイアウォールポリシー ───
   {
     id: 'adv-firewall',
-    title: 'Firewall Policy',
+    get title() { return t('challenge.adv-firewall.title'); },
     difficulty: 'advanced',
     category: 'Firewall',
-    description: 'A DMZ web server is currently open to all traffic. Restrict the firewall so only HTTPS (TCP 443) from the internal LAN is allowed. Remove the permit-all policy and add specific rules.',
+    get description() { return t('challenge.adv-firewall.desc'); },
     topology() {
       const devices = {
         FW1: {
@@ -59,7 +60,7 @@ export const advancedScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can reach WebServer on TCP 443 (HTTPS) with specific policy',
+      { get text() { return t('challenge.adv-firewall.obj0'); },
         check: (devices) => {
           // Must not have a permit-all policy (user should have replaced it with specific rules)
           const hasPermitAll = devices.FW1.policies.some(p => p.src === 'any' && p.dst === 'any' && p.protocol === 'ip' && p.action === 'permit');
@@ -68,31 +69,31 @@ export const advancedScenarios = [
           return trace.reachable;
         }
       },
-      { text: 'PC1 cannot reach WebServer on TCP 80 (HTTP blocked)',
+      { get text() { return t('challenge.adv-firewall.obj1'); },
         check: (devices) => {
           const trace = tracePacketFlow(devices, 'PC1', '172.16.0.10', 'tcp', 80);
           return !trace.reachable;
         }
       },
-      { text: 'PC1 cannot ping WebServer (ICMP blocked by implicit deny)',
+      { get text() { return t('challenge.adv-firewall.obj2'); },
         check: (devices) => !canReach(devices, 'PC1', '172.16.0.10')
       },
     ],
     hints: [
-      { text: 'Currently policy seq 100 permits all traffic. You need to remove it and add a specific HTTPS rule.' },
-      { text: 'Firewall1: no firewall policy 100  (remove the permit-all rule)' },
-      { text: 'firewall policy 10 permit 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 tcp 443' },
-      { text: 'The implicit deny at the end blocks everything else. No need to add an explicit deny.' },
+      { get text() { return t('challenge.adv-firewall.hint0'); } },
+      { get text() { return t('challenge.adv-firewall.hint1'); } },
+      { get text() { return t('challenge.adv-firewall.hint2'); } },
+      { get text() { return t('challenge.adv-firewall.hint3'); } },
     ],
   },
 
   // ─── 10. VPNトンネル接続 ───
   {
     id: 'adv-vpn',
-    title: 'Site-to-Site VPN',
+    get title() { return t('challenge.adv-vpn.title'); },
     difficulty: 'advanced',
     category: 'VPN',
-    description: 'Two branch offices need to communicate securely over the internet. Configure IPsec VPN tunnels on both routers. The ISP router and physical connectivity are already set up.',
+    get description() { return t('challenge.adv-vpn.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -150,25 +151,25 @@ export const advancedScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'HQ-PC can ping Branch-PC (192.168.2.10)', check: (devices) => canReach(devices, 'PC1', '192.168.2.10') },
-      { text: 'Branch-PC can ping HQ-PC (192.168.1.10)', check: (devices) => canReach(devices, 'PC2', '192.168.1.10') },
+      { get text() { return t('challenge.adv-vpn.obj0'); }, check: (devices) => canReach(devices, 'PC1', '192.168.2.10') },
+      { get text() { return t('challenge.adv-vpn.obj1'); }, check: (devices) => canReach(devices, 'PC2', '192.168.1.10') },
     ],
     hints: [
-      { text: 'Each router needs: (1) Tunnel interface with IP, (2) tunnel source/destination/mode, (3) static route to remote LAN via tunnel.' },
-      { text: 'HQ-Router: interface tunnel 0 > ip address 10.0.0.1 255.255.255.252 > tunnel source Gi0/1 > tunnel destination 198.51.100.2 > tunnel mode ipsec > no shutdown' },
-      { text: 'HQ-Router: ip route 192.168.2.0 255.255.255.0 10.0.0.2' },
-      { text: 'Branch-Router: same pattern but mirror (tunnel dest 203.0.113.2, ip address 10.0.0.2, route 192.168.1.0 via 10.0.0.1)' },
+      { get text() { return t('challenge.adv-vpn.hint0'); } },
+      { get text() { return t('challenge.adv-vpn.hint1'); } },
+      { get text() { return t('challenge.adv-vpn.hint2'); } },
+      { get text() { return t('challenge.adv-vpn.hint3'); } },
     ],
-    congratsMessage: 'You built a site-to-site VPN tunnel connecting two branch offices!',
+    get congratsMessage() { return t('challenge.adv-vpn.congrats'); },
   },
 
   // ─── 11. トラブルシューティング ───
   {
     id: 'adv-troubleshoot',
-    title: 'Troubleshooting',
+    get title() { return t('challenge.adv-troubleshoot.title'); },
     difficulty: 'advanced',
     category: 'Troubleshooting',
-    description: 'PC1 cannot ping Server1. The network was working before but someone made changes. Use diagnostic commands to find and fix the problems.',
+    get description() { return t('challenge.adv-troubleshoot.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -215,24 +216,24 @@ export const advancedScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can ping Server1 (10.0.0.10)', check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
-      { text: 'Server1 can ping PC1 (192.168.1.10)', check: (devices) => canReach(devices, 'SV1', '192.168.1.10') },
+      { get text() { return t('challenge.adv-troubleshoot.obj0'); }, check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
+      { get text() { return t('challenge.adv-troubleshoot.obj1'); }, check: (devices) => canReach(devices, 'SV1', '192.168.1.10') },
     ],
     hints: [
-      { text: 'Use "show packet-flow 10.0.0.10" on PC1 to trace where the packet stops.' },
-      { text: 'Check Router2: "show ip route" — is the return route correct? "show access-lists" — is anything blocked?' },
-      { text: 'Fix 1: Router2 has wrong next-hop. Use: no ip route 192.168.1.0 255.255.255.0 172.16.0.3, then: ip route 192.168.1.0 255.255.255.0 172.16.0.1' },
-      { text: 'Fix 2: Router2 has ACL 100 blocking all traffic on Gi0/1. Use: no access-list 100 (or interface Gi0/1 > no ip access-group 100 in)' },
+      { get text() { return t('challenge.adv-troubleshoot.hint0'); } },
+      { get text() { return t('challenge.adv-troubleshoot.hint1'); } },
+      { get text() { return t('challenge.adv-troubleshoot.hint2'); } },
+      { get text() { return t('challenge.adv-troubleshoot.hint3'); } },
     ],
   },
 
   // ─── 12. 総合演習 ───
   {
     id: 'adv-comprehensive',
-    title: 'Comprehensive Exercise',
+    get title() { return t('challenge.adv-comprehensive.title'); },
     difficulty: 'advanced',
     category: 'Comprehensive',
-    description: 'Build a complete network: internal LAN with a firewall protecting a DMZ server. Internal PCs should be able to access the DMZ server via HTTPS only. Configure routing, firewall policies, and verify connectivity.',
+    get description() { return t('challenge.adv-comprehensive.desc'); },
     topology() {
       const devices = {
         FW1: {
@@ -274,30 +275,30 @@ export const advancedScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can reach WebServer on TCP 443',
+      { get text() { return t('challenge.adv-comprehensive.obj0'); },
         check: (devices) => {
           const trace = tracePacketFlow(devices, 'PC1', devices.SV1?.interfaces?.Ethernet0?.ip, 'tcp', 443);
           return trace.reachable;
         }
       },
-      { text: 'PC1 cannot reach WebServer on TCP 80 (blocked)',
+      { get text() { return t('challenge.adv-comprehensive.obj1'); },
         check: (devices) => {
           if (!devices.SV1?.interfaces?.Ethernet0?.ip) return false;
           const trace = tracePacketFlow(devices, 'PC1', devices.SV1.interfaces.Ethernet0.ip, 'tcp', 80);
           return !trace.reachable;
         }
       },
-      { text: 'Firewall has at least one policy configured',
+      { get text() { return t('challenge.adv-comprehensive.obj2'); },
         check: (devices) => devices.FW1.policies && devices.FW1.policies.length > 0
       },
     ],
     hints: [
-      { text: 'Plan your IP addressing: e.g., LAN=192.168.1.0/24, Transit=10.0.0.0/30, DMZ=172.16.0.0/24' },
-      { text: 'Configure IP addresses on all interfaces: Router1 Gi0/0, Gi0/1, Firewall Gi0/0, Gi0/1, PC1, WebServer' },
-      { text: 'Add routes: Router1 needs a route to DMZ via firewall. Firewall needs a route to LAN via router.' },
-      { text: 'Set default gateways on PC1 and WebServer.' },
-      { text: 'Add firewall policy: firewall policy 10 permit 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 tcp 443' },
+      { get text() { return t('challenge.adv-comprehensive.hint0'); } },
+      { get text() { return t('challenge.adv-comprehensive.hint1'); } },
+      { get text() { return t('challenge.adv-comprehensive.hint2'); } },
+      { get text() { return t('challenge.adv-comprehensive.hint3'); } },
+      { get text() { return t('challenge.adv-comprehensive.hint4'); } },
     ],
-    congratsMessage: 'Excellent! You designed a complete network with routing, firewall, and access control from scratch!',
+    get congratsMessage() { return t('challenge.adv-comprehensive.congrats'); },
   },
 ];
