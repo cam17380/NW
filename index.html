@@ -9,16 +9,16 @@
 <body>
 
 <header>
-  <h1>Network Simulator</h1>
+  <h1 data-i18n="ui.appTitle">Network Simulator</h1>
   <div class="device-tabs" id="deviceTabs"></div>
 </header>
 <div class="toast" id="toast"></div>
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
-    <p id="confirmMsg">Are you sure?</p>
+    <p id="confirmMsg" data-i18n="ui.confirmReset">Are you sure?</p>
     <div class="btn-row">
-      <button onclick="closeConfirm()">Cancel</button>
-      <button class="danger" id="confirmOk" onclick="doReset()">Reset</button>
+      <button onclick="closeConfirm()" data-i18n="ui.cancel">Cancel</button>
+      <button class="danger" id="confirmOk" onclick="doReset()" data-i18n="ui.reset">Reset</button>
     </div>
   </div>
 </div>
@@ -28,22 +28,29 @@
   <div class="terminal-panel">
     <div class="toolbar">
       <div class="toolbar-dropdown">
-        <button class="toolbar-btn file">File ▾</button>
+        <button class="toolbar-btn file" data-i18n="ui.file">File ▾</button>
         <div class="toolbar-dropdown-menu">
-          <button onclick="saveConfig()">Save</button>
-          <button onclick="loadConfig()">Load</button>
+          <button onclick="saveConfig()" data-i18n="ui.save">Save</button>
+          <button onclick="loadConfig()" data-i18n="ui.load">Load</button>
           <div class="dropdown-sep"></div>
-          <button onclick="exportConfig()">Export JSON</button>
-          <button onclick="importConfig()">Import JSON</button>
+          <button onclick="exportConfig()" data-i18n="ui.exportJson">Export JSON</button>
+          <button onclick="importConfig()" data-i18n="ui.importJson">Import JSON</button>
           <div class="dropdown-sep"></div>
-          <button onclick="exportScript()">Export Script</button>
+          <button onclick="exportScript()" data-i18n="ui.exportCisco">Export Script (Cisco)</button>
+          <button onclick="exportYamaha()" data-i18n="ui.exportYamaha">Export Script (YAMAHA)</button>
+          <button onclick="exportImage()" data-i18n="ui.exportImage">Export Image</button>
+          <div class="dropdown-sep"></div>
+          <button onclick="confirmReset()" data-i18n="ui.resetTopology">Reset Topology</button>
           <div class="dropdown-sep"></div>
           <div class="dropdown-info" id="saveInfo"></div>
         </div>
       </div>
-      <button class="toolbar-btn template" onclick="showTemplates()">Templates</button>
-      <button class="toolbar-btn design" id="designToggle">Design Mode</button>
-      <button class="toolbar-btn reset" onclick="confirmReset()">Reset</button>
+      <button class="toolbar-btn template" onclick="showTemplates()" data-i18n="ui.templates">Templates</button>
+      <button class="toolbar-btn learn" id="learnBtn" onclick="showLessons()" data-i18n="ui.learn">Learn</button>
+      <button class="toolbar-btn challenge" id="challengeBtn" onclick="showChallenges()" data-i18n="ui.challenge">Challenge</button>
+      <button class="toolbar-btn design" id="designToggle" data-i18n="ui.designMode">Design Mode</button>
+      <div class="toolbar-spacer"></div>
+      <button class="toolbar-btn lang" id="langToggle" onclick="toggleLang()">JA</button>
     </div>
     <div class="terminal-header">
       <span id="terminalTitle">Terminal — Switch1</span>
@@ -63,213 +70,24 @@
     <canvas id="netCanvas"></canvas>
     <div class="legend" id="legendArea">
       <div class="legend-row">
-        <div class="legend-item"><div class="legend-dot" style="background:#69f0ae"></div> Router</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ffa726"></div> Switch</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#ef5350"></div> Firewall</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#7e57c2"></div> Server</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#4fc3f7"></div> PC</div>
-        <div class="legend-item"><span style="color:#556;font-size:10px">(bright=All UP / dim=Partial / dark=Down)</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#69f0ae"></div> <span data-i18n="ui.legendRouter">Router</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffa726"></div> <span data-i18n="ui.legendSwitch">Switch</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef5350"></div> <span data-i18n="ui.legendFirewall">Firewall</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7e57c2"></div> <span data-i18n="ui.legendServer">Server</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#4fc3f7"></div> <span data-i18n="ui.legendPC">PC</span></div>
+        <div class="legend-item"><span style="color:#556;font-size:10px" data-i18n="ui.legendStatus">(bright=All UP / dim=Partial / dark=Down)</span></div>
       </div>
       <div class="legend-row" id="legendRowLinks">
-        <div class="legend-item"><div class="legend-line" style="background:#69f0ae"></div> Link UP</div>
-        <div class="legend-item"><div class="legend-line" style="background:#555"></div> Link Down</div>
-        <div class="legend-item"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#ab47bc,#ab47bc 3px,transparent 3px,transparent 6px)"></div> Trunk</div>
+        <div class="legend-item"><div class="legend-line" style="background:#69f0ae"></div> <span data-i18n="ui.legendLinkUp">Link UP</span></div>
+        <div class="legend-item"><div class="legend-line" style="background:#555"></div> <span data-i18n="ui.legendLinkDown">Link Down</span></div>
+        <div class="legend-item"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#ab47bc,#ab47bc 3px,transparent 3px,transparent 6px)"></div> <span data-i18n="ui.legendTrunk">Trunk</span></div>
       </div>
     </div>
-    <div class="help-badge" onclick="toggleHelp()">? Help / Commands</div>
+    <div class="help-badge" onclick="toggleHelp()" data-i18n="ui.helpBadge">? Help / Commands</div>
     <div class="help-overlay" id="helpOverlay">
-      <button class="help-close" onclick="toggleHelp()">Close</button>
-      <h2>Available Commands</h2>
-      <h3>Mode Navigation</h3>
-      <table>
-        <tr><th>Command</th><th>Description</th></tr>
-        <tr><td><code>enable</code></td><td>Enter privileged EXEC mode</td></tr>
-        <tr><td><code>configure terminal</code></td><td>Enter global configuration mode</td></tr>
-        <tr><td><code>interface &lt;name&gt;</code></td><td>Enter interface config (e.g. <code>int gi0/1</code>)</td></tr>
-        <tr><td><code>exit</code></td><td>Go back one mode level</td></tr>
-        <tr><td><code>end</code></td><td>Return to privileged EXEC mode</td></tr>
-      </table>
-      <h3>Configuration</h3>
-      <table>
-        <tr><th>Command</th><th>Description</th></tr>
-        <tr><td><code>hostname &lt;name&gt;</code></td><td>Set device hostname</td></tr>
-        <tr><td><code>ip address &lt;ip&gt; &lt;mask&gt;</code></td><td>Set IP address on interface</td></tr>
-        <tr><td><code>no shutdown</code></td><td>Enable interface (bring up)</td></tr>
-        <tr><td><code>shutdown</code></td><td>Disable interface (bring down)</td></tr>
-        <tr><td><code>description &lt;text&gt;</code></td><td>Set interface description</td></tr>
-      </table>
-      <h3>VLAN Commands (Switch only)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>vlan &lt;id&gt;</code></td><td>config</td><td>Create VLAN and enter VLAN config mode</td></tr>
-        <tr><td><code>name &lt;name&gt;</code></td><td>config-vlan</td><td>Set VLAN name</td></tr>
-        <tr><td><code>no vlan &lt;id&gt;</code></td><td>config</td><td>Delete a VLAN</td></tr>
-        <tr><td><code>switchport mode access</code></td><td>config-if</td><td>Set port as access port</td></tr>
-        <tr><td><code>switchport access vlan &lt;id&gt;</code></td><td>config-if</td><td>Assign access VLAN to port</td></tr>
-        <tr><td><code>switchport mode trunk</code></td><td>config-if</td><td>Set port as trunk port</td></tr>
-        <tr><td><code>switchport trunk allowed vlan &lt;list&gt;</code></td><td>config-if</td><td>Set allowed VLANs (e.g. 10,20 or all)</td></tr>
-        <tr><td><code>show vlan brief</code></td><td>EXEC</td><td>Show VLAN summary table</td></tr>
-        <tr><td><code>show interfaces trunk</code></td><td>EXEC</td><td>Show trunk port info</td></tr>
-        <tr><td><code>show interfaces switchport</code></td><td>EXEC</td><td>Show switchport config per port</td></tr>
-      </table>
-      <h3>Routing Commands</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV/L3SW)</td><td>Add static route</td></tr>
-        <tr><td><code>no ip route &lt;network&gt; &lt;mask&gt; &lt;next-hop&gt;</code></td><td>config (R/FW/SV/L3SW)</td><td>Remove static route</td></tr>
-        <tr><td><code>ip default-gateway &lt;ip&gt;</code></td><td>config (PC/SV)</td><td>Set default gateway</td></tr>
-        <tr><td><code>show ip route</code></td><td>EXEC</td><td>Show routing table</td></tr>
-      </table>
-      <h3>L3 Switch Commands (SVI / Inter-VLAN Routing)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>interface vlan &lt;id&gt;</code></td><td>config (SW)</td><td>Create SVI and enter config (auto-creates VLAN)</td></tr>
-        <tr><td><code>ip address &lt;ip&gt; &lt;mask&gt;</code></td><td>config-if (SVI)</td><td>Set IP on SVI for inter-VLAN routing</td></tr>
-        <tr><td><code>ip route &lt;net&gt; &lt;mask&gt; &lt;hop&gt;</code></td><td>config (L3 SW)</td><td>Add static route on L3 switch</td></tr>
-        <tr><td><code>access-list / ip access-group</code></td><td>config / config-if</td><td>ACL on SVI interfaces (same syntax as router)</td></tr>
-      </table>
-      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
-        Switch becomes L3-capable when SVIs are configured. No separate device type needed.<br>
-        <b>Example:</b> <code>int vlan 10</code> &rarr; <code>ip address 192.168.10.1 255.255.255.0</code> &rarr; <code>no shut</code>
-      </p>
-      <h3>LACP / Bond Commands (Server / PC)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>bond-group &lt;name&gt;</code></td><td>config-if</td><td>Add interface to bond group (active-backup)</td></tr>
-        <tr><td><code>no bond-group</code></td><td>config-if</td><td>Remove from bond group</td></tr>
-        <tr><td><code>show etherchannel summary</code></td><td>EXEC</td><td>Show bond group status</td></tr>
-      </table>
-      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
-        Interfaces in the same bond group act as active-backup. If the primary (IP-holding) interface goes down, traffic automatically fails over to the partner.
-      </p>
-      <h3>NAT Commands (Router / Firewall)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>ip nat inside</code></td><td>config-if</td><td>Mark interface as NAT inside</td></tr>
-        <tr><td><code>ip nat outside</code></td><td>config-if</td><td>Mark interface as NAT outside</td></tr>
-        <tr><td><code>ip nat inside source static &lt;local&gt; &lt;global&gt;</code></td><td>config</td><td>Create static NAT translation</td></tr>
-        <tr><td><code>ip nat pool &lt;name&gt; &lt;start&gt; &lt;end&gt; netmask &lt;mask&gt;</code></td><td>config</td><td>Define NAT address pool</td></tr>
-        <tr><td><code>ip nat inside source list &lt;acl&gt; pool &lt;name&gt;</code></td><td>config</td><td>Dynamic NAT with standard ACL and pool</td></tr>
-        <tr><td><code>show ip nat translations</code></td><td>EXEC</td><td>Show NAT translation table</td></tr>
-        <tr><td><code>show ip nat statistics</code></td><td>EXEC</td><td>Show NAT statistics and config</td></tr>
-      </table>
-      <h3>ACL Commands (Router / Firewall / L3 Switch)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Standard ACL (1–99) — source IP only</td></tr>
-        <tr><td><code>access-list &lt;1-99&gt; permit|deny &lt;network&gt; [wildcard]</code></td><td>config</td><td>Add standard ACL entry (also used for NAT)</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Extended ACL (100–199) — source, destination, protocol, port</td></tr>
-        <tr><td><code>access-list &lt;100-199&gt; permit|deny &lt;proto&gt; &lt;src&gt; &lt;srcWC&gt; &lt;dst&gt; &lt;dstWC&gt; [eq &lt;port&gt;]</code></td><td>config</td><td>Add extended ACL entry</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Applying ACLs to interfaces</td></tr>
-        <tr><td><code>ip access-group &lt;acl-num&gt; in|out</code></td><td>config-if</td><td>Apply ACL inbound or outbound on interface</td></tr>
-        <tr><td><code>no ip access-group &lt;acl-num&gt; in|out</code></td><td>config-if</td><td>Remove ACL from interface</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Management</td></tr>
-        <tr><td><code>no access-list &lt;num&gt;</code></td><td>config</td><td>Delete entire ACL</td></tr>
-        <tr><td><code>show access-lists</code></td><td>EXEC</td><td>Show all ACLs and applied interfaces</td></tr>
-      </table>
-      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
-        <b>proto</b>: <code>ip</code> (all), <code>icmp</code>, <code>tcp</code>, <code>udp</code> &nbsp;
-        <b>src/dst</b>: IP + wildcard, <code>any</code>, or <code>host &lt;ip&gt;</code> &nbsp;
-        <b>eq</b>: port number (tcp/udp only, 1-65535) &nbsp;
-        Implicit <b>deny all</b> at end of every ACL<br>
-        <b>Example:</b> <code>access-list 100 permit tcp 192.168.1.0 0.0.0.255 any eq 80</code> &nbsp;→&nbsp; Allow HTTP from 192.168.1.0/24 to any destination
-      </p>
-      <h3>Firewall Policy Commands (Firewall only)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td><code>firewall policy &lt;seq&gt; permit|deny &lt;src&gt; &lt;srcWC&gt; &lt;dst&gt; &lt;dstWC&gt; &lt;proto&gt; [port]</code></td><td>config</td><td>Add/update firewall policy</td></tr>
-        <tr><td><code>no firewall policy &lt;seq&gt;</code></td><td>config</td><td>Remove policy by sequence number</td></tr>
-        <tr><td><code>no firewall policy all</code></td><td>config</td><td>Remove all policies</td></tr>
-        <tr><td><code>show firewall policy</code></td><td>EXEC</td><td>Show firewall policy table</td></tr>
-      </table>
-      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
-        <b>seq</b>: sequence number (evaluated lowest-first) &nbsp;
-        <b>src/dst</b>: IP address + wildcard mask, or <code>any</code> &nbsp;
-        <b>proto</b>: <code>ip</code> (all), <code>icmp</code>, <code>tcp</code>, <code>udp</code> &nbsp;
-        <b>port</b>: optional (tcp/udp only) &nbsp;
-        Implicit <b>deny all</b> at end (stateless — return traffic must also be permitted)<br>
-        <b>Example 1:</b> <code>firewall policy 10 permit 192.168.1.0 0.0.0.255 any any icmp</code> &nbsp;→&nbsp; Allow ICMP from 192.168.1.0/24 to anywhere<br>
-        <b>Example 2:</b> <code>firewall policy 20 permit any any 10.0.0.1 0.0.0.0 tcp 443</code> &nbsp;→&nbsp; Allow HTTPS to host 10.0.0.1<br>
-        <b>Example 3:</b> <code>firewall policy 999 deny any any any any ip</code> &nbsp;→&nbsp; Explicit deny all (same as implicit default)
-      </p>
-      <h3>VPN / IPsec Commands (Router / Firewall)</h3>
-      <table>
-        <tr><th>Command</th><th>Mode</th><th>Description</th></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Tunnel Interface</td></tr>
-        <tr><td><code>interface tunnel &lt;N&gt;</code></td><td>config</td><td>Create tunnel interface and enter config-if</td></tr>
-        <tr><td><code>tunnel source &lt;if|ip&gt;</code></td><td>config-if (Tunnel)</td><td>Set tunnel source (interface name or IP)</td></tr>
-        <tr><td><code>tunnel destination &lt;ip&gt;</code></td><td>config-if (Tunnel)</td><td>Set tunnel destination (remote peer IP)</td></tr>
-        <tr><td><code>tunnel mode ipsec|gre</code></td><td>config-if (Tunnel)</td><td>Set tunnel encapsulation mode</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">ISAKMP (IKE Phase 1)</td></tr>
-        <tr><td><code>crypto isakmp policy &lt;num&gt;</code></td><td>config</td><td>Enter ISAKMP policy config sub-mode</td></tr>
-        <tr><td><code>encryption aes|3des|des</code></td><td>config-isakmp</td><td>Set encryption algorithm</td></tr>
-        <tr><td><code>hash sha|md5</code></td><td>config-isakmp</td><td>Set hash algorithm</td></tr>
-        <tr><td><code>authentication pre-share|rsa-sig</code></td><td>config-isakmp</td><td>Set authentication method</td></tr>
-        <tr><td><code>group 1|2|5|14</code></td><td>config-isakmp</td><td>Set Diffie-Hellman group</td></tr>
-        <tr><td><code>lifetime &lt;seconds&gt;</code></td><td>config-isakmp</td><td>Set SA lifetime</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">IPsec (IKE Phase 2)</td></tr>
-        <tr><td><code>crypto ipsec transform-set &lt;name&gt; &lt;t1&gt; [t2]</code></td><td>config</td><td>Define transform set (e.g. esp-aes esp-sha-hmac)</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Crypto Map</td></tr>
-        <tr><td><code>crypto map &lt;name&gt; &lt;seq&gt; ipsec-isakmp</code></td><td>config</td><td>Enter crypto map config sub-mode</td></tr>
-        <tr><td><code>set peer &lt;ip&gt;</code></td><td>config-crypto-map</td><td>Set VPN peer address</td></tr>
-        <tr><td><code>set transform-set &lt;name&gt;</code></td><td>config-crypto-map</td><td>Set transform set to use</td></tr>
-        <tr><td><code>match address &lt;acl-num&gt;</code></td><td>config-crypto-map</td><td>Set interesting traffic ACL</td></tr>
-        <tr><td><code>crypto map &lt;name&gt;</code></td><td>config-if</td><td>Apply crypto map to interface</td></tr>
-        <tr><td colspan="3" style="color:#4fc3f7;font-weight:bold;padding:6px 4px;">Show / Delete</td></tr>
-        <tr><td><code>show crypto isakmp sa</code></td><td>EXEC</td><td>Show ISAKMP policies</td></tr>
-        <tr><td><code>show crypto ipsec sa</code></td><td>EXEC</td><td>Show IPsec SA / transform sets / tunnel status</td></tr>
-        <tr><td><code>show interfaces tunnel</code></td><td>EXEC</td><td>Show tunnel interface details</td></tr>
-        <tr><td><code>no crypto isakmp policy &lt;num&gt;</code></td><td>config</td><td>Delete ISAKMP policy</td></tr>
-        <tr><td><code>no crypto map &lt;name&gt;</code></td><td>config</td><td>Delete crypto map</td></tr>
-      </table>
-      <p style="color:#8899aa;font-size:12px;margin:4px 0 8px 4px;">
-        Tunnel interfaces create virtual point-to-point links between routers over the existing underlay network.
-        Packets routed to a tunnel subnet are encapsulated and forwarded through the underlay to the peer.<br>
-        <b>Example (R1 side):</b><br>
-        <code>crypto isakmp policy 10</code> &rarr; <code>encryption aes</code> / <code>hash sha</code> / <code>authentication pre-share</code> / <code>group 14</code><br>
-        <code>crypto ipsec transform-set MYSET esp-aes esp-sha-hmac</code><br>
-        <code>interface tunnel 0</code> &rarr; <code>ip address 10.0.0.1 255.255.255.252</code> &rarr; <code>tunnel source GigabitEthernet0/0</code> &rarr; <code>tunnel destination 203.0.113.2</code><br>
-        <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code> &nbsp;&rarr;&nbsp; Route remote subnet via tunnel
-      </p>
-      <h3>Show Commands</h3>
-      <table>
-        <tr><th>Command</th><th>Description</th></tr>
-        <tr><td><code>show ip interface brief</code></td><td>Show all interfaces summary</td></tr>
-        <tr><td><code>show running-config</code></td><td>Show current configuration</td></tr>
-        <tr><td><code>show interfaces</code></td><td>Show detailed interface info</td></tr>
-        <tr><td><code>show ip route</code></td><td>Show routing table (routers/PCs/L3 switches)</td></tr>
-        <tr><td><code>show ip nat translations</code></td><td>Show NAT translation table</td></tr>
-        <tr><td><code>show ip nat statistics</code></td><td>Show NAT statistics</td></tr>
-        <tr><td><code>show firewall policy</code></td><td>Show firewall policy table (Firewall only)</td></tr>
-        <tr><td><code>show access-lists</code></td><td>Show all ACLs and applied interfaces (R/FW/L3SW)</td></tr>
-        <tr><td><code>show crypto isakmp sa</code></td><td>Show ISAKMP policies (Router/FW)</td></tr>
-        <tr><td><code>show crypto ipsec sa</code></td><td>Show IPsec config and tunnel status (Router/FW)</td></tr>
-        <tr><td><code>show interfaces tunnel</code></td><td>Show tunnel interface details (Router/FW)</td></tr>
-        <tr><td><code>show arp</code></td><td>Show ARP table (learned via ping/traceroute)</td></tr>
-        <tr><td><code>show etherchannel summary</code></td><td>Show LACP bond group status (Server/PC)</td></tr>
-        <tr><td><code>show packet-flow &lt;ip&gt; [proto] [port]</code></td><td>Trace packet forwarding decisions hop-by-hop</td></tr>
-        <tr><td><code>test access &lt;ip&gt; &lt;tcp|udp|icmp&gt; [port]</code></td><td>Test firewall/ACL policy for specific protocol/port</td></tr>
-        <tr><td><code>clear arp</code></td><td>Clear ARP cache (privileged mode)</td></tr>
-        <tr><td><code>ping &lt;ip&gt;</code></td><td>Ping test (routing + VLAN + NAT + FW aware)</td></tr>
-        <tr><td><code>traceroute &lt;ip&gt;</code></td><td>Trace route hop-by-hop to destination</td></tr>
-      </table>
-      <h3>Tips</h3>
-      <table>
-        <tr><td>Click device tabs or diagram icons to switch devices</td></tr>
-        <tr><td><code>Tab</code> = auto-complete, <code>↑↓</code> = command history</td></tr>
-        <tr><td>VLAN colors appear on links in the network diagram</td></tr>
-        <tr><td>Routers need <code>ip route</code> to forward packets between networks</td></tr>
-        <tr><td>PCs need <code>ip default-gateway</code> to reach other networks</td></tr>
-        <tr><td>NAT requires <code>ip nat inside/outside</code> on interfaces + translation rules</td></tr>
-        <tr><td>Firewalls have an implicit <b>deny all</b> — add <code>firewall policy</code> to permit traffic</td></tr>
-        <tr><td>ACLs need <code>ip access-group &lt;num&gt; in|out</code> on an interface to take effect</td></tr>
-        <tr><td>Extended ACLs (100-199) filter by source, destination, protocol, and port</td></tr>
-        <tr><td>Switches become L3 when SVIs are configured: <code>interface vlan 10</code></td></tr>
-        <tr><td>LACP bond: <code>bond-group Bond0</code> on paired interfaces for failover</td></tr>
-        <tr><td>VPN tunnel: <code>interface tunnel 0</code> + <code>tunnel source/destination</code> to create virtual links</td></tr>
-        <tr><td>Route remote subnets via tunnel IP: <code>ip route 192.168.2.0 255.255.255.0 10.0.0.2</code></td></tr>
-        <tr><td><b>Zoom:</b> Mouse wheel &nbsp; <b>Pan:</b> Drag empty area &nbsp; <b>Fit:</b> Double-click empty area</td></tr>
-      </table>
+      <button class="help-close" onclick="toggleHelp()" data-i18n="ui.helpClose">Close</button>
+      <h2 data-i18n="ui.helpTitle">Available Commands</h2>
+      <div id="helpContent"></div>
     </div>
   </div>
 </div>

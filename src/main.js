@@ -20,8 +20,33 @@ import { InterfacePicker } from './design/InterfacePicker.js';
 import { ContextMenu } from './design/ContextMenu.js';
 import { initSplitter } from './ui/Splitter.js';
 import { initTemplateSelector, showTemplateSelector } from './ui/TemplateSelector.js';
-import { downloadCommandScript } from './persistence/ConfigExport.js';
+import { downloadCommandScript, downloadYamahaScript } from './persistence/ConfigExport.js';
 import { showToast } from './ui/Toast.js';
+import { ChallengeEngine } from './challenge/ChallengeEngine.js';
+import { ChallengeUI } from './challenge/ChallengeUI.js';
+import { ChallengeSelector } from './challenge/ChallengeSelector.js';
+import { beginnerScenarios } from './challenge/scenarios/BeginnerScenarios.js';
+import { intermediateScenarios } from './challenge/scenarios/IntermediateScenarios.js';
+import { advancedScenarios } from './challenge/scenarios/AdvancedScenarios.js';
+import { LearnEngine } from './learn/LearnEngine.js';
+import { LearnSelector } from './learn/LearnSelector.js';
+import { LearnUI } from './learn/LearnUI.js';
+import { lessonIPAddress } from './learn/lessons/Lesson_IPAddress.js';
+import { lessonSubnetMask } from './learn/lessons/Lesson_SubnetMask.js';
+import { lessonNetworkBroadcast } from './learn/lessons/Lesson_NetworkBroadcast.js';
+import { lessonEthernetSwitch } from './learn/lessons/Lesson_EthernetSwitch.js';
+import { lessonPacketStructure } from './learn/lessons/Lesson_PacketStructure.js';
+import { lessonRouting } from './learn/lessons/Lesson_Routing.js';
+import { registerLocale, setLocale, getLocale, loadSavedLocale, onLocaleChanged, t } from './i18n/I18n.js';
+import { en } from './i18n/locales/en.js';
+import { ja } from './i18n/locales/ja.js';
+import { enChallenge } from './i18n/locales/en_challenge.js';
+import { jaChallenge } from './i18n/locales/ja_challenge.js';
+import { enLearn } from './i18n/locales/en_learn.js';
+import { jaLearn } from './i18n/locales/ja_learn.js';
+import { enHelp } from './i18n/locales/en_help.js';
+import { jaHelp } from './i18n/locales/ja_help.js';
+import { renderHelpContent } from './ui/HelpRenderer.js';
 
 // ─── Initialize core ───
 const eventBus = new EventBus();
@@ -50,7 +75,7 @@ function switchDevice(id) {
     terminal.setBuffer(savedBuffer);
   } else {
     terminal.clear();
-    terminal.write(`\n--- Connected to ${store.getCurrentDevice().hostname} ---\n`, 'success-line');
+    terminal.write('\n--- ' + t('ui.connectedTo', { name: store.getCurrentDevice().hostname }) + ' ---\n', 'success-line');
   }
   doUpdatePrompt();
   doUpdateTabs();
@@ -62,16 +87,53 @@ function doUpdateTabs() { updateTabs(store, switchDevice); }
 function doUpdatePrompt() { updatePrompt(store); }
 function doUpdateVlanLegend() { updateVlanLegend(store); }
 
+// ─── I18n setup ───
+registerLocale('en', en);
+registerLocale('en', enChallenge);
+registerLocale('en', enLearn);
+registerLocale('ja', ja);
+registerLocale('ja', jaChallenge);
+registerLocale('ja', jaLearn);
+registerLocale('en', enHelp);
+registerLocale('ja', jaHelp);
+loadSavedLocale();
+
+function updateUIText() {
+  // Update all elements with data-i18n attribute
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  }
+  // Language toggle button
+  document.getElementById('langToggle').textContent = t('ui.lang');
+  // HTML lang attribute
+  document.documentElement.lang = getLocale() === 'ja' ? 'ja' : 'en';
+}
+
+window.toggleLang = () => {
+  setLocale(getLocale() === 'ja' ? 'en' : 'ja');
+};
+
+onLocaleChanged(() => {
+  updateUIText();
+  // Re-render modals if open
+  if (challengeSelector.el && challengeSelector.el.style.display !== 'none') challengeSelector.render();
+  if (learnSelector.el && learnSelector.el.style.display !== 'none') learnSelector.render();
+  if (learnUI.el && learnUI.el.style.display !== 'none') learnUI.render();
+  if (challengeUI.el && challengeUI.el.style.display !== 'none') challengeUI.render();
+});
+
 function refreshUI() {
   store.deviceSessions = {};
   store.cliMode = 'user';
   store.currentInterface = '';
   store.currentVlanId = null;
   terminal.clear();
-  terminal.write('Welcome to Network Simulator!', 'success-line');
-  terminal.write('Practice Cisco IOS commands and watch the network respond.\n');
-  terminal.write('Type commands below or click "? Help" for reference.\n');
-  terminal.write(`Connected to ${store.getCurrentDevice().hostname}\n`, 'success-line');
+  terminal.write(t('ui.welcome'), 'success-line');
+  terminal.write(t('ui.welcomeSub') + '\n');
+  terminal.write(t('ui.welcomeHelp') + '\n');
+  const curDev = store.getCurrentDevice();
+  if (curDev) terminal.write(t('ui.connectedTo', { name: curDev.hostname }) + '\n', 'success-line');
   doUpdatePrompt();
   doUpdateTabs();
   renderer.draw();
@@ -154,7 +216,13 @@ cmdInput.addEventListener('keydown', (e) => {
 });
 
 // ─── Help overlay ───
+function updateHelpContent() {
+  const el = document.getElementById('helpContent');
+  if (el) el.innerHTML = renderHelpContent();
+}
+
 function toggleHelp() {
+  updateHelpContent();
   document.getElementById('helpOverlay').classList.toggle('show');
 }
 
@@ -168,7 +236,17 @@ window.closeConfirm = closeConfirm;
 window.doReset = () => doReset(store, refreshUI);
 window.toggleHelp = toggleHelp;
 window.showTemplates = showTemplateSelector;
-window.exportScript = () => { downloadCommandScript(store); showToast('Command script exported', 'success'); };
+window.exportScript = () => { downloadCommandScript(store); showToast(t('ui.toastScriptExported'), 'success'); };
+window.exportYamaha = () => { downloadYamahaScript(store); showToast(t('ui.toastYamahaExported'), 'success'); };
+window.exportImage = () => {
+  const dataURL = renderer.exportImage();
+  if (!dataURL) { showToast(t('ui.toastNoDevices'), 'error'); return; }
+  const a = document.createElement('a');
+  a.href = dataURL;
+  a.download = `netsim-topology-${new Date().toISOString().slice(0,10)}.png`;
+  a.click();
+  showToast(t('ui.toastImageExported'), 'success');
+};
 
 // ─── Setup ───
 initTemplateSelector(store, refreshUI);
@@ -182,6 +260,60 @@ initSplitter(
   document.querySelector('.diagram-panel'),
   () => renderer.resize()
 );
+
+// ─── Challenge Mode ───
+const challengeEngine = new ChallengeEngine();
+challengeEngine.registerScenarios(beginnerScenarios);
+challengeEngine.registerScenarios(intermediateScenarios);
+challengeEngine.registerScenarios(advancedScenarios);
+
+const challengeUI = new ChallengeUI(challengeEngine);
+challengeUI.mount(document.body);
+challengeUI.onCheck = () => {
+  const result = challengeEngine.check(store.getDevices());
+  if (result.allPassed) {
+    showToast(t('ui.toastChallengeComplete'), 'success');
+  }
+  challengeUI.render();
+};
+challengeUI.onQuit = () => {
+  document.getElementById('challengeBtn').classList.remove('active');
+  refreshUI();
+};
+
+const challengeSelector = new ChallengeSelector(challengeEngine);
+challengeSelector.mount(document.body);
+challengeSelector.onSelect = (scenarioId) => {
+  challengeEngine.start(scenarioId, store);
+  refreshUI();
+  challengeUI.show();
+  document.getElementById('challengeBtn').classList.add('active');
+  const d = store.getCurrentDevice();
+  terminal.write(t('ui.challengeStarted', { title: challengeEngine.current.title }) + '\n', 'success-line');
+  terminal.write(`${challengeEngine.current.description}\n`);
+  terminal.write(t('ui.connectedTo', { name: d.hostname }) + '\n', 'success-line');
+};
+
+window.showChallenges = () => challengeSelector.show();
+
+// ─── Learn Mode ───
+const learnEngine = new LearnEngine();
+learnEngine.registerLessons([lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast, lessonEthernetSwitch, lessonPacketStructure, lessonRouting]);
+
+const learnUI = new LearnUI(learnEngine);
+learnUI.mount(document.body);
+learnUI.onQuit = () => {
+  showToast(t('ui.toastLessonComplete'), 'success');
+};
+
+const learnSelector = new LearnSelector(learnEngine);
+learnSelector.mount(document.body);
+learnSelector.onSelect = (lessonId) => {
+  learnEngine.start(lessonId);
+  learnUI.show();
+};
+
+window.showLessons = () => learnSelector.show();
 
 // ─── Initial render ───
 renderer.resize();
@@ -197,13 +329,16 @@ if (loaded) {
   doUpdatePrompt();
   renderer.draw();
   doUpdateVlanLegend();
-  terminal.write('Welcome to Network Simulator!', 'success-line');
-  terminal.write('Saved configuration restored automatically.\n', 'success-line');
-  terminal.write('Type commands below or click "? Help" for reference.\n');
-  terminal.write(`Connected to ${store.getCurrentDevice().hostname}\n`, 'success-line');
+  terminal.write(t('ui.welcome'), 'success-line');
+  terminal.write(t('ui.savedRestored') + '\n', 'success-line');
+  terminal.write(t('ui.welcomeHelp') + '\n');
+  terminal.write(t('ui.connectedTo', { name: store.getCurrentDevice().hostname }) + '\n', 'success-line');
 } else {
-  terminal.write('Welcome to Network Simulator!', 'success-line');
-  terminal.write('Practice Cisco IOS commands and watch the network respond.\n');
-  terminal.write('Type commands below or click "? Help" for reference.\n');
-  terminal.write(`Connected to ${store.getCurrentDevice().hostname}\n`, 'success-line');
+  terminal.write(t('ui.welcome'), 'success-line');
+  terminal.write(t('ui.welcomeSub') + '\n');
+  terminal.write(t('ui.welcomeHelp') + '\n');
+  terminal.write(t('ui.connectedTo', { name: store.getCurrentDevice().hostname }) + '\n', 'success-line');
 }
+
+// Apply initial UI text
+updateUIText();

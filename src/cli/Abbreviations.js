@@ -105,6 +105,18 @@ const abbreviations = {
   'te acc': 'test access',
   'te access': 'test access',
   'test acc': 'test access',
+  // DHCP
+  'sh ip dhcp bind': 'show ip dhcp binding',
+  'sh ip dhcp binding': 'show ip dhcp binding',
+  'show ip dhcp bind': 'show ip dhcp binding',
+  'sh ip dhcp pool': 'show ip dhcp pool',
+  'ip dhcp excl': 'ip dhcp excluded-address',
+  'ip dhcp excluded': 'ip dhcp excluded-address',
+  'no ip dhcp excl': 'no ip dhcp excluded-address',
+  'no ip dhcp excluded': 'no ip dhcp excluded-address',
+  'ip addr dhcp': 'ip address dhcp',
+  'def-router': 'default-router',
+  'dns': 'dns-server',
 };
 
 export function expandAbbrev(input) {

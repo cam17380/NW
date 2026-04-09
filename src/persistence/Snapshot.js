@@ -16,6 +16,8 @@ export function getSnapshot(devices, links) {
       nat: dv.nat ? JSON.parse(JSON.stringify({ staticEntries: dv.nat.staticEntries, pools: dv.nat.pools, dynamicRules: dv.nat.dynamicRules })) : undefined,
       accessLists: dv.accessLists && Object.keys(dv.accessLists).length > 0 ? JSON.parse(JSON.stringify(dv.accessLists)) : undefined,
       crypto: dv.crypto && (Object.keys(dv.crypto.isakmpPolicies || {}).length > 0 || Object.keys(dv.crypto.transformSets || {}).length > 0 || Object.keys(dv.crypto.cryptoMaps || {}).length > 0) ? JSON.parse(JSON.stringify(dv.crypto)) : undefined,
+      dhcp: dv.dhcp && (Object.keys(dv.dhcp.pools).length > 0 || dv.dhcp.excludedAddresses.length > 0) ? JSON.parse(JSON.stringify(dv.dhcp)) : undefined,
+      dhcpGateway: dv.dhcpGateway || undefined,
       policies: dv.policies && dv.policies.length > 0 ? JSON.parse(JSON.stringify(dv.policies)) : undefined,
       interfaces: {},
     };
@@ -33,6 +35,7 @@ export function getSnapshot(devices, links) {
         bondGroup: iface.bondGroup || undefined,
         tunnel: iface.tunnel ? JSON.parse(JSON.stringify(iface.tunnel)) : undefined,
         cryptoMap: iface.cryptoMap || undefined,
+        dhcpClient: iface.dhcpClient || undefined,
       };
     }
   }
@@ -67,6 +70,11 @@ export function applySnapshot(store, snap) {
         dv.crypto.transformSets = saved.crypto.transformSets || {};
         dv.crypto.cryptoMaps = saved.crypto.cryptoMaps || {};
       }
+      if (saved.dhcp !== undefined && dv.dhcp) {
+        dv.dhcp.pools = saved.dhcp.pools || {};
+        dv.dhcp.excludedAddresses = saved.dhcp.excludedAddresses || [];
+      }
+      if (saved.dhcpGateway !== undefined) dv.dhcpGateway = saved.dhcpGateway;
       if (saved.policies !== undefined) dv.policies = saved.policies;
       // Rebuild interfaces: use exactly what was saved
       // Remove factory defaults not in snapshot, add snapshot interfaces not in factory
@@ -90,6 +98,7 @@ export function applySnapshot(store, snap) {
         if (savedIf.bondGroup !== undefined) iface.bondGroup = savedIf.bondGroup;
         if (savedIf.tunnel !== undefined) iface.tunnel = savedIf.tunnel;
         if (savedIf.cryptoMap !== undefined) iface.cryptoMap = savedIf.cryptoMap;
+        if (savedIf.dhcpClient !== undefined) iface.dhcpClient = savedIf.dhcpClient;
       }
       devices[id] = dv;
     }

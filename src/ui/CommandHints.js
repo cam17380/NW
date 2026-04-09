@@ -11,10 +11,13 @@ export function updateCmdHints(store) {
     user: 'User EXEC', privileged: 'Privileged EXEC',
     config: 'Global Config', 'config-if': 'Interface Config',
     'config-vlan': 'VLAN Config',
+    'config-isakmp': 'ISAKMP Policy Config',
+    'config-crypto-map': 'Crypto Map Config',
+    'config-dhcp-pool': 'DHCP Pool Config',
   };
   const title = document.createElement('div');
   title.className = 'cmd-hint-title';
-  title.textContent = modeLabels[cliMode] + ' commands';
+  title.textContent = (modeLabels[cliMode] || cliMode) + ' commands';
   container.appendChild(title);
 
   const cmdHintData = getCmdHintData(store);
@@ -35,6 +38,7 @@ export function updateCmdHints(store) {
 
 export function updatePrompt(store) {
   const dev = store.getCurrentDevice();
+  if (!dev) return;
   const cliMode = store.getCLIMode();
 
   const h = dev.hostname;
@@ -45,17 +49,23 @@ export function updatePrompt(store) {
     case 'config': prompt = h + '(config)#'; break;
     case 'config-if': prompt = h + '(config-if)#'; break;
     case 'config-vlan': prompt = h + '(config-vlan)#'; break;
+    case 'config-isakmp': prompt = h + '(config-isakmp)#'; break;
+    case 'config-crypto-map': prompt = h + '(config-crypto-map)#'; break;
+    case 'config-dhcp-pool': prompt = h + '(dhcp-config)#'; break;
   }
 
-  document.getElementById('promptLabel').textContent = prompt;
+  document.getElementById('promptLabel').textContent = prompt || h + '#';
 
   const modeLabels = {
     user: 'User EXEC', privileged: 'Privileged EXEC',
     config: 'Global Config',
     'config-if': 'Interface Config — ' + shortIfName(store.getCurrentInterface()),
     'config-vlan': 'VLAN Config — VLAN ' + store.getCurrentVlanId(),
+    'config-isakmp': 'ISAKMP Policy Config',
+    'config-crypto-map': 'Crypto Map Config',
+    'config-dhcp-pool': 'DHCP Pool Config — ' + (store.getCurrentDhcpPoolName() || ''),
   };
-  document.getElementById('modeIndicator').textContent = modeLabels[cliMode];
+  document.getElementById('modeIndicator').textContent = modeLabels[cliMode] || cliMode;
   document.getElementById('terminalTitle').textContent = 'Terminal — ' + dev.hostname;
 
   updateCmdHints(store);

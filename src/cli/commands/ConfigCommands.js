@@ -399,6 +399,78 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     return;
   }
 
+  // ── DHCP commands (router only) ──
+
+  // ip dhcp pool <name>
+  if (lower.startsWith('ip dhcp pool')) {
+    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!dev.dhcp) dev.dhcp = { pools: {}, excludedAddresses: [] };
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: ip dhcp pool <pool-name>', 'error-line'); return; }
+    const poolName = args[3];
+    if (!dev.dhcp.pools[poolName]) {
+      dev.dhcp.pools[poolName] = { network: '', mask: '', defaultRouter: '', dnsServer: '', lease: 1, bindings: {} };
+      termWrite(`% DHCP pool "${poolName}" created`, 'success-line');
+    }
+    store.setCurrentDhcpPoolName(poolName);
+    store.setCLIMode('config-dhcp-pool');
+    return;
+  }
+
+  // no ip dhcp pool <name>
+  if (lower.startsWith('no ip dhcp pool')) {
+    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Usage: no ip dhcp pool <pool-name>', 'error-line'); return; }
+    const poolName = args[4];
+    if (!dev.dhcp || !dev.dhcp.pools[poolName]) { termWrite(`% DHCP pool "${poolName}" not found`, 'error-line'); return; }
+    // Release bindings: clear dhcpClient on bound PCs
+    const devices = store.getDevices();
+    for (const [boundIP, clientRef] of Object.entries(dev.dhcp.pools[poolName].bindings)) {
+      const [clientId, clientIf] = clientRef.split('/');
+      const clientDev = devices[clientId];
+      if (clientDev && clientDev.interfaces[clientIf]) {
+        const iface = clientDev.interfaces[clientIf];
+        if (iface.dhcpClient) { iface.ip = ''; iface.mask = ''; iface.dhcpClient = false; }
+        if (clientDev.defaultGateway && clientDev.dhcpGateway) { clientDev.defaultGateway = ''; delete clientDev.dhcpGateway; }
+      }
+    }
+    delete dev.dhcp.pools[poolName];
+    termWrite(`% DHCP pool "${poolName}" removed`, 'success-line');
+    return;
+  }
+
+  // ip dhcp excluded-address <start> [end]
+  if (lower.startsWith('ip dhcp excluded-address')) {
+    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!dev.dhcp) dev.dhcp = { pools: {}, excludedAddresses: [] };
+    const args = input.split(/\s+/);
+    if (args.length < 4) { termWrite('% Usage: ip dhcp excluded-address <start-ip> [end-ip]', 'error-line'); return; }
+    const start = args[3];
+    const end = args[4] || start;
+    if (!isValidIP(start) || !isValidIP(end)) { termWrite('% Invalid IP address', 'error-line'); return; }
+    const dup = dev.dhcp.excludedAddresses.find(e => e.start === start && e.end === end);
+    if (dup) { termWrite('% Exclusion already exists', 'error-line'); return; }
+    dev.dhcp.excludedAddresses.push({ start, end });
+    termWrite(`% DHCP excluded: ${start}${end !== start ? ' - ' + end : ''}`, 'success-line');
+    return;
+  }
+
+  // no ip dhcp excluded-address <start> [end]
+  if (lower.startsWith('no ip dhcp excluded-address')) {
+    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!dev.dhcp) return;
+    const args = input.split(/\s+/);
+    if (args.length < 5) { termWrite('% Usage: no ip dhcp excluded-address <start-ip> [end-ip]', 'error-line'); return; }
+    const start = args[4];
+    const end = args[5] || start;
+    const idx = dev.dhcp.excludedAddresses.findIndex(e => e.start === start && e.end === end);
+    if (idx === -1) { termWrite('% Exclusion not found', 'error-line'); return; }
+    dev.dhcp.excludedAddresses.splice(idx, 1);
+    termWrite(`% DHCP exclusion removed`, 'success-line');
+    return;
+  }
+
   // ── Crypto / VPN commands (router/firewall) ──
 
   // crypto isakmp policy <num>
@@ -589,6 +661,53 @@ export function execConfigCryptoMap(input, parts, cmd, store, termWrite) {
   if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentCryptoMapName(null); store.setCurrentCryptoMapSeq(null); return; }
   if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentCryptoMapName(null); store.setCurrentCryptoMapSeq(null); return; }
   termWrite(`% Unknown command "${parts[0]}" in crypto map config mode`, 'error-line');
+}
+
+// ─── DHCP pool sub-mode ───
+export function execConfigDhcpPool(input, parts, cmd, store, termWrite) {
+  const dev = store.getCurrentDevice();
+  const poolName = store.getCurrentDhcpPoolName();
+  if (!dev.dhcp || !dev.dhcp.pools[poolName]) { store.setCLIMode('config'); return; }
+  const pool = dev.dhcp.pools[poolName];
+
+  if (cmd === 'network') {
+    if (parts.length < 3) { termWrite('% Usage: network <network-ip> <mask>', 'error-line'); return; }
+    if (!isValidIP(parts[1]) || !isValidIP(parts[2])) { termWrite('% Invalid IP address or mask', 'error-line'); return; }
+    pool.network = parts[1];
+    pool.mask = parts[2];
+    termWrite(`% Network set to ${parts[1]} ${parts[2]}`, 'success-line');
+    return;
+  }
+  if (cmd === 'default-router') {
+    if (parts.length < 2) { termWrite('% Usage: default-router <ip>', 'error-line'); return; }
+    if (!isValidIP(parts[1])) { termWrite('% Invalid IP address', 'error-line'); return; }
+    pool.defaultRouter = parts[1];
+    termWrite(`% Default router set to ${parts[1]}`, 'success-line');
+    return;
+  }
+  if (cmd === 'dns-server') {
+    if (parts.length < 2) { termWrite('% Usage: dns-server <ip>', 'error-line'); return; }
+    if (!isValidIP(parts[1])) { termWrite('% Invalid IP address', 'error-line'); return; }
+    pool.dnsServer = parts[1];
+    termWrite(`% DNS server set to ${parts[1]}`, 'success-line');
+    return;
+  }
+  if (cmd === 'lease') {
+    if (parts.length < 2) { termWrite('% Usage: lease <days> | lease infinite', 'error-line'); return; }
+    if (parts[1].toLowerCase() === 'infinite') {
+      pool.lease = 0;
+      termWrite('% Lease set to infinite', 'success-line');
+      return;
+    }
+    const days = parseInt(parts[1]);
+    if (isNaN(days) || days < 0) { termWrite('% Invalid lease value', 'error-line'); return; }
+    pool.lease = days;
+    termWrite(`% Lease set to ${days} day(s)`, 'success-line');
+    return;
+  }
+  if (cmd === 'exit') { store.setCLIMode('config'); store.setCurrentDhcpPoolName(null); return; }
+  if (cmd === 'end') { store.setCLIMode('privileged'); store.setCurrentDhcpPoolName(null); return; }
+  termWrite(`% Unknown command "${parts[0]}" in DHCP pool config mode`, 'error-line');
 }
 
 export function execConfigVlan(input, parts, cmd, store, termWrite) {

@@ -2,6 +2,7 @@
 import { shortIfName, generateMAC, isValidIP } from '../../simulation/NetworkUtils.js';
 import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
+import { tryDhcpAssign } from './InterfaceCommands.js';
 
 function findTunnelPeer(devices, srcDev, destIP) {
   if (!destIP) return null;
@@ -22,7 +23,8 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     termWrite('Interface                  IP-Address      OK? Method Status                Protocol');
     for (const [name, iface] of Object.entries(dev.interfaces)) {
       const ip = iface.ip || 'unassigned';
-      const line = name.padEnd(27) + ip.padEnd(16) + 'YES '.padEnd(4) + 'manual '.padEnd(7) +
+      const method = iface.dhcpClient ? 'DHCP  ' : 'manual';
+      const line = name.padEnd(27) + ip.padEnd(16) + 'YES '.padEnd(4) + (method + ' ').padEnd(7) +
         (iface.status === 'up' ? 'up' : 'administratively down').padEnd(22) + iface.protocol;
       termWrite(line);
     }
@@ -230,6 +232,77 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  // ── DHCP show commands ──
+  if (lower === 'show ip dhcp binding') {
+    if (dev.type !== 'router') { termWrite('% DHCP binding is only available on routers', 'error-line'); return; }
+    if (!dev.dhcp || Object.keys(dev.dhcp.pools).length === 0) { termWrite('  (no DHCP pools configured)'); return; }
+    termWrite('IP Address        Client-ID             Pool');
+    termWrite('----------------  --------------------  ----------------');
+    let count = 0;
+    for (const [poolName, pool] of Object.entries(dev.dhcp.pools)) {
+      for (const [ip, clientRef] of Object.entries(pool.bindings)) {
+        termWrite(`${ip.padEnd(18)}${clientRef.padEnd(22)}${poolName}`);
+        count++;
+      }
+    }
+    if (count === 0) termWrite('  (no bindings)');
+    return;
+  }
+
+  if (lower === 'show ip dhcp pool') {
+    if (dev.type !== 'router') { termWrite('% DHCP pool is only available on routers', 'error-line'); return; }
+    if (!dev.dhcp || Object.keys(dev.dhcp.pools).length === 0) { termWrite('  (no DHCP pools configured)'); return; }
+    for (const [poolName, pool] of Object.entries(dev.dhcp.pools)) {
+      termWrite(`Pool ${poolName}:`);
+      termWrite(`  Network:        ${pool.network || '(not set)'} ${pool.mask || ''}`);
+      termWrite(`  Default Router: ${pool.defaultRouter || '(not set)'}`);
+      termWrite(`  DNS Server:     ${pool.dnsServer || '(not set)'}`);
+      termWrite(`  Lease:          ${pool.lease === 0 ? 'infinite' : pool.lease + ' day(s)'}`);
+      const bindCount = Object.keys(pool.bindings).length;
+      termWrite(`  Bindings:       ${bindCount}`);
+      termWrite('');
+    }
+    if (dev.dhcp.excludedAddresses.length > 0) {
+      termWrite('Excluded Addresses:');
+      for (const excl of dev.dhcp.excludedAddresses) {
+        termWrite(`  ${excl.start}${excl.end !== excl.start ? ' - ' + excl.end : ''}`);
+      }
+    }
+    return;
+  }
+
+  if (lower === 'renew dhcp') {
+    if (dev.type !== 'pc') { termWrite('% renew dhcp is only available on PCs', 'error-line'); return; }
+    // Find DHCP-enabled interface
+    let dhcpIf = null, dhcpIfName = null;
+    for (const [ifName, iface] of Object.entries(dev.interfaces)) {
+      if (iface.dhcpClient) { dhcpIf = iface; dhcpIfName = ifName; break; }
+    }
+    if (!dhcpIf) { termWrite('% No interface configured with "ip address dhcp"', 'error-line'); return; }
+    const devices = store.getDevices();
+    // Release old binding first
+    if (dhcpIf.ip) {
+      const clientRef = store.getCurrentDeviceId() + '/' + dhcpIfName;
+      for (const dv of Object.values(devices)) {
+        if (!dv.dhcp) continue;
+        for (const pool of Object.values(dv.dhcp.pools)) {
+          if (pool.bindings[dhcpIf.ip] === clientRef) delete pool.bindings[dhcpIf.ip];
+        }
+      }
+    }
+    const result = tryDhcpAssign(devices, store.getCurrentDeviceId(), dhcpIfName);
+    if (result) {
+      dhcpIf.ip = result.ip; dhcpIf.mask = result.mask;
+      dev.defaultGateway = result.gateway; dev.dhcpGateway = true;
+      termWrite(`% DHCP: Acquired ${result.ip}/${result.mask} from ${result.serverName}`, 'success-line');
+      termWrite(`  Gateway: ${result.gateway}${result.dns ? '  DNS: ' + result.dns : ''}`);
+    } else {
+      dhcpIf.ip = ''; dhcpIf.mask = '';
+      termWrite('% DHCP: No DHCP server found', 'error-line');
+    }
+    return;
+  }
+
   // ── VPN / Crypto show commands ──
   if (lower === 'show crypto isakmp sa' || lower === 'show crypto isakmp policy') {
     if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
@@ -353,7 +426,10 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     for (const [name, iface] of Object.entries(dev.interfaces)) {
       termWrite(`interface ${name}`);
       if (iface.description) termWrite(` description ${iface.description}`);
-      if (iface.ip) termWrite(` ip address ${iface.ip} ${iface.mask}`);
+      if (iface.dhcpClient) {
+        termWrite(` ip address dhcp`);
+        if (iface.ip) termWrite(`  ! Acquired: ${iface.ip} ${iface.mask}`);
+      } else if (iface.ip) termWrite(` ip address ${iface.ip} ${iface.mask}`);
       if (iface.switchport) {
         const sp = iface.switchport;
         if (sp.mode === 'trunk') {
@@ -437,6 +513,23 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         }
       }
       if (hasCrypto || Object.keys(dev.crypto.transformSets || {}).length > 0 || Object.keys(dev.crypto.cryptoMaps || {}).length > 0) {
+        termWrite('!');
+      }
+    }
+    // DHCP
+    if (dev.dhcp) {
+      const hasDhcp = Object.keys(dev.dhcp.pools).length > 0 || dev.dhcp.excludedAddresses.length > 0;
+      if (hasDhcp) {
+        for (const excl of dev.dhcp.excludedAddresses) {
+          termWrite(`ip dhcp excluded-address ${excl.start}${excl.end !== excl.start ? ' ' + excl.end : ''}`);
+        }
+        for (const [poolName, pool] of Object.entries(dev.dhcp.pools)) {
+          termWrite(`ip dhcp pool ${poolName}`);
+          if (pool.network) termWrite(` network ${pool.network} ${pool.mask}`);
+          if (pool.defaultRouter) termWrite(` default-router ${pool.defaultRouter}`);
+          if (pool.dnsServer) termWrite(` dns-server ${pool.dnsServer}`);
+          if (pool.lease !== undefined && pool.lease !== 1) termWrite(` lease ${pool.lease === 0 ? 'infinite' : pool.lease}`);
+        }
         termWrite('!');
       }
     }
