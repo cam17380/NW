@@ -1,3 +1,4 @@
+import { t } from '../../i18n/I18n.js';
 // ─── Intermediate Challenge Scenarios ───
 import { canReach } from '../../simulation/Routing.js';
 
@@ -9,10 +10,10 @@ export const intermediateScenarios = [
   // ─── 5. VLAN分離 ───
   {
     id: 'inter-vlan-isolation',
-    title: 'VLAN Isolation',
+    get title() { return t('challenge.inter-vlan-isolation.title'); },
     difficulty: 'intermediate',
     category: 'VLAN',
-    description: 'Sales and Engineering teams share the same switch and can all communicate. Create VLANs and assign ports so each team is isolated — same subnet, but different VLANs.',
+    get description() { return t('challenge.inter-vlan-isolation.desc'); },
     topology() {
       const devices = {
         SW1: {
@@ -33,25 +34,25 @@ export const intermediateScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'Sales-PC1 can ping Sales-PC2', check: (devices) => canReach(devices, 'PC1', '192.168.1.11') },
-      { text: 'Eng-PC1 can ping Eng-PC2', check: (devices) => canReach(devices, 'PC3', '192.168.1.21') },
-      { text: 'Sales-PC1 cannot ping Eng-PC1 (VLAN isolation)', check: (devices) => !canReach(devices, 'PC1', '192.168.1.20') },
+      { get text() { return t('challenge.inter-vlan-isolation.obj0'); }, check: (devices) => canReach(devices, 'PC1', '192.168.1.11') },
+      { get text() { return t('challenge.inter-vlan-isolation.obj1'); }, check: (devices) => canReach(devices, 'PC3', '192.168.1.21') },
+      { get text() { return t('challenge.inter-vlan-isolation.obj2'); }, check: (devices) => !canReach(devices, 'PC1', '192.168.1.20') },
     ],
     hints: [
-      { text: 'Currently all PCs are on VLAN 1 and can reach each other. You need to separate them into two VLANs.' },
-      { text: 'Switch1: enable > configure terminal > vlan 10 > name Sales > exit > vlan 20 > name Engineering > exit' },
-      { text: 'Assign Sales ports: interface Gi0/1 > switchport access vlan 10 > exit > interface Gi0/2 > switchport access vlan 10' },
-      { text: 'Assign Eng ports: interface Gi0/3 > switchport access vlan 20 > exit > interface Gi0/4 > switchport access vlan 20' },
+      { get text() { return t('challenge.inter-vlan-isolation.hint0'); } },
+      { get text() { return t('challenge.inter-vlan-isolation.hint1'); } },
+      { get text() { return t('challenge.inter-vlan-isolation.hint2'); } },
+      { get text() { return t('challenge.inter-vlan-isolation.hint3'); } },
     ],
   },
 
   // ─── 6. VLAN間ルーティング ───
   {
     id: 'inter-vlan-routing',
-    title: 'Inter-VLAN Routing with L3 Switch',
+    get title() { return t('challenge.inter-vlan-routing.title'); },
     difficulty: 'intermediate',
     category: 'VLAN',
-    description: 'Sales and Engineering are on separate VLANs. Configure SVIs on the L3 switch so they can communicate across VLANs.',
+    get description() { return t('challenge.inter-vlan-routing.desc'); },
     topology() {
       const devices = {
         SW1: {
@@ -69,24 +70,24 @@ export const intermediateScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'Sales-PC can ping Eng-PC (192.168.20.10)', check: (devices) => canReach(devices, 'PC1', '192.168.20.10') },
-      { text: 'Eng-PC can ping Sales-PC (192.168.10.10)', check: (devices) => canReach(devices, 'PC2', '192.168.10.10') },
+      { get text() { return t('challenge.inter-vlan-routing.obj0'); }, check: (devices) => canReach(devices, 'PC1', '192.168.20.10') },
+      { get text() { return t('challenge.inter-vlan-routing.obj1'); }, check: (devices) => canReach(devices, 'PC2', '192.168.10.10') },
     ],
     hints: [
-      { text: 'An L3 switch needs SVI (Switch Virtual Interface) for each VLAN to route between them.' },
-      { text: 'On L3-Switch: enable > configure terminal > interface vlan 10 > ip address 192.168.10.1 255.255.255.0 > no shutdown > exit' },
-      { text: 'Same for VLAN 20: interface vlan 20 > ip address 192.168.20.1 255.255.255.0 > no shutdown' },
+      { get text() { return t('challenge.inter-vlan-routing.hint0'); } },
+      { get text() { return t('challenge.inter-vlan-routing.hint1'); } },
+      { get text() { return t('challenge.inter-vlan-routing.hint2'); } },
     ],
-    congratsMessage: 'You can now route between VLANs using an L3 switch!',
+    get congratsMessage() { return t('challenge.inter-vlan-routing.congrats'); },
   },
 
   // ─── 7. NATでインターネットへ ───
   {
     id: 'inter-nat',
-    title: 'NAT to the Internet',
+    get title() { return t('challenge.inter-nat.title'); },
     difficulty: 'intermediate',
     category: 'NAT',
-    description: 'Your internal network (192.168.1.0/24) needs to access an external server. Configure a default route and dynamic NAT on Router1.',
+    get description() { return t('challenge.inter-nat.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -121,27 +122,27 @@ export const intermediateScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'NAT dynamic rule is configured on Router1',
+      { get text() { return t('challenge.inter-nat.obj0'); },
         check: (devices) => devices.R1.nat && devices.R1.nat.dynamicRules && devices.R1.nat.dynamicRules.length > 0
       },
-      { text: 'PC1 can ping WebServer (8.8.8.8)', check: (devices) => canReach(devices, 'PC1', '8.8.8.8') },
+      { get text() { return t('challenge.inter-nat.obj1'); }, check: (devices) => canReach(devices, 'PC1', '8.8.8.8') },
     ],
     hints: [
-      { text: 'You need: (1) default route to ISP, (2) ACL to match internal IPs, (3) NAT pool, (4) dynamic NAT rule.' },
-      { text: 'Router1: ip route 0.0.0.0 0.0.0.0 203.0.113.1' },
-      { text: 'access-list 1 permit 192.168.1.0 0.0.0.255' },
-      { text: 'ip nat pool MYPOOL 203.0.113.2 203.0.113.2 netmask 255.255.255.252' },
-      { text: 'ip nat inside source list 1 pool MYPOOL' },
+      { get text() { return t('challenge.inter-nat.hint0'); } },
+      { get text() { return t('challenge.inter-nat.hint1'); } },
+      { get text() { return t('challenge.inter-nat.hint2'); } },
+      { get text() { return t('challenge.inter-nat.hint3'); } },
+      { get text() { return t('challenge.inter-nat.hint4'); } },
     ],
   },
 
   // ─── 8. ACLでセキュリティ ───
   {
     id: 'inter-acl',
-    title: 'Access Control Lists',
+    get title() { return t('challenge.inter-acl.title'); },
     difficulty: 'intermediate',
     category: 'ACL',
-    description: 'Server1 should only accept TCP port 443 (HTTPS) from the internal network. Block all other inbound traffic using an extended ACL on the router.',
+    get description() { return t('challenge.inter-acl.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -174,7 +175,7 @@ export const intermediateScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can reach Server1 on TCP 443 (test access 10.0.0.10 tcp 443)',
+      { get text() { return t('challenge.inter-acl.obj0'); },
         check: (devices) => {
           // Check if ACL on Gi0/1 out allows tcp 443
           const r1 = devices.R1;
@@ -184,15 +185,15 @@ export const intermediateScenarios = [
           return canReach(devices, 'PC1', '10.0.0.10', 'tcp', 443);
         }
       },
-      { text: 'PC1 cannot reach Server1 on TCP 80 (blocked by ACL)',
+      { get text() { return t('challenge.inter-acl.obj1'); },
         check: (devices) => !canReach(devices, 'PC1', '10.0.0.10', 'tcp', 80)
       },
     ],
     hints: [
-      { text: 'Create an extended ACL (100-199) that permits TCP 443 and denies everything else.' },
-      { text: 'Router1: access-list 100 permit tcp 192.168.1.0 0.0.0.255 10.0.0.0 0.0.0.255 eq 443' },
-      { text: 'Apply outbound on Gi0/1: interface Gi0/1 > ip access-group 100 out' },
+      { get text() { return t('challenge.inter-acl.hint0'); } },
+      { get text() { return t('challenge.inter-acl.hint1'); } },
+      { get text() { return t('challenge.inter-acl.hint2'); } },
     ],
-    congratsMessage: 'You secured the server with an ACL allowing only HTTPS!',
+    get congratsMessage() { return t('challenge.inter-acl.congrats'); },
   },
 ];

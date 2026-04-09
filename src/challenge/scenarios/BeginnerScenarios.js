@@ -1,3 +1,4 @@
+import { t } from '../../i18n/I18n.js';
 // ─── Beginner Challenge Scenarios ───
 import { canReach } from '../../simulation/Routing.js';
 
@@ -9,10 +10,10 @@ export const beginnerScenarios = [
   // ─── 1. はじめてのping ───
   {
     id: 'beginner-first-ping',
-    title: 'Your First Ping',
+    get title() { return t('challenge.beginner-first-ping.title'); },
     difficulty: 'beginner',
     category: 'Routing',
-    description: 'PC1 needs an IP address to communicate. Configure PC1 and ping the router.',
+    get description() { return t('challenge.beginner-first-ping.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -38,24 +39,24 @@ export const beginnerScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can ping Router1 (192.168.1.1)', check: (devices) => canReach(devices, 'PC1', '192.168.1.1') },
+      { get text() { return t('challenge.beginner-first-ping.obj0'); }, check: (devices) => canReach(devices, 'PC1', '192.168.1.1') },
     ],
     hints: [
-      { text: 'Select the PC1 tab and enter: enable' },
-      { text: 'Enter: configure terminal' },
-      { text: 'Enter: interface Ethernet0' },
-      { text: 'Enter: ip address 192.168.1.10 255.255.255.0' },
-      { text: 'Enter: end, then: ping 192.168.1.1' },
+      { get text() { return t('challenge.beginner-first-ping.hint0'); } },
+      { get text() { return t('challenge.beginner-first-ping.hint1'); } },
+      { get text() { return t('challenge.beginner-first-ping.hint2'); } },
+      { get text() { return t('challenge.beginner-first-ping.hint3'); } },
+      { get text() { return t('challenge.beginner-first-ping.hint4'); } },
     ],
   },
 
   // ─── 2. DHCPでIPアドレスを自動取得 ───
   {
     id: 'beginner-dhcp',
-    title: 'DHCP Auto-Configuration',
+    get title() { return t('challenge.beginner-dhcp.title'); },
     difficulty: 'beginner',
     category: 'DHCP',
-    description: 'A router is connected to two PCs via a switch. Configure a DHCP server on the router so both PCs can automatically obtain IP addresses and ping each other.',
+    get description() { return t('challenge.beginner-dhcp.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -88,36 +89,36 @@ export const beginnerScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'DHCP pool is configured on Router1',
+      { get text() { return t('challenge.beginner-dhcp.obj0'); },
         check: (devices) => devices.R1.dhcp && Object.keys(devices.R1.dhcp.pools).length > 0 &&
           Object.values(devices.R1.dhcp.pools).some(p => p.network && p.mask) },
-      { text: 'Router1\'s IP (192.168.1.1) is excluded from DHCP',
+      { get text() { return t('challenge.beginner-dhcp.obj1'); },
         check: (devices) => devices.R1.dhcp && devices.R1.dhcp.excludedAddresses.some(e => {
           const s = e.start.split('.').map(Number); const eN = e.end.split('.').map(Number);
           const gw = [192, 168, 1, 1];
           return gw.every((v, i) => v >= s[i] && v <= eN[i]);
         }) },
-      { text: 'PC1 obtained IP via DHCP', check: (devices) => devices.PC1.interfaces.Ethernet0.dhcpClient && devices.PC1.interfaces.Ethernet0.ip !== '' },
-      { text: 'PC2 obtained IP via DHCP', check: (devices) => devices.PC2.interfaces.Ethernet0.dhcpClient && devices.PC2.interfaces.Ethernet0.ip !== '' },
-      { text: 'PC1 can ping PC2', check: (devices) => devices.PC2.interfaces.Ethernet0.ip !== '' && canReach(devices, 'PC1', devices.PC2.interfaces.Ethernet0.ip) },
+      { get text() { return t('challenge.beginner-dhcp.obj2'); }, check: (devices) => devices.PC1.interfaces.Ethernet0.dhcpClient && devices.PC1.interfaces.Ethernet0.ip !== '' },
+      { get text() { return t('challenge.beginner-dhcp.obj3'); }, check: (devices) => devices.PC2.interfaces.Ethernet0.dhcpClient && devices.PC2.interfaces.Ethernet0.ip !== '' },
+      { get text() { return t('challenge.beginner-dhcp.obj4'); }, check: (devices) => devices.PC2.interfaces.Ethernet0.ip !== '' && canReach(devices, 'PC1', devices.PC2.interfaces.Ethernet0.ip) },
     ],
     hints: [
-      { text: 'First, configure a DHCP pool on Router1: ip dhcp pool LAN' },
-      { text: 'In the pool, set: network 192.168.1.0 255.255.255.0 and default-router 192.168.1.1' },
-      { text: 'Exclude the router\'s own IP: ip dhcp excluded-address 192.168.1.1' },
-      { text: 'On each PC: interface Ethernet0 > ip address dhcp' },
-      { text: 'Use "show ip dhcp binding" on Router1 to verify assignments' },
+      { get text() { return t('challenge.beginner-dhcp.hint0'); } },
+      { get text() { return t('challenge.beginner-dhcp.hint1'); } },
+      { get text() { return t('challenge.beginner-dhcp.hint2'); } },
+      { get text() { return t('challenge.beginner-dhcp.hint3'); } },
+      { get text() { return t('challenge.beginner-dhcp.hint4'); } },
     ],
-    congratsMessage: 'You configured a DHCP server and both PCs auto-acquired IPs!',
+    get congratsMessage() { return t('challenge.beginner-dhcp.congrats'); },
   },
 
   // ─── 3. デフォルトゲートウェイ ───
   {
     id: 'beginner-default-gw',
-    title: 'The Default Gateway',
+    get title() { return t('challenge.beginner-default-gw.title'); },
     difficulty: 'beginner',
     category: 'Routing',
-    description: 'PC1 and Server1 are on different subnets. Configure PC1\'s default gateway so it can reach the server through the router.',
+    get description() { return t('challenge.beginner-default-gw.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -156,22 +157,22 @@ export const beginnerScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can ping Server1 (10.0.0.10)', check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
+      { get text() { return t('challenge.beginner-default-gw.obj0'); }, check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
     ],
     hints: [
-      { text: 'PC1 is on a different subnet (192.168.1.x) than Server1 (10.0.0.x). A default gateway is needed to route between subnets.' },
-      { text: 'On PC1: enable > configure terminal > ip default-gateway 192.168.1.1' },
-      { text: 'The gateway IP is the router\'s interface on PC1\'s subnet.' },
+      { get text() { return t('challenge.beginner-default-gw.hint0'); } },
+      { get text() { return t('challenge.beginner-default-gw.hint1'); } },
+      { get text() { return t('challenge.beginner-default-gw.hint2'); } },
     ],
   },
 
   // ─── 4. スタティックルート ───
   {
     id: 'beginner-static-route',
-    title: 'Static Routes',
+    get title() { return t('challenge.beginner-static-route.title'); },
     difficulty: 'beginner',
     category: 'Routing',
-    description: 'Two routers connect two subnets, but neither router knows how to reach the other subnet. Add static routes on both routers.',
+    get description() { return t('challenge.beginner-static-route.desc'); },
     topology() {
       const devices = {
         R1: {
@@ -220,15 +221,15 @@ export const beginnerScenarios = [
       return { devices };
     },
     objectives: [
-      { text: 'PC1 can ping Server1 (10.0.0.10)', check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
-      { text: 'Server1 can ping PC1 (192.168.1.10)', check: (devices) => canReach(devices, 'SV1', '192.168.1.10') },
+      { get text() { return t('challenge.beginner-static-route.obj0'); }, check: (devices) => canReach(devices, 'PC1', '10.0.0.10') },
+      { get text() { return t('challenge.beginner-static-route.obj1'); }, check: (devices) => canReach(devices, 'SV1', '192.168.1.10') },
     ],
     hints: [
-      { text: 'Use "show packet-flow 10.0.0.10" on PC1 to see where the packet gets stuck.' },
-      { text: 'Each router needs a static route to reach the remote subnet via the other router.' },
-      { text: 'On Router1: ip route 10.0.0.0 255.255.255.0 172.16.0.2' },
-      { text: 'On Router2: ip route 192.168.1.0 255.255.255.0 172.16.0.1' },
+      { get text() { return t('challenge.beginner-static-route.hint0'); } },
+      { get text() { return t('challenge.beginner-static-route.hint1'); } },
+      { get text() { return t('challenge.beginner-static-route.hint2'); } },
+      { get text() { return t('challenge.beginner-static-route.hint3'); } },
     ],
-    congratsMessage: 'You mastered static routing between two subnets!',
+    get congratsMessage() { return t('challenge.beginner-static-route.congrats'); },
   },
 ];
