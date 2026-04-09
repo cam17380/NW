@@ -2,6 +2,8 @@
 // Router role, default gateway, routing table, packet journey (MAC rewrite).
 
 // ─── Shared drawing helpers ───
+import { t } from '../../i18n/I18n.js';
+
 function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -66,15 +68,8 @@ function drawLink(ctx, x1, y1, x2, y2, color) {
 
 // ─── Step 1: Role of a Router ───
 const step1_RouterRole = {
-  title: '\u30eb\u30fc\u30bf\u30fc\u306e\u5f79\u5272',
-  content: `
-    <p>\u30eb\u30fc\u30bf\u30fc\u306f <strong>\u7570\u306a\u308b\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u540c\u58eb</strong> \u3092\u63a5\u7d9a\u3059\u308b\u88c5\u7f6e\u3067\u3059\u3002</p>
-    <ul>
-      <li>\u30b9\u30a4\u30c3\u30c1\u306f\u540c\u3058\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u5185\u3067\u30d5\u30ec\u30fc\u30e0\u3092\u8ee2\u9001\uff08L2\uff09</li>
-      <li>\u30eb\u30fc\u30bf\u30fc\u306f\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u9593\u3067\u30d1\u30b1\u30c3\u30c8\u3092\u8ee2\u9001\uff08L3\uff09</li>
-      <li>\u5404\u30a4\u30f3\u30bf\u30fc\u30d5\u30a7\u30fc\u30b9\u304c\u7570\u306a\u308b\u30b5\u30d6\u30cd\u30c3\u30c8\u306b\u5c5e\u3059\u308b</li>
-    </ul>
-  `,
+  get title() { return t('learn.routing.s0t'); },
+  get content() { return t('learn.routing.s0c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
     const routerY = h * 0.36;
@@ -182,17 +177,8 @@ const step1_RouterRole = {
 
 // ─── Step 2: Default Gateway ───
 const step2_DefaultGateway = {
-  title: '\u30c7\u30d5\u30a9\u30eb\u30c8\u30b2\u30fc\u30c8\u30a6\u30a7\u30a4',
-  content: `
-    <p>PC\u304c\u81ea\u5206\u306e\u30b5\u30d6\u30cd\u30c3\u30c8\u5916\u306b\u901a\u4fe1\u3059\u308b\u3068\u304d\u3001
-       \u30d1\u30b1\u30c3\u30c8\u3092\u9001\u308b\u5148\u304c <strong>\u30c7\u30d5\u30a9\u30eb\u30c8\u30b2\u30fc\u30c8\u30a6\u30a7\u30a4</strong> \u3067\u3059\u3002</p>
-    <ul>
-      <li>\u901a\u5e38\u306f\u30eb\u30fc\u30bf\u30fc\u306eIP\u30a2\u30c9\u30ec\u30b9\u3092\u8a2d\u5b9a</li>
-      <li>\u5b9b\u5148\u304c\u540c\u3058\u30b5\u30d6\u30cd\u30c3\u30c8\u306a\u3089\u76f4\u63a5\u901a\u4fe1\uff08ARP\uff09</li>
-      <li>\u5b9b\u5148\u304c\u5225\u30b5\u30d6\u30cd\u30c3\u30c8\u306a\u3089\u30b2\u30fc\u30c8\u30a6\u30a7\u30a4\u3078\u9001\u4fe1</li>
-    </ul>
-    <p>Cisco IOS: <code>ip default-gateway 192.168.1.1</code></p>
-  `,
+  get title() { return t('learn.routing.s1t'); },
+  get content() { return t('learn.routing.s1c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
     const phase = Math.min(elapsed / 2000, 1);
@@ -295,16 +281,8 @@ const step2_DefaultGateway = {
 
 // ─── Step 3: Routing Table ───
 const step3_RoutingTable = {
-  title: '\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u30c6\u30fc\u30d6\u30eb',
-  content: `
-    <p>\u30eb\u30fc\u30bf\u30fc\u306f <strong>\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u30c6\u30fc\u30d6\u30eb</strong> \u3092\u898b\u3066\u30d1\u30b1\u30c3\u30c8\u306e\u8ee2\u9001\u5148\u3092\u6c7a\u3081\u307e\u3059\u3002</p>
-    <ul>
-      <li><strong>Connected</strong>: \u76f4\u63a5\u63a5\u7d9a\u3055\u308c\u305f\u30cd\u30c3\u30c8\u30ef\u30fc\u30af</li>
-      <li><strong>Static</strong>: \u624b\u52d5\u8a2d\u5b9a\u3057\u305f\u30eb\u30fc\u30c8</li>
-      <li><strong>Default (0.0.0.0/0)</strong>: \u4ed6\u306b\u8a72\u5f53\u306a\u3044\u5834\u5408\u306e\u6700\u7d42\u624b\u6bb5</li>
-    </ul>
-    <p>Cisco IOS: <code>show ip route</code> \u3067\u78ba\u8a8d\u3067\u304d\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.routing.s2t'); },
+  get content() { return t('learn.routing.s2c'); },
   animation(ctx, w, h, elapsed) {
     const phase = Math.min(elapsed / 2000, 1);
 
@@ -407,15 +385,8 @@ const step3_RoutingTable = {
 
 // ─── Step 4: Packet Journey (MAC rewrite) ───
 const step4_PacketJourney = {
-  title: '\u30d1\u30b1\u30c3\u30c8\u306e\u65c5\uff08MAC\u66f8\u304d\u63db\u3048\uff09',
-  content: `
-    <p>\u30d1\u30b1\u30c3\u30c8\u304c\u30eb\u30fc\u30bf\u30fc\u3092\u901a\u904e\u3059\u308b\u6642:</p>
-    <ul>
-      <li><strong>L3\u30d8\u30c3\u30c0\uff08IP\uff09</strong>: \u5909\u308f\u3089\u306a\u3044\uff08\u7d42\u70b9\u9593\uff09</li>
-      <li><strong>L2\u30d8\u30c3\u30c0\uff08MAC\uff09</strong>: \u6bce\u30db\u30c3\u30d7\u3067\u66f8\u304d\u63db\u308f\u308b</li>
-    </ul>
-    <p>\u3053\u308c\u304c IP\u3068MAC\u306e\u4e21\u65b9\u304c\u5fc5\u8981\u306a\u7406\u7531\u3067\u3059\u3002</p>
-  `,
+  get title() { return t('learn.routing.s3t'); },
+  get content() { return t('learn.routing.s3c'); },
   animation(ctx, w, h, elapsed) {
     // Network: PC1 → SW1 → R1 → SW2 → SV1
     const nodes = [
@@ -545,15 +516,8 @@ const step4_PacketJourney = {
 
 // ─── Step 5: What changes per hop ───
 const step5_WhatChanges = {
-  title: '\u30db\u30c3\u30d7\u3054\u3068\u306b\u4f55\u304c\u5909\u308f\u308b\uff1f',
-  content: `
-    <p>Step 4\u306e\u30d1\u30b1\u30c3\u30c8\u306e\u65c5\u3092\u632f\u308a\u8fd4\u308a\u307e\u3057\u3087\u3046\u3002\u30db\u30c3\u30d7\u3054\u3068\u306e\u5909\u5316:</p>
-    <ul>
-      <li><strong>L2\u30d8\u30c3\u30c0 (MAC)</strong>: \u6bce\u30db\u30c3\u30d7\u3067\u66f8\u304d\u63db\u308f\u308b \u2014 \u300c\u6b21\u306e\u8ee2\u9001\u5148\u300d</li>
-      <li><strong>L3\u30d8\u30c3\u30c0 (IP)</strong>: \u5909\u308f\u3089\u306a\u3044 \u2014 \u300c\u6700\u7d42\u5b9b\u5148\u300d</li>
-      <li><strong>TTL</strong>: \u30eb\u30fc\u30bf\u30fc\u901a\u904e\u6bce\u306b -1</li>
-    </ul>
-  `,
+  get title() { return t('learn.routing.s4t'); },
+  get content() { return t('learn.routing.s4c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
 
@@ -665,17 +629,8 @@ const step5_WhatChanges = {
 
 // ─── Step 6: Summary ───
 const step6_Summary = {
-  title: '\u307e\u3068\u3081',
-  content: `
-    <p>\u3053\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u5b66\u3093\u3060\u3053\u3068:</p>
-    <ul>
-      <li><strong>\u30eb\u30fc\u30bf\u30fc</strong>: \u7570\u306a\u308b\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u9593\u3092\u63a5\u7d9a</li>
-      <li><strong>\u30c7\u30d5\u30a9\u30eb\u30c8\u30b2\u30fc\u30c8\u30a6\u30a7\u30a4</strong>: \u30b5\u30d6\u30cd\u30c3\u30c8\u5916\u3078\u306e\u51fa\u53e3</li>
-      <li><strong>\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u30c6\u30fc\u30d6\u30eb</strong>: \u5b9b\u5148\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u2192\u6b21\u306e\u30db\u30c3\u30d7</li>
-      <li>IP\u30d8\u30c3\u30c0\u306f\u4e0d\u5909\u3001MAC\u30d8\u30c3\u30c0\u306f\u6bce\u30db\u30c3\u30d7\u66f8\u304d\u63db\u3048</li>
-    </ul>
-    <p>Challenge Mode\u3067\u5b9f\u969b\u306b\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u3092\u8a2d\u5b9a\u3057\u3066\u307f\u307e\u3057\u3087\u3046\uff01</p>
-  `,
+  get title() { return t('learn.routing.s5t'); },
+  get content() { return t('learn.routing.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
       { text: 'Router',       sub: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u9593\u8ee2\u9001', color: '#69f0ae' },
@@ -741,8 +696,8 @@ const step6_Summary = {
 // ─── Export lesson ───
 export const lessonRouting = {
   id: 'lesson-routing',
-  title: '\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u306e\u57fa\u672c',
-  description: '\u30eb\u30fc\u30bf\u30fc\u306e\u5f79\u5272\u3001\u30c7\u30d5\u30a9\u30eb\u30c8\u30b2\u30fc\u30c8\u30a6\u30a7\u30a4\u3001\u30eb\u30fc\u30c6\u30a3\u30f3\u30b0\u30c6\u30fc\u30d6\u30eb\u3001\u30d1\u30b1\u30c3\u30c8\u306eMAC\u66f8\u304d\u63db\u3048\u3092\u5b66\u3073\u307e\u3059\u3002',
+  get title() { return t('learn.routing.title'); },
+  get description() { return t('learn.routing.desc'); },
   category: 'L3 Routing',
   steps: [
     step1_RouterRole,

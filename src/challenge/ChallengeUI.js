@@ -1,4 +1,5 @@
 // ─── Challenge UI: goal panel overlay during active challenge ───
+import { t } from '../i18n/I18n.js';
 
 export class ChallengeUI {
   constructor(engine) {
@@ -83,7 +84,7 @@ export class ChallengeUI {
     const allPassed = objectives.every(o => o.passed);
     const collapsed = this._collapsed;
 
-    const diffBadge = { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' }[s.difficulty] || s.difficulty;
+    const diffBadge = { beginner: t('ui.beginner'), intermediate: t('ui.intermediate'), advanced: t('ui.advanced') }[s.difficulty] || s.difficulty;
     const diffColor = { beginner: '#69f0ae', intermediate: '#ffa726', advanced: '#ef5350' }[s.difficulty] || '#888';
 
     this.el.innerHTML = `
@@ -91,8 +92,8 @@ export class ChallengeUI {
         <div class="challenge-title-row">
           <span class="challenge-badge" style="background:${diffColor}">${diffBadge}</span>
           <span class="challenge-title">${s.title}</span>
-          <button class="challenge-btn challenge-collapse-btn" title="${collapsed ? 'Expand' : 'Collapse'}">${collapsed ? '▼' : '▲'}</button>
-          <button class="challenge-btn challenge-quit-btn" title="Quit challenge">✕</button>
+          <button class="challenge-btn challenge-collapse-btn">${collapsed ? '\u25bc' : '\u25b2'}</button>
+          <button class="challenge-btn challenge-quit-btn" title="${t('ui.quitChallenge')}">\u2715</button>
         </div>
       </div>
       ${collapsed ? '' : `
@@ -108,13 +109,13 @@ export class ChallengeUI {
         ${allPassed ? `
           <div class="challenge-success">
             <span class="challenge-success-icon">🎉</span>
-            <span>${s.congratsMessage || 'Challenge Complete!'}</span>
+            <span>${s.congratsMessage || t('ui.challengeComplete')}</span>
           </div>
         ` : `
           <div class="challenge-actions">
-            <button class="challenge-btn challenge-check-btn">Check</button>
+            <button class="challenge-btn challenge-check-btn">${t('ui.check')}</button>
             <button class="challenge-btn challenge-hint-btn" ${hints.length >= totalHints ? 'disabled' : ''}>
-              Hint (${hints.length}/${totalHints})
+              ${t('ui.hint')} (${hints.length}/${totalHints})
             </button>
           </div>
         `}

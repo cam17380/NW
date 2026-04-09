@@ -2,6 +2,8 @@
 // Why 2^n - 2: visualizing the two reserved addresses in every subnet.
 
 // ─── Shared drawing helpers ───
+import { t } from '../../i18n/I18n.js';
+
 function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -28,12 +30,8 @@ function easeInOut(t) {
 
 // ─── Step 1: Network Address ───
 const step1_NetworkAddress = {
-  title: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9',
-  content: `
-    <p>\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u306f\u30db\u30b9\u30c8\u90e8\u304c\u5168\u3066 <strong>0</strong> \u306e\u30a2\u30c9\u30ec\u30b9\u3067\u3059\u3002</p>
-    <p>\u30b5\u30d6\u30cd\u30c3\u30c8\u305d\u306e\u3082\u306e\u306e\u300c\u540d\u524d\u300d\u3092\u8868\u3057\u3001\u30db\u30b9\u30c8\u306b\u306f\u5272\u308a\u5f53\u3066\u3089\u308c\u307e\u305b\u3093\u3002</p>
-    <p>\u4f8b: <code>192.168.1.130/25</code> \u306e\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9 \u2192 <code>192.168.1.128</code></p>
-  `,
+  get title() { return t('learn.network-broadcast.s0t'); },
+  get content() { return t('learn.network-broadcast.s0c'); },
   animation(ctx, w, h, elapsed) {
     // IP: 192.168.1.130 /25, Mask: 255.255.255.128 → Network: 192.168.1.128
     const ip   = [192, 168, 1, 130];
@@ -177,12 +175,8 @@ const step1_NetworkAddress = {
 
 // ─── Step 2: Broadcast Address ───
 const step2_BroadcastAddress = {
-  title: '\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u30a2\u30c9\u30ec\u30b9',
-  content: `
-    <p>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u30a2\u30c9\u30ec\u30b9\u306f\u30db\u30b9\u30c8\u90e8\u304c\u5168\u3066 <strong>1</strong> \u306e\u30a2\u30c9\u30ec\u30b9\u3067\u3059\u3002</p>
-    <p>\u305d\u306e\u30b5\u30d6\u30cd\u30c3\u30c8\u5185\u306e <strong>\u5168\u3066\u306e\u30db\u30b9\u30c8</strong> \u306b\u30d1\u30b1\u30c3\u30c8\u3092\u9001\u308b\u305f\u3081\u306e\u7279\u6b8a\u30a2\u30c9\u30ec\u30b9\u3067\u3059\u3002</p>
-    <p>\u4f8b: <code>192.168.1.130/25</code> \u306e\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8 \u2192 <code>192.168.1.255</code></p>
-  `,
+  get title() { return t('learn.network-broadcast.s1t'); },
+  get content() { return t('learn.network-broadcast.s1c'); },
   animation(ctx, w, h, elapsed) {
     // IP: 192.168.1.130 /25, Mask: 255.255.255.128 → Broadcast: 192.168.1.255
     const ip   = [192, 168, 1, 130];
@@ -326,17 +320,8 @@ const step2_BroadcastAddress = {
 
 // ─── Step 3: Usable Address Range ───
 const step3_UsableRange = {
-  title: '\u4f7f\u7528\u53ef\u80fd\u306a\u30a2\u30c9\u30ec\u30b9\u7bc4\u56f2',
-  content: `
-    <p>\u30b5\u30d6\u30cd\u30c3\u30c8\u5185\u3067\u30db\u30b9\u30c8\u306b\u5272\u308a\u5f53\u3066\u3089\u308c\u308b\u306e\u306f:</p>
-    <p><strong>Network + 1</strong> \uff5e <strong>Broadcast - 1</strong> \u306e\u7bc4\u56f2\u3067\u3059\u3002</p>
-    <ul>
-      <li>\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9 (192.168.1.128) \u2014 \u4f7f\u7528\u4e0d\u53ef</li>
-      <li>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8 (192.168.1.255) \u2014 \u4f7f\u7528\u4e0d\u53ef</li>
-      <li>\u4f7f\u7528\u53ef\u80fd: 192.168.1.129 \uff5e 192.168.1.254 (<strong>126\u53f0</strong>)</li>
-    </ul>
-    <p>\u3053\u308c\u304c <code>2\u207f - 2</code> \u306e\u300c-2\u300d\u306e\u7406\u7531\u3067\u3059\u3002</p>
-  `,
+  get title() { return t('learn.network-broadcast.s2t'); },
+  get content() { return t('learn.network-broadcast.s2c'); },
   animation(ctx, w, h, elapsed) {
     // 192.168.1.128/25 → .128(net) .129~.254(usable) .255(bcast)
     const netAddr = 128;
@@ -461,15 +446,8 @@ const step3_UsableRange = {
 
 // ─── Step 4: Unicast vs Broadcast ───
 const step4_UnicastBroadcast = {
-  title: '\u30e6\u30cb\u30ad\u30e3\u30b9\u30c8 vs \u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8',
-  content: `
-    <p>\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u901a\u4fe1\u306b\u306f2\u3064\u306e\u30d1\u30bf\u30fc\u30f3\u304c\u3042\u308a\u307e\u3059:</p>
-    <ul>
-      <li><strong>\u30e6\u30cb\u30ad\u30e3\u30b9\u30c8</strong> \u2014 \u7279\u5b9a\u306e1\u53f0\u306b\u9001\u4fe1\uff08\u901a\u5e38\u306e\u901a\u4fe1\uff09</li>
-      <li><strong>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8</strong> \u2014 \u30b5\u30d6\u30cd\u30c3\u30c8\u5185\u306e\u5168\u53f0\u306b\u9001\u4fe1\uff08ARP, DHCP\u7b49\uff09</li>
-    </ul>
-    <p>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u30a2\u30c9\u30ec\u30b9\u5b9b\u3066\u306e\u30d1\u30b1\u30c3\u30c8\u306f\u5168\u30db\u30b9\u30c8\u304c\u53d7\u4fe1\u3057\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.network-broadcast.s3t'); },
+  get content() { return t('learn.network-broadcast.s3c'); },
   animation(ctx, w, h, elapsed) {
     const halfW = w / 2;
     const senderY = h * 0.18;
@@ -644,11 +622,8 @@ const step4_UnicastBroadcast = {
 
 // ─── Step 5: Subnet reference table ───
 const step5_SubnetTable = {
-  title: '\u30b5\u30d6\u30cd\u30c3\u30c8\u65e9\u898b\u8868',
-  content: `
-    <p>\u4ee3\u8868\u7684\u306aCIDR\u3054\u3068\u306e\u30cd\u30c3\u30c8\u30ef\u30fc\u30af/\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8/\u30db\u30b9\u30c8\u6570\u4e00\u89a7\u3067\u3059\u3002</p>
-    <p>\u3053\u306e\u8868\u3092\u899a\u3048\u3066\u304a\u304f\u3068\u30b5\u30d6\u30cd\u30c3\u30c8\u8a2d\u8a08\u304c\u30b9\u30e0\u30fc\u30ba\u306b\u306a\u308a\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.network-broadcast.s4t'); },
+  get content() { return t('learn.network-broadcast.s4c'); },
   animation(ctx, w, h, elapsed) {
     const entries = [
       { cidr: '/24', mask: '255.255.255.0',   net: '.0',   bcast: '.255', hosts: 254, blockSize: 256 },
@@ -810,17 +785,8 @@ const step5_SubnetTable = {
 
 // ─── Step 6: Summary ───
 const step6_Summary = {
-  title: '\u307e\u3068\u3081',
-  content: `
-    <p>\u3053\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u5b66\u3093\u3060\u3053\u3068:</p>
-    <ul>
-      <li><strong>\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9</strong>: \u30db\u30b9\u30c8\u90e8 = all 0\uff08\u30b5\u30d6\u30cd\u30c3\u30c8\u306e\u540d\u524d\uff09</li>
-      <li><strong>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8</strong>: \u30db\u30b9\u30c8\u90e8 = all 1\uff08\u5168\u5b9b\u5148\uff09</li>
-      <li><strong>\u4f7f\u7528\u53ef\u80fd\u7bc4\u56f2</strong>: Net+1 \uff5e Bcast-1</li>
-      <li><strong>\u30db\u30b9\u30c8\u6570</strong>: 2<sup>n</sup> - 2 \u306e\u300c-2\u300d= Net\u3068Bcast\u3092\u9664\u304f</li>
-      <li><strong>\u30e6\u30cb\u30ad\u30e3\u30b9\u30c8</strong> = 1\u5bfe1\u3001<strong>\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8</strong> = 1\u5bfe\u5168</li>
-    </ul>
-  `,
+  get title() { return t('learn.network-broadcast.s5t'); },
+  get content() { return t('learn.network-broadcast.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
       { text: 'Network Addr',   sub: 'Host = all 0', color: '#888' },
@@ -888,8 +854,8 @@ const step6_Summary = {
 // ─── Export lesson ───
 export const lessonNetworkBroadcast = {
   id: 'lesson-network-broadcast',
-  title: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3068\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8',
-  description: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3001\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u3001\u4f7f\u7528\u53ef\u80fd\u7bc4\u56f2\u3001\u30e6\u30cb\u30ad\u30e3\u30b9\u30c8/\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u901a\u4fe1\u3092\u5b66\u3073\u307e\u3059\u3002',
+  get title() { return t('learn.network-broadcast.title'); },
+  get description() { return t('learn.network-broadcast.desc'); },
   category: 'IP Addressing',
   steps: [
     step1_NetworkAddress,

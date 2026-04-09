@@ -1,4 +1,5 @@
 // ─── Learn Selector: lesson selection modal ───
+import { t } from '../i18n/I18n.js';
 
 export class LearnSelector {
   constructor(engine) {
@@ -38,19 +39,19 @@ export class LearnSelector {
     this.el.innerHTML = `
       <div class="learn-selector-modal">
         <div class="learn-selector-header">
-          <h2>Learn — Networking Basics</h2>
-          <span class="learn-progress-badge">${completedCount} / ${totalCount} completed</span>
+          <h2>${t('ui.learnTitle')}</h2>
+          <span class="learn-progress-badge">${t('ui.completed', { n: completedCount, total: totalCount })}</span>
           <button class="learn-selector-close">\u2715</button>
         </div>
         <p class="learn-selector-desc">
-          Animated lessons to help you understand core networking concepts step by step.
+          ${t('ui.learnDesc')}
         </p>
         ${categories.length > 1 ? `
           <div class="learn-selector-filters">
             <div class="learn-filter-group">
-              <label>Category:</label>
+              <label>${t('ui.category')}</label>
               <select class="learn-filter-select" data-filter="category">
-                <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>All</option>
+                <option value="all" ${this.filterCategory === 'all' ? 'selected' : ''}>${t('ui.all')}</option>
                 ${categories.map(c => `<option value="${c}" ${this.filterCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
               </select>
             </div>
@@ -104,12 +105,12 @@ export class LearnSelector {
         <div class="learn-card-icon">${icon}</div>
         <div class="learn-card-body">
           <div class="learn-card-header">
-            <span class="learn-card-number">Lesson ${index + 1}</span>
+            <span class="learn-card-number">${t('ui.lessonN', { n: index + 1 })}</span>
             ${completed ? '<span class="learn-card-check">\u2714</span>' : ''}
           </div>
           <div class="learn-card-title">${l.title}</div>
           <div class="learn-card-desc">${l.description}</div>
-          <div class="learn-card-meta">${stepsCount} steps</div>
+          <div class="learn-card-meta">${t('ui.nSteps', { n: stepsCount })}</div>
         </div>
       </div>
     `;

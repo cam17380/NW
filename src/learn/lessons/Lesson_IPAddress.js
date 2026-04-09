@@ -2,6 +2,8 @@
 // Animated introduction to IPv4 address structure, classes, and private ranges.
 
 // ─── Shared drawing helpers ───
+import { t } from '../../i18n/I18n.js';
+
 function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -28,12 +30,8 @@ function easeInOut(t) {
 
 // ─── Step 1: What is an IP address? ───
 const step1_WhatIsIP = {
-  title: 'IP\u30a2\u30c9\u30ec\u30b9\u3068\u306f\uff1f',
-  content: `
-    <p>IP\u30a2\u30c9\u30ec\u30b9\u306f\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u4e0a\u306e\u300c\u4f4f\u6240\u300d\u3067\u3059\u3002</p>
-    <p>IPv4\u30a2\u30c9\u30ec\u30b9\u306f <strong>32\u30d3\u30c3\u30c8</strong> \u306e\u6570\u5024\u3067\u3001<strong>8\u30d3\u30c3\u30c8\u00d74\u30aa\u30af\u30c6\u30c3\u30c8</strong> \u306b\u533a\u5207\u3063\u3066\u8868\u8a18\u3057\u307e\u3059\u3002</p>
-    <p>\u4f8b: <code>192.168.1.10</code> \u2192 \u5404\u30aa\u30af\u30c6\u30c3\u30c8\u306f 0\uff5e255 \u306e\u7bc4\u56f2\u3067\u3059\u3002</p>
-  `,
+  get title() { return t('learn.ip-address.s0t'); },
+  get content() { return t('learn.ip-address.s0c'); },
   animation(ctx, w, h, elapsed) {
     const octets = [192, 168, 1, 10];
     const boxW = Math.min(100, w * 0.2);
@@ -148,13 +146,8 @@ const step1_WhatIsIP = {
 
 // ─── Step 2: Binary ↔ Decimal conversion ───
 const step2_BinaryConversion = {
-  title: '2\u9032\u6570\u3068\u30aa\u30af\u30c6\u30c3\u30c8',
-  content: `
-    <p>\u5404\u30aa\u30af\u30c6\u30c3\u30c8\u306f <strong>8\u30d3\u30c3\u30c8</strong> \u306e2\u9032\u6570\u3067\u8868\u73fe\u3055\u308c\u307e\u3059\u3002</p>
-    <p>\u5404\u30d3\u30c3\u30c8\u306f\u53f3\u304b\u3089 2<sup>0</sup>, 2<sup>1</sup>, ..., 2<sup>7</sup> \u306e\u91cd\u307f\u3092\u6301\u3061\u307e\u3059\u3002</p>
-    <p>\u4f8b: <code>10101000</code> = 128 + 32 + 8 = <strong>168</strong></p>
-    <p>1\u306e\u4f4d\u7f6e\u306e\u91cd\u307f\u3092\u8db3\u3057\u5408\u308f\u305b\u308b\u3068\u300110\u9032\u6570\u306b\u306a\u308a\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.ip-address.s1t'); },
+  get content() { return t('learn.ip-address.s1c'); },
   animation(ctx, w, h, elapsed) {
     const target = 168; // 10101000
     const bits = toBinary8(target);
@@ -262,17 +255,8 @@ const step2_BinaryConversion = {
 
 // ─── Step 3: IP Address Classes ───
 const step3_Classes = {
-  title: 'IP\u30a2\u30c9\u30ec\u30b9\u306e\u30af\u30e9\u30b9',
-  content: `
-    <p>IPv4\u30a2\u30c9\u30ec\u30b9\u306f\u5148\u982d\u30d3\u30c3\u30c8\u3067 <strong>\u30af\u30e9\u30b9 A\uff5eE</strong> \u306b\u5206\u985e\u3055\u308c\u307e\u3059\u3002</p>
-    <ul>
-      <li><strong>Class A</strong> (0xxx): 1.0.0.0 \u2013 126.255.255.255 \u2014 \u5927\u898f\u6a21\u30cd\u30c3\u30c8\u30ef\u30fc\u30af</li>
-      <li><strong>Class B</strong> (10xx): 128.0.0.0 \u2013 191.255.255.255 \u2014 \u4e2d\u898f\u6a21</li>
-      <li><strong>Class C</strong> (110x): 192.0.0.0 \u2013 223.255.255.255 \u2014 \u5c0f\u898f\u6a21</li>
-      <li><strong>Class D</strong> (1110): 224\uff5e239 \u2014 \u30de\u30eb\u30c1\u30ad\u30e3\u30b9\u30c8</li>
-      <li><strong>Class E</strong> (1111): 240\uff5e255 \u2014 \u4e88\u7d04\u6e08\u307f</li>
-    </ul>
-  `,
+  get title() { return t('learn.ip-address.s2t'); },
+  get content() { return t('learn.ip-address.s2c'); },
   animation(ctx, w, h, elapsed) {
     const classes = [
       { name: 'Class A', range: '1 \u2013 126',   ratio: 0.5,  color: '#4fc3f7', bits: '0xxxxxxx', net: '8', host: '24' },
@@ -350,18 +334,8 @@ const step3_Classes = {
 
 // ─── Step 4: Private vs Global addresses ───
 const step4_PrivateGlobal = {
-  title: '\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30a2\u30c9\u30ec\u30b9\u3068\u30b0\u30ed\u30fc\u30d0\u30eb\u30a2\u30c9\u30ec\u30b9',
-  content: `
-    <p>IP\u30a2\u30c9\u30ec\u30b9\u306b\u306f\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8\u3067\u4f7f\u3046 <strong>\u30b0\u30ed\u30fc\u30d0\u30eb\u30a2\u30c9\u30ec\u30b9</strong> \u3068\u3001
-       LAN\u5185\u5c02\u7528\u306e <strong>\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30a2\u30c9\u30ec\u30b9</strong> \u304c\u3042\u308a\u307e\u3059\u3002</p>
-    <p>RFC 1918 \u3067\u5b9a\u7fa9\u3055\u308c\u305f\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u7bc4\u56f2:</p>
-    <ul>
-      <li><strong>10.0.0.0/8</strong> \u2014 Class A (\u5927\u898f\u6a21LAN)</li>
-      <li><strong>172.16.0.0/12</strong> \u2014 Class B (172.16\uff5e172.31)</li>
-      <li><strong>192.168.0.0/16</strong> \u2014 Class C (\u5bb6\u5ead/\u5c0f\u898f\u6a21)</li>
-    </ul>
-    <p>\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30a2\u30c9\u30ec\u30b9\u306f NAT \u3092\u901a\u3058\u3066\u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8\u306b\u30a2\u30af\u30bb\u30b9\u3057\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.ip-address.s3t'); },
+  get content() { return t('learn.ip-address.s3c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
     const phase = Math.min(elapsed / 2000, 1);
@@ -473,17 +447,8 @@ const step4_PrivateGlobal = {
 
 // ─── Step 5: Special addresses ───
 const step5_SpecialAddresses = {
-  title: '\u7279\u6b8a\u306aIP\u30a2\u30c9\u30ec\u30b9',
-  content: `
-    <p>IPv4\u306b\u306f\u7279\u5225\u306a\u5f79\u5272\u3092\u6301\u3064\u30a2\u30c9\u30ec\u30b9\u304c\u3042\u308a\u307e\u3059:</p>
-    <ul>
-      <li><strong>0.0.0.0</strong> \u2014 \u30c7\u30d5\u30a9\u30eb\u30c8\u30eb\u30fc\u30c8 / \u672a\u6307\u5b9a</li>
-      <li><strong>127.0.0.1</strong> \u2014 \u30eb\u30fc\u30d7\u30d0\u30c3\u30af (\u81ea\u5206\u81ea\u8eab)</li>
-      <li><strong>255.255.255.255</strong> \u2014 \u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8 (\u5168\u5b9b\u5148)</li>
-      <li><strong>169.254.x.x</strong> \u2014 \u30ea\u30f3\u30af\u30ed\u30fc\u30ab\u30eb (DHCP\u5931\u6557\u6642)</li>
-    </ul>
-    <p>\u3053\u308c\u3089\u306f\u901a\u5e38\u306e\u901a\u4fe1\u5148\u3068\u3057\u3066\u4f7f\u3048\u307e\u305b\u3093\u3002</p>
-  `,
+  get title() { return t('learn.ip-address.s4t'); },
+  get content() { return t('learn.ip-address.s4c'); },
   animation(ctx, w, h, elapsed) {
     const specials = [
       { addr: '0.0.0.0',         label: 'Default / Unspecified', icon: '\u25cb', color: '#667' },
@@ -532,18 +497,8 @@ const step5_SpecialAddresses = {
 
 // ─── Step 6: Summary ───
 const step6_Summary = {
-  title: '\u307e\u3068\u3081',
-  content: `
-    <p>\u3053\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u5b66\u3093\u3060\u3053\u3068:</p>
-    <ul>
-      <li>IPv4\u30a2\u30c9\u30ec\u30b9 = <strong>32\u30d3\u30c3\u30c8</strong>\u30014\u30aa\u30af\u30c6\u30c3\u30c8</li>
-      <li>\u5404\u30aa\u30af\u30c6\u30c3\u30c8\u306f <strong>0\uff5e255</strong> (8\u30d3\u30c3\u30c8)</li>
-      <li><strong>Class A/B/C</strong> \u3067\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u898f\u6a21\u304c\u6c7a\u307e\u308b</li>
-      <li><strong>\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8\u30a2\u30c9\u30ec\u30b9</strong>: 10.x, 172.16\uff5e31.x, 192.168.x</li>
-      <li>\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8 \u2192 NAT \u2192 \u30a4\u30f3\u30bf\u30fc\u30cd\u30c3\u30c8</li>
-    </ul>
-    <p>\u6b21\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u306f\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u3068CIDR\u3092\u5b66\u3073\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.ip-address.s5t'); },
+  get content() { return t('learn.ip-address.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
       { text: '32 bits = 4 octets', color: '#4fc3f7' },
@@ -611,8 +566,8 @@ const step6_Summary = {
 // ─── Export lesson ───
 export const lessonIPAddress = {
   id: 'lesson-ip-address',
-  title: 'IP\u30a2\u30c9\u30ec\u30b9\u306e\u57fa\u672c',
-  description: 'IPv4\u30a2\u30c9\u30ec\u30b9\u306e\u69cb\u9020\u3001\u30af\u30e9\u30b9\u5206\u985e\u3001\u30d7\u30e9\u30a4\u30d9\u30fc\u30c8/\u30b0\u30ed\u30fc\u30d0\u30eb\u30a2\u30c9\u30ec\u30b9\u3092\u5b66\u3073\u307e\u3059\u3002',
+  get title() { return t('learn.ip-address.title'); },
+  get description() { return t('learn.ip-address.desc'); },
   category: 'IP Addressing',
   steps: [
     step1_WhatIsIP,

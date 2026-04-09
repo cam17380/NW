@@ -2,6 +2,7 @@
 import { getSnapshot, applySnapshot } from './Snapshot.js';
 import { createDefaultDevices, createDefaultLinks } from '../model/Topology.js';
 import { showToast } from '../ui/Toast.js';
+import { t } from '../i18n/I18n.js';
 
 const SAVE_KEY = 'netsim_save';
 
@@ -89,8 +90,7 @@ export function autoLoadConfig(store) {
 }
 
 export function confirmReset() {
-  document.getElementById('confirmMsg').textContent =
-    'All device configurations will be reset to factory defaults. Are you sure?';
+  document.getElementById('confirmMsg').textContent = t('ui.confirmReset');
   document.getElementById('confirmOverlay').classList.add('show');
 }
 

@@ -2,6 +2,8 @@
 // Animated explanation of how masks divide network/host portions.
 
 // ─── Shared drawing helpers ───
+import { t } from '../../i18n/I18n.js';
+
 function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -28,13 +30,8 @@ function easeInOut(t) {
 
 // ─── Step 1: What is a subnet mask? ───
 const step1_WhatIsMask = {
-  title: '\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u3068\u306f\uff1f',
-  content: `
-    <p>\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u306fIP\u30a2\u30c9\u30ec\u30b9\u306e\u300c\u3069\u3053\u307e\u3067\u304c\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u90e8\u3067\u3001
-       \u3069\u3053\u304b\u3089\u304c\u30db\u30b9\u30c8\u90e8\u304b\u300d\u3092\u793a\u3057\u307e\u3059\u3002</p>
-    <p>\u30de\u30b9\u30af\u306e <strong>1</strong> \u306e\u90e8\u5206 = \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u90e8\u3001<strong>0</strong> \u306e\u90e8\u5206 = \u30db\u30b9\u30c8\u90e8</p>
-    <p>\u4f8b: <code>255.255.255.0</code> \u2192 \u5148\u982d24\u30d3\u30c3\u30c8\u304c\u30cd\u30c3\u30c8\u30ef\u30fc\u30af</p>
-  `,
+  get title() { return t('learn.subnet-mask.s0t'); },
+  get content() { return t('learn.subnet-mask.s0c'); },
   animation(ctx, w, h, elapsed) {
     const ip   = [192, 168, 1, 10];
     const mask = [255, 255, 255, 0];
@@ -161,19 +158,8 @@ const step1_WhatIsMask = {
 
 // ─── Step 3: CIDR notation ───
 const step3_CIDR = {
-  title: 'CIDR\u8868\u8a18',
-  content: `
-    <p><strong>CIDR</strong> (Classless Inter-Domain Routing) \u306f\u30de\u30b9\u30af\u306e\u30d3\u30c3\u30c8\u6570\u3092
-       \u30b9\u30e9\u30c3\u30b7\u30e5\u3067\u8868\u8a18\u3059\u308b\u65b9\u6cd5\u3067\u3059\u3002</p>
-    <p>\u4f8b: <code>192.168.1.0/24</code> = \u30de\u30b9\u30af 255.255.255.0</p>
-    <p>\u4e3b\u306aCIDR\u3068\u30de\u30b9\u30af\u306e\u5bfe\u5fdc:</p>
-    <ul>
-      <li><code>/8</code>  = 255.0.0.0 (Class A)</li>
-      <li><code>/16</code> = 255.255.0.0 (Class B)</li>
-      <li><code>/24</code> = 255.255.255.0 (Class C)</li>
-      <li><code>/32</code> = 255.255.255.255 (\u30db\u30b9\u30c8\u5358\u4f53)</li>
-    </ul>
-  `,
+  get title() { return t('learn.subnet-mask.s1t'); },
+  get content() { return t('learn.subnet-mask.s1c'); },
   animation(ctx, w, h, elapsed) {
     const examples = [
       { cidr: '/8',  mask: '255.0.0.0',       netBits: 8,  hosts: '16,777,214', color: '#4fc3f7' },
@@ -248,17 +234,8 @@ const step3_CIDR = {
 
 // ─── Step 2: AND operation for network address ───
 const step2_ANDOperation = {
-  title: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u306e\u8a08\u7b97',
-  content: `
-    <p>IP\u30a2\u30c9\u30ec\u30b9\u3068\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u306e <strong>AND\u6f14\u7b97</strong> \u3067
-       \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3092\u6c42\u3081\u307e\u3059\u3002</p>
-    <p>\u4f8b: <code>192.168.1.130</code> \u3068 <code>/25</code> (255.255.255.128)</p>
-    <ol>
-      <li>IP\u3068\u30de\u30b9\u30af\u3092\u30d3\u30c3\u30c8\u3067\u4e26\u3079\u308b</li>
-      <li>\u5404\u30d3\u30c3\u30c8\u3092 AND\u6f14\u7b97 (1 AND 1 = 1, \u305d\u308c\u4ee5\u5916 = 0)</li>
-      <li>\u7d50\u679c = \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9</li>
-    </ol>
-  `,
+  get title() { return t('learn.subnet-mask.s2t'); },
+  get content() { return t('learn.subnet-mask.s2c'); },
   animation(ctx, w, h, elapsed) {
     const ip   = [192, 168, 1, 130];
     const mask = [255, 255, 255, 128];
@@ -381,14 +358,8 @@ const step2_ANDOperation = {
 
 // ─── Step 4: Mask and host count relationship ───
 const step4_MaskHostCount = {
-  title: '\u30de\u30b9\u30af\u3068\u30db\u30b9\u30c8\u6570\u306e\u95a2\u4fc2',
-  content: `
-    <p>\u30de\u30b9\u30af\u304c\u9577\u3044\u307b\u3069\u30db\u30b9\u30c8\u90e8\u304c\u5c0f\u3055\u304f\u306a\u308a\u3001
-       \u4f7f\u3048\u308bIP\u30a2\u30c9\u30ec\u30b9\u304c\u6e1b\u308a\u307e\u3059\u3002</p>
-    <p>\u30db\u30b9\u30c8\u6570 = <strong>2<sup>(32-prefix)</sup> - 2</strong></p>
-    <p>-2\u306f\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3068\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u3092\u9664\u304f\u305f\u3081\u3067\u3059\u3002</p>
-    <p>\u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3\u3067\u30de\u30b9\u30af\u9577\u3068\u30db\u30b9\u30c8\u6570\u306e\u5909\u5316\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002</p>
-  `,
+  get title() { return t('learn.subnet-mask.s3t'); },
+  get content() { return t('learn.subnet-mask.s3c'); },
   animation(ctx, w, h, elapsed) {
     // Sliding mask visualization
     const cycleTime = 10000;
@@ -484,18 +455,8 @@ const step4_MaskHostCount = {
 
 // ─── Step 5: VLSM (Variable Length Subnet Masking) ───
 const step5_VLSM = {
-  title: 'VLSM\uff08\u53ef\u5909\u9577\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\uff09',
-  content: `
-    <p><strong>VLSM</strong> \u3092\u4f7f\u3046\u3068\u3001\u30b5\u30d6\u30cd\u30c3\u30c8\u3054\u3068\u306b\u7570\u306a\u308b\u30de\u30b9\u30af\u9577\u3092
-       \u8a2d\u5b9a\u3067\u304d\u3001IP\u30a2\u30c9\u30ec\u30b9\u3092\u52b9\u7387\u7684\u306b\u4f7f\u3048\u307e\u3059\u3002</p>
-    <p>\u4f8b: 192.168.1.0/24 \u3092\u5206\u5272:</p>
-    <ul>
-      <li>\u30aa\u30d5\u30a3\u30b9A: 100\u53f0 \u2192 /25 (126\u30db\u30b9\u30c8)</li>
-      <li>\u30aa\u30d5\u30a3\u30b9B: 50\u53f0 \u2192 /26 (62\u30db\u30b9\u30c8)</li>
-      <li>\u30b5\u30fc\u30d0\u30fc: 10\u53f0 \u2192 /28 (14\u30db\u30b9\u30c8)</li>
-      <li>P2P\u30ea\u30f3\u30af: 2\u53f0 \u2192 /30 (2\u30db\u30b9\u30c8)</li>
-    </ul>
-  `,
+  get title() { return t('learn.subnet-mask.s4t'); },
+  get content() { return t('learn.subnet-mask.s4c'); },
   animation(ctx, w, h, elapsed) {
     const subnets = [
       { name: 'Office A',  need: 100, prefix: 25, range: '192.168.1.0/25',   hosts: 126, color: '#4fc3f7' },
@@ -618,18 +579,8 @@ const step5_VLSM = {
 
 // ─── Step 6: Summary ───
 const step6_Summary = {
-  title: '\u307e\u3068\u3081',
-  content: `
-    <p>\u3053\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u5b66\u3093\u3060\u3053\u3068:</p>
-    <ul>
-      <li>\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af: <strong>1 = Network, 0 = Host</strong></li>
-      <li>CIDR\u8868\u8a18: <code>/24</code> = \u30de\u30b9\u30af\u306e1\u306e\u30d3\u30c3\u30c8\u6570</li>
-      <li>AND\u6f14\u7b97\u3067\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3092\u6c42\u3081\u308b</li>
-      <li>\u30db\u30b9\u30c8\u6570 = 2<sup>(32-prefix)</sup> - 2</li>
-      <li>VLSM\u3067\u5fc5\u8981\u306b\u5fdc\u3058\u305f\u30b5\u30d6\u30cd\u30c3\u30c8\u5206\u5272</li>
-    </ul>
-    <p>Challenge Mode\u3067\u5b9f\u969b\u306bIP\u30a2\u30c9\u30ec\u30b9\u3092\u8a2d\u5b9a\u3057\u3066\u307f\u307e\u3057\u3087\u3046\uff01</p>
-  `,
+  get title() { return t('learn.subnet-mask.s5t'); },
+  get content() { return t('learn.subnet-mask.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
       { text: 'Subnet Mask', sub: '1=Net, 0=Host', color: '#69f0ae' },
@@ -700,8 +651,8 @@ const step6_Summary = {
 // ─── Export lesson ───
 export const lessonSubnetMask = {
   id: 'lesson-subnet-mask',
-  title: '\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u3068CIDR',
-  description: '\u30b5\u30d6\u30cd\u30c3\u30c8\u30de\u30b9\u30af\u306e\u4ed5\u7d44\u307f\u3001CIDR\u8868\u8a18\u3001\u30b5\u30d6\u30cd\u30c3\u30c8\u8a08\u7b97\u3001VLSM\u3092\u5b66\u3073\u307e\u3059\u3002',
+  get title() { return t('learn.subnet-mask.title'); },
+  get description() { return t('learn.subnet-mask.desc'); },
   category: 'IP Addressing',
   steps: [
     step1_WhatIsMask,

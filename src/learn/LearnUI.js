@@ -1,4 +1,5 @@
 // ─── Learn UI: full-screen lesson viewer with animation canvas ───
+import { t } from '../i18n/I18n.js';
 
 export class LearnUI {
   constructor(engine) {
@@ -50,8 +51,8 @@ export class LearnUI {
       <div class="learn-viewer">
         <div class="learn-viewer-header">
           <div class="learn-viewer-title">${lesson.title}</div>
-          <div class="learn-viewer-step-info">Step ${stepIdx + 1} / ${totalSteps}</div>
-          <button class="learn-viewer-close" title="Exit lesson">\u2715</button>
+          <div class="learn-viewer-step-info">${t('ui.stepOf', { current: stepIdx + 1, total: totalSteps })}</div>
+          <button class="learn-viewer-close" title="${t('ui.exitLesson')}">\u2715</button>
         </div>
 
         <div class="learn-viewer-progress">
@@ -73,7 +74,7 @@ export class LearnUI {
 
         <div class="learn-viewer-nav">
           <button class="learn-nav-btn learn-prev-btn" ${isFirst ? 'disabled' : ''}>
-            \u25c0 Prev
+            ${t('ui.prev')}
           </button>
           <div class="learn-nav-dots">
             ${Array.from({ length: totalSteps }, (_, i) =>
@@ -81,7 +82,7 @@ export class LearnUI {
             ).join('')}
           </div>
           <button class="learn-nav-btn learn-next-btn ${isLast ? 'finish' : ''}">
-            ${isLast ? 'Finish \u2714' : 'Next \u25b6'}
+            ${isLast ? t('ui.finish') : t('ui.next')}
           </button>
         </div>
       </div>

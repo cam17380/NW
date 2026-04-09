@@ -2,6 +2,8 @@
 // Encapsulation, Ethernet frame (L2), IP packet (L3), nesting overview.
 
 // ─── Shared drawing helpers ───
+import { t } from '../../i18n/I18n.js';
+
 function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -24,17 +26,8 @@ function easeInOut(t) {
 
 // ─── Step 1: Encapsulation concept ───
 const step1_Encapsulation = {
-  title: '\u30ab\u30d7\u30bb\u30eb\u5316\u3068\u306f\uff1f',
-  content: `
-    <p>\u30c7\u30fc\u30bf\u3092\u9001\u308b\u3068\u304d\u3001\u5404\u5c64\u304c <strong>\u30d8\u30c3\u30c0</strong> \u3092\u4ed8\u3051\u3066\u5305\u307f\u307e\u3059\u3002</p>
-    <p>\u3061\u3087\u3046\u3069\u624b\u7d19\u3092\u5c01\u7b52\u306b\u5165\u308c\u3001\u3055\u3089\u306b\u5b9b\u540d\u30e9\u30d9\u30eb\u3092\u8cbc\u308b\u3088\u3046\u306a\u30a4\u30e1\u30fc\u30b8\u3067\u3059\u3002</p>
-    <ul>
-      <li><strong>L4</strong>: \u30a2\u30d7\u30ea\u30c7\u30fc\u30bf\u306b\u30dd\u30fc\u30c8\u756a\u53f7\u3092\u4ed8\u52a0\uff08\u30bb\u30b0\u30e1\u30f3\u30c8\uff09</li>
-      <li><strong>L3</strong>: IP\u30d8\u30c3\u30c0\u3092\u4ed8\u52a0\uff08\u30d1\u30b1\u30c3\u30c8\uff09</li>
-      <li><strong>L2</strong>: MAC\u30d8\u30c3\u30c0\u3092\u4ed8\u52a0\uff08\u30d5\u30ec\u30fc\u30e0\uff09</li>
-    </ul>
-    <p>\u53d7\u4fe1\u5074\u3067\u306f\u9006\u306b\u5404\u5c64\u306e\u30d8\u30c3\u30c0\u3092\u5265\u304c\u3057\u3066\u3044\u304d\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.packet-structure.s0t'); },
+  get content() { return t('learn.packet-structure.s0c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
     const baseY = h * 0.42;
@@ -168,17 +161,8 @@ const step1_Encapsulation = {
 
 // ─── Step 2: Ethernet Frame (L2) ───
 const step2_EthernetFrame = {
-  title: '\u30a4\u30fc\u30b5\u30cd\u30c3\u30c8\u30d5\u30ec\u30fc\u30e0\uff08L2\uff09',
-  content: `
-    <p>\u30b9\u30a4\u30c3\u30c1\u304c\u6271\u3046\u30c7\u30fc\u30bf\u5358\u4f4d\u304c <strong>\u30d5\u30ec\u30fc\u30e0</strong> \u3067\u3059\u3002</p>
-    <ul>
-      <li><strong>\u5b9b\u5148MAC</strong> (6\u30d0\u30a4\u30c8): \u6b21\u306e\u8ee2\u9001\u5148\u306eMAC\u30a2\u30c9\u30ec\u30b9</li>
-      <li><strong>\u9001\u4fe1\u5143MAC</strong> (6\u30d0\u30a4\u30c8): \u9001\u4fe1\u5143\u306eMAC\u30a2\u30c9\u30ec\u30b9</li>
-      <li><strong>Type</strong> (2\u30d0\u30a4\u30c8): \u4e2d\u8eab\u306e\u30d7\u30ed\u30c8\u30b3\u30eb (0x0800=IPv4)</li>
-      <li><strong>Payload</strong>: L3\u4ee5\u4e0a\u306e\u30c7\u30fc\u30bf\uff08IP\u30d1\u30b1\u30c3\u30c8\uff09</li>
-      <li><strong>FCS</strong> (4\u30d0\u30a4\u30c8): \u30a8\u30e9\u30fc\u691c\u51fa\u7528\u30c1\u30a7\u30c3\u30af\u30b5\u30e0</li>
-    </ul>
-  `,
+  get title() { return t('learn.packet-structure.s1t'); },
+  get content() { return t('learn.packet-structure.s1c'); },
   animation(ctx, w, h, elapsed) {
     const phase = Math.min(elapsed / 2500, 1);
     const cx = w / 2;
@@ -272,17 +256,8 @@ const step2_EthernetFrame = {
 
 // ─── Step 3: IP Packet (L3) ───
 const step3_IPPacket = {
-  title: 'IP\u30d1\u30b1\u30c3\u30c8\uff08L3\uff09',
-  content: `
-    <p>\u30eb\u30fc\u30bf\u30fc\u304c\u6271\u3046\u30c7\u30fc\u30bf\u5358\u4f4d\u304c <strong>\u30d1\u30b1\u30c3\u30c8</strong> \u3067\u3059\u3002</p>
-    <p>\u30d5\u30ec\u30fc\u30e0\u306ePayload\u90e8\u5206\u306b\u5165\u3063\u3066\u3044\u307e\u3059\u3002</p>
-    <ul>
-      <li><strong>Src IP</strong>: \u9001\u4fe1\u5143\u306eIP\u30a2\u30c9\u30ec\u30b9\uff08\u7d42\u70b9\uff09</li>
-      <li><strong>Dst IP</strong>: \u5b9b\u5148\u306eIP\u30a2\u30c9\u30ec\u30b9\uff08\u7d42\u70b9\uff09</li>
-      <li><strong>TTL</strong>: \u30eb\u30fc\u30bf\u30fc\u3092\u901a\u904e\u3059\u308b\u305f\u3073\u306b\u6e1b\u308b\u30ab\u30a6\u30f3\u30bf\u30fc\uff08\u30eb\u30fc\u30d7\u9632\u6b62\uff09</li>
-      <li><strong>Protocol</strong>: \u4e2d\u8eab\u306e\u30d7\u30ed\u30c8\u30b3\u30eb (1=ICMP, 6=TCP, 17=UDP)</li>
-    </ul>
-  `,
+  get title() { return t('learn.packet-structure.s2t'); },
+  get content() { return t('learn.packet-structure.s2c'); },
   animation(ctx, w, h, elapsed) {
     const phase = Math.min(elapsed / 2500, 1);
     const cx = w / 2;
@@ -380,13 +355,8 @@ const step3_IPPacket = {
 
 // ─── Step 4: Nesting overview ───
 const step4_Nesting = {
-  title: '\u5165\u308c\u5b50\u69cb\u9020\u306e\u5168\u4f53\u50cf',
-  content: `
-    <p>\u5b9f\u969b\u306b\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u3092\u6d41\u308c\u308b\u30c7\u30fc\u30bf\u306f\u3001\u5404\u5c64\u306e\u30d8\u30c3\u30c0\u304c
-       \u5165\u308c\u5b50\u72b6\u306b\u306a\u3063\u3066\u3044\u307e\u3059\u3002</p>
-    <p>\u30b9\u30a4\u30c3\u30c1\u306fL2\u30d8\u30c3\u30c0\u3060\u3051\u3092\u898b\u3066\u8ee2\u9001\u3057\u3001
-       \u30eb\u30fc\u30bf\u30fc\u306fL2\u3092\u5265\u304c\u3057\u3066L3\u3092\u898b\u3066\u8ee2\u9001\u3057\u307e\u3059\u3002</p>
-  `,
+  get title() { return t('learn.packet-structure.s3t'); },
+  get content() { return t('learn.packet-structure.s3c'); },
   animation(ctx, w, h, elapsed) {
     const cx = w / 2;
     const centerY = h * 0.28;
@@ -445,8 +415,9 @@ const step4_Nesting = {
       ctx.globalAlpha = devPhase;
 
       const annY = h * 0.58;
-      const colW = maxW / 3;
-      const annStartX = cx - maxW / 2;
+      const totalW = innerW + padW * 2 * (n - 1);
+      const colW = totalW / 3;
+      const annStartX = cx - totalW / 2;
 
       const devices = [
         { label: 'Switch (L2)', desc: 'Ethernet\u30d8\u30c3\u30c0\u3092\u898b\u3066\u8ee2\u9001', color: '#ffa726', looks: 'L2\u306e\u307f' },
@@ -480,140 +451,10 @@ const step4_Nesting = {
   }
 };
 
-// ─── Step 5: What changes per hop ───
-const step5_WhatChanges = {
-  title: '\u30db\u30c3\u30d7\u3054\u3068\u306b\u4f55\u304c\u5909\u308f\u308b\uff1f',
-  content: `
-    <p>\u30d1\u30b1\u30c3\u30c8\u304c\u30eb\u30fc\u30bf\u30fc\u3092\u901a\u904e\u3059\u308b\u3068\u304d\u306e\u5909\u5316:</p>
-    <ul>
-      <li><strong>L2\u30d8\u30c3\u30c0 (MAC)</strong>: \u6bce\u30db\u30c3\u30d7\u3067\u66f8\u304d\u63db\u308f\u308b \u2014 \u300c\u6b21\u306e\u8ee2\u9001\u5148\u300d</li>
-      <li><strong>L3\u30d8\u30c3\u30c0 (IP)</strong>: \u5909\u308f\u3089\u306a\u3044 \u2014 \u300c\u6700\u7d42\u5b9b\u5148\u300d</li>
-      <li><strong>TTL</strong>: \u30eb\u30fc\u30bf\u30fc\u901a\u904e\u6bce\u306b -1</li>
-    </ul>
-    <p>\u6b21\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u3001\u5b9f\u969b\u306e\u30d1\u30b1\u30c3\u30c8\u306e\u65c5\u3092\u898b\u3066\u3044\u304d\u307e\u3059\u3002</p>
-  `,
-  animation(ctx, w, h, elapsed) {
-    const cx = w / 2;
-
-    // Two hops visualization
-    const hopLabels = ['Hop 1', 'Hop 2'];
-    const hopW = Math.min((w - 60) / 2, 260);
-    const hopGap = 20;
-    const startX = cx - (hopW * 2 + hopGap) / 2;
-    const headerY = h * 0.08;
-
-    // Header rows
-    const rows = [
-      { label: 'L2 Src MAC', values: ['AA:11', 'CC:33'], color: '#ffa726', changed: true },
-      { label: 'L2 Dst MAC', values: ['BB:22', 'DD:44'], color: '#ffa726', changed: true },
-      { label: 'L3 Src IP',  values: ['192.168.1.10', '192.168.1.10'], color: '#4fc3f7', changed: false },
-      { label: 'L3 Dst IP',  values: ['10.0.0.10', '10.0.0.10'], color: '#4fc3f7', changed: false },
-      { label: 'TTL',        values: ['128', '127'], color: '#ef5350', changed: true },
-    ];
-
-    const rowH = Math.min(34, (h * 0.75) / (rows.length + 1.5));
-    const phase = Math.min(elapsed / 2500, 1);
-
-    // Hop headers
-    for (let hi = 0; hi < 2; hi++) {
-      const hx = startX + hi * (hopW + hopGap);
-      const appear = easeInOut(Math.min(Math.max(phase * 3 - hi * 0.5, 0), 1));
-      ctx.globalAlpha = appear;
-
-      ctx.font = 'bold 13px sans-serif';
-      ctx.fillStyle = '#e0e0e0';
-      ctx.textAlign = 'center';
-      ctx.fillText(hopLabels[hi], hx + hopW / 2, headerY + 14);
-
-      ctx.font = '9px sans-serif';
-      ctx.fillStyle = '#556';
-      ctx.fillText(hi === 0 ? 'PC1 \u2192 R1' : 'R1 \u2192 SV1', hx + hopW / 2, headerY + 28);
-    }
-    ctx.globalAlpha = 1;
-
-    // Label column
-    const labelX = startX - 8;
-    const dataStartY = headerY + 38;
-
-    for (let ri = 0; ri < rows.length; ri++) {
-      const row = rows[ri];
-      const appear = easeInOut(Math.min(Math.max(phase * 4 - ri * 0.4, 0), 1));
-      if (appear <= 0) continue;
-
-      ctx.globalAlpha = appear;
-      const ry = dataStartY + ri * rowH;
-
-      // Row label
-      ctx.font = 'bold 10px sans-serif';
-      ctx.fillStyle = row.color;
-      ctx.textAlign = 'right';
-      ctx.fillText(row.label, labelX, ry + rowH / 2 + 4);
-
-      // Values in each hop column
-      for (let hi = 0; hi < 2; hi++) {
-        const hx = startX + hi * (hopW + hopGap);
-        const val = row.values[hi];
-        const isChanged = row.changed && hi === 1;
-
-        drawRoundedRect(ctx, hx, ry, hopW, rowH - 4, 4,
-          isChanged ? row.color + '1a' : '#1a2332',
-          isChanged ? row.color : '#1e3a5c');
-
-        ctx.font = '11px Consolas, monospace';
-        ctx.fillStyle = isChanged ? row.color : '#e0e0e0';
-        ctx.textAlign = 'center';
-        ctx.fillText(val, hx + hopW / 2, ry + rowH / 2 + 3);
-      }
-
-      // Changed indicator
-      if (row.changed) {
-        const arrowX = startX + hopW + hopGap / 2;
-        ctx.font = '12px sans-serif';
-        ctx.fillStyle = row.color;
-        ctx.textAlign = 'center';
-        ctx.fillText('\u2192', arrowX, ry + rowH / 2 + 4);
-      } else {
-        const arrowX = startX + hopW + hopGap / 2;
-        ctx.font = '10px sans-serif';
-        ctx.fillStyle = '#69f0ae';
-        ctx.textAlign = 'center';
-        ctx.fillText('=', arrowX, ry + rowH / 2 + 4);
-      }
-    }
-    ctx.globalAlpha = 1;
-
-    // Legend at bottom
-    if (phase >= 1) {
-      const lp = easeInOut(Math.min((elapsed - 2500) / 600, 1));
-      ctx.globalAlpha = lp;
-
-      const legY = dataStartY + rows.length * rowH + 12;
-      ctx.font = '11px sans-serif';
-      ctx.textAlign = 'center';
-
-      ctx.fillStyle = '#ffa726';
-      ctx.fillText('\u25a0 MAC / TTL: \u30db\u30c3\u30d7\u3054\u3068\u306b\u5909\u5316', cx - 120, legY);
-      ctx.fillStyle = '#4fc3f7';
-      ctx.fillText('\u25a0 IP: \u7d42\u70b9\u9593\u3067\u4e0d\u5909', cx + 120, legY);
-
-      ctx.globalAlpha = 1;
-    }
-  }
-};
-
-// ─── Step 6: Summary ───
+// ─── Step 5: Summary ───
 const step6_Summary = {
-  title: '\u307e\u3068\u3081',
-  content: `
-    <p>\u3053\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u5b66\u3093\u3060\u3053\u3068:</p>
-    <ul>
-      <li><strong>\u30ab\u30d7\u30bb\u30eb\u5316</strong>: Data \u2192 L4 \u2192 L3 \u2192 L2 \u3068\u30d8\u30c3\u30c0\u3067\u5305\u3080</li>
-      <li><strong>\u30d5\u30ec\u30fc\u30e0 (L2)</strong>: Dst/Src MAC + Type + Payload + FCS</li>
-      <li><strong>\u30d1\u30b1\u30c3\u30c8 (L3)</strong>: Src/Dst IP + TTL + Protocol + Data</li>
-      <li>\u5404\u5c64\u306e\u5165\u308c\u5b50\u69cb\u9020: L2[ L3[ L4[ Data ] ] ]</li>
-    </ul>
-    <p>\u6b21\u306e\u30ec\u30c3\u30b9\u30f3\u3067\u30d1\u30b1\u30c3\u30c8\u304c\u5b9f\u969b\u306b\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u3092\u65c5\u3059\u308b\u69d8\u5b50\u3092\u898b\u3066\u3044\u304d\u307e\u3059\uff01</p>
-  `,
+  get title() { return t('learn.packet-structure.s4t'); },
+  get content() { return t('learn.packet-structure.s4c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
       { text: 'Encapsulation', sub: '\u5404\u5c64\u304c\u30d8\u30c3\u30c0\u3067\u5305\u3080', color: '#69f0ae' },
@@ -678,8 +519,8 @@ const step6_Summary = {
 // ─── Export lesson ───
 export const lessonPacketStructure = {
   id: 'lesson-packet-structure',
-  title: '\u30d1\u30b1\u30c3\u30c8\u3068\u30d5\u30ec\u30fc\u30e0\u306e\u69cb\u9020',
-  description: '\u30ab\u30d7\u30bb\u30eb\u5316\u3001\u30a4\u30fc\u30b5\u30cd\u30c3\u30c8\u30d5\u30ec\u30fc\u30e0(L2)\u3001IP\u30d1\u30b1\u30c3\u30c8(L3)\u3001\u5165\u308c\u5b50\u69cb\u9020\u3092\u5b66\u3073\u307e\u3059\u3002',
+  get title() { return t('learn.packet-structure.title'); },
+  get description() { return t('learn.packet-structure.desc'); },
   category: 'L3 Routing',
   steps: [
     step1_Encapsulation,
