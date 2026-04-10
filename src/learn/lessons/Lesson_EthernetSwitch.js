@@ -70,7 +70,7 @@ const step1_MACAddress = {
     ctx.font = 'bold 14px Consolas, monospace';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('MAC Address (48 bits)', w / 2, cy - 36);
+    ctx.fillText(t('learn.ethernet-switch.cv_macTitle'), w / 2, cy - 36);
 
     for (let i = 0; i < 6; i++) {
       const appear = easeInOut(Math.min(Math.max(phase * 6 - i * 0.6, 0), 1));
@@ -117,7 +117,7 @@ const step1_MACAddress = {
       ctx.font = 'bold 11px sans-serif';
       ctx.fillStyle = '#ffa726';
       ctx.textAlign = 'center';
-      ctx.fillText('OUI (\u30e1\u30fc\u30ab\u30fc)', (startX + ouiEnd) / 2, bracketY + 22);
+      ctx.fillText(t('learn.ethernet-switch.cv_ouiLabel'), (startX + ouiEnd) / 2, bracketY + 22);
 
       // Device bracket
       const devStart = ouiEnd + gap;
@@ -133,7 +133,7 @@ const step1_MACAddress = {
       ctx.font = 'bold 11px sans-serif';
       ctx.fillStyle = '#4fc3f7';
       ctx.textAlign = 'center';
-      ctx.fillText('Device ID (\u56fa\u6709)', (devStart + devEnd) / 2, bracketY + 22);
+      ctx.fillText(t('learn.ethernet-switch.cv_deviceId'), (devStart + devEnd) / 2, bracketY + 22);
 
       ctx.globalAlpha = 1;
     }
@@ -151,22 +151,22 @@ const step1_MACAddress = {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText('IP Address', w / 2 - compW / 2 - 10, compY + 18);
+      ctx.fillText(t('learn.ethernet-switch.cv_ipAddress'), w / 2 - compW / 2 - 10, compY + 18);
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#8899aa';
-      ctx.fillText('\u8ad6\u7406\u30a2\u30c9\u30ec\u30b9\uff08\u5909\u66f4\u53ef\uff09', w / 2 - compW / 2 - 10, compY + 36);
-      ctx.fillText('L3 - \u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u5c64', w / 2 - compW / 2 - 10, compY + 50);
+      ctx.fillText(t('learn.ethernet-switch.cv_logicalAddr'), w / 2 - compW / 2 - 10, compY + 36);
+      ctx.fillText(t('learn.ethernet-switch.cv_l3Network'), w / 2 - compW / 2 - 10, compY + 50);
 
       // MAC card
       drawRoundedRect(ctx, w / 2 + 10, compY, compW, 56, 6, '#ab47bc11', '#ab47bc');
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#ab47bc';
       ctx.textAlign = 'center';
-      ctx.fillText('MAC Address', w / 2 + compW / 2 + 10, compY + 18);
+      ctx.fillText(t('learn.ethernet-switch.cv_macAddress'), w / 2 + compW / 2 + 10, compY + 18);
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#8899aa';
-      ctx.fillText('\u7269\u7406\u30a2\u30c9\u30ec\u30b9\uff08\u56fa\u5b9a\uff09', w / 2 + compW / 2 + 10, compY + 36);
-      ctx.fillText('L2 - \u30c7\u30fc\u30bf\u30ea\u30f3\u30af\u5c64', w / 2 + compW / 2 + 10, compY + 50);
+      ctx.fillText(t('learn.ethernet-switch.cv_physicalAddr'), w / 2 + compW / 2 + 10, compY + 36);
+      ctx.fillText(t('learn.ethernet-switch.cv_l2Datalink'), w / 2 + compW / 2 + 10, compY + 50);
 
       ctx.globalAlpha = 1;
     }
@@ -214,7 +214,7 @@ const step2_SwitchOperation = {
 
     // 3 phases: ARP Request → ARP Reply → Data
     const totalCycle = 12000;
-    const t = elapsed % totalCycle;
+    const ct = elapsed % totalCycle;
     const stageTime = totalCycle / 3;
 
     // MAC address table (above switch)
@@ -226,18 +226,18 @@ const step2_SwitchOperation = {
     ctx.font = 'bold 9px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('MAC Table', cx, tableY + 14);
+    ctx.fillText(t('learn.ethernet-switch.cv_macTable'), cx, tableY + 14);
 
     let stage;
-    if (t < stageTime) {
+    if (ct < stageTime) {
       stage = 0; // ARP Request
-    } else if (t < stageTime * 2) {
+    } else if (ct < stageTime * 2) {
       stage = 1; // ARP Reply
     } else {
       stage = 2; // Data
     }
 
-    const stageT = (t % stageTime) / stageTime;
+    const stageT = (ct % stageTime) / stageTime;
     const packetProgress = easeInOut(Math.min(stageT * 2, 1));
 
     // Stage label
@@ -374,8 +374,8 @@ const step3_BroadcastDomain = {
     ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('Broadcast Domain', leftX, domainY - domainR - 8);
-    ctx.fillText('(\u30b9\u30a4\u30c3\u30c1\u306e\u307f)', leftX, domainY - domainR + 6);
+    ctx.fillText(t('learn.ethernet-switch.cv_broadcastDomain'), leftX, domainY - domainR - 8);
+    ctx.fillText(t('learn.ethernet-switch.cv_switchOnly'), leftX, domainY - domainR + 6);
 
     // Switch in center
     drawSwitch(ctx, leftX, domainY - 10, 60, 26, 'SW', '#ffa726');
@@ -477,19 +477,19 @@ const step3_BroadcastDomain = {
     ctx.strokeStyle = '#69f0ae';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = 'bold 8px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
-    ctx.fillText('R', rightX, domainY + 3);
+    ctx.fillText('R', rightX, domainY + 4);
 
     ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#69f0ae';
-    ctx.fillText('Router\u3067\u5206\u5272', rightX, domainY - domainR - 8);
+    ctx.fillText(t('learn.ethernet-switch.cv_routerSplit'), rightX, domainY - domainR - 8);
 
     // Stop symbol on router
     ctx.font = '10px sans-serif';
     ctx.fillStyle = '#ef5350';
-    ctx.fillText('\u2716 Broadcast\u3092\u901a\u3055\u306a\u3044', rightX, domainY + domainR + 14);
+    ctx.fillText(t('learn.ethernet-switch.cv_noBroadcast'), rightX, domainY + domainR + 14);
 
     ctx.globalAlpha = 1;
   }
@@ -596,7 +596,7 @@ const step4_VLAN = {
       ctx.font = 'bold 11px sans-serif';
       ctx.fillStyle = '#ef5350';
       ctx.textAlign = 'center';
-      ctx.fillText('\u2716 \u901a\u4fe1\u4e0d\u53ef', cx, v10Bot + 6);
+      ctx.fillText(t('learn.ethernet-switch.cv_noCommunication'), cx, v10Bot + 6);
 
       ctx.globalAlpha = 1;
     }
@@ -609,17 +609,17 @@ const step5_Summary = {
   get content() { return t('learn.ethernet-switch.s4c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: 'MAC Address', sub: '48bit \u7269\u7406\u30a2\u30c9\u30ec\u30b9', color: '#ffa726' },
-      { text: 'L2 Switch',   sub: 'MAC\u30c6\u30fc\u30d6\u30eb\u8ee2\u9001', color: '#4fc3f7' },
-      { text: 'Broadcast',   sub: '\u30c9\u30e1\u30a4\u30f3\u5168\u4f53\u306b\u5c4a\u304f', color: '#ef5350' },
-      { text: 'VLAN',        sub: '\u8ad6\u7406\u5206\u5272', color: '#69f0ae' },
-      { text: 'Router',      sub: '\u30c9\u30e1\u30a4\u30f3\u9593\u8ee2\u9001', color: '#ab47bc' },
+      { text: t('learn.ethernet-switch.cv_sumMacAddr'), sub: t('learn.ethernet-switch.cv_sumMacSub'), color: '#ffa726' },
+      { text: t('learn.ethernet-switch.cv_sumL2Switch'), sub: t('learn.ethernet-switch.cv_sumL2Sub'), color: '#4fc3f7' },
+      { text: t('learn.ethernet-switch.cv_sumBroadcast'), sub: t('learn.ethernet-switch.cv_sumBcastSub'), color: '#ef5350' },
+      { text: t('learn.ethernet-switch.cv_sumVlan'), sub: t('learn.ethernet-switch.cv_sumVlanSub'), color: '#69f0ae' },
+      { text: t('learn.ethernet-switch.cv_sumRouter'), sub: t('learn.ethernet-switch.cv_sumRouterSub'), color: '#ab47bc' },
     ];
 
     const cx = w / 2;
     const cy = h * 0.45;
     const radius = Math.min(h * 0.32, w * 0.22);
-    const rot = elapsed / 10000 * Math.PI * 2;
+    const rot = elapsed / 8000 * Math.PI * 2;
 
     for (let i = 0; i < items.length; i++) {
       const angle = rot + (Math.PI * 2 / items.length) * i - Math.PI / 2;
@@ -662,10 +662,10 @@ const step5_Summary = {
     ctx.strokeStyle = '#ffa726';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('L2', cx, cy + 4);
+    ctx.fillText(t('learn.ethernet-switch.cv_l2Label'), cx, cy + 4);
   }
 };
 

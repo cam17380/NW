@@ -45,7 +45,7 @@ const step1_WhatIsIP = {
     ctx.font = 'bold 16px Consolas, monospace';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('IPv4 Address', w / 2, cy - 50);
+    ctx.fillText(t('learn.ip-address.cv_ipv4Address'), w / 2, cy - 50);
 
     // Animate octets appearing one by one
     const phase = Math.min(elapsed / 600, 4);
@@ -92,7 +92,7 @@ const step1_WhatIsIP = {
         ctx.font = '12px sans-serif';
         ctx.fillStyle = '#69f0ae';
         ctx.textAlign = 'center';
-        ctx.fillText('Binary:', w / 2, binY);
+        ctx.fillText(t('learn.ip-address.cv_binary'), w / 2, binY);
 
         const binaryStr = octets.map(o => toBinary8(o)).join('.');
         ctx.font = 'bold 15px Consolas, monospace';
@@ -102,7 +102,7 @@ const step1_WhatIsIP = {
         // 32 bits label
         ctx.font = '11px sans-serif';
         ctx.fillStyle = '#ffa726';
-        ctx.fillText('= 32 bits (4 \u00d7 8 bits)', w / 2, binY + 48);
+        ctx.fillText(t('learn.ip-address.cv_32bits'), w / 2, binY + 48);
 
         ctx.globalAlpha = 1;
       }
@@ -181,6 +181,7 @@ const step2_BinaryConversion = {
     let sum = 0;
     const activeColors = [];
 
+    const allWeights = [];
     for (let i = 0; i < 8; i++) {
       const x = startX + i * (boxSize + gap);
       const isOne = bits[i] === '1';
@@ -199,9 +200,10 @@ const step2_BinaryConversion = {
           sum += weights[i];
           activeColors.push({ weight: weights[i], x: x + boxSize / 2, y: bitY + boxSize });
         } else {
-          border = '#3a2020';
-          textColor = '#666';
+          border = '#6a4444';
+          textColor = '#888';
         }
+        allWeights.push(isOne ? weights[i] : 0);
       }
 
       drawRoundedRect(ctx, x, bitY, boxSize, boxSize, 6, fill, border);
@@ -214,17 +216,17 @@ const step2_BinaryConversion = {
 
     // Sum display
     const sumY = bitY + boxSize + 40;
-    if (activeColors.length > 0) {
-      // Draw addition
+    if (allWeights.length > 0) {
+      // Draw addition with all weights (including 0)
       ctx.font = '14px Consolas, monospace';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
 
-      const parts = activeColors.map(a => a.weight.toString());
+      const parts = allWeights.map(v => v.toString());
       const expr = parts.join(' + ') + ' = ' + sum;
       ctx.fillText(expr, w / 2, sumY);
 
-      // Arrow lines from active bits
+      // Arrow lines from active bits (1-bits only)
       for (const a of activeColors) {
         ctx.beginPath();
         ctx.moveTo(a.x, a.y + 4);
@@ -303,14 +305,14 @@ const step3_Classes = {
       ctx.fillStyle = '#8899aa';
       ctx.textAlign = 'left';
       const infoX = barX + barW * 0.55;
-      ctx.fillText(`Leading bits: ${c.bits}`, infoX, y + 15);
+      ctx.fillText(t('learn.ip-address.cv_leadingBits', { bits: c.bits }), infoX, y + 15);
 
       // Network / host
       if (c.net !== '\u2014') {
-        ctx.fillText(`Net: /${c.net}  Host: ${c.host} bits`, infoX, y + 30);
+        ctx.fillText(t('learn.ip-address.cv_netHost', { net: c.net, host: c.host }), infoX, y + 30);
       } else {
         ctx.fillStyle = '#667';
-        ctx.fillText('(special use)', infoX, y + 30);
+        ctx.fillText(t('learn.ip-address.cv_specialUse'), infoX, y + 30);
       }
 
       ctx.globalAlpha = 1;
@@ -325,7 +327,7 @@ const step3_Classes = {
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#556';
       ctx.textAlign = 'center';
-      ctx.fillText('\u2190 Address space size (Class A = 50%, Class B = 25%, ...) \u2192', w / 2, scaleY);
+      ctx.fillText(t('learn.ip-address.cv_addressSpace'), w / 2, scaleY);
 
       ctx.globalAlpha = 1;
     }
@@ -358,10 +360,10 @@ const step4_PrivateGlobal = {
     ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('Internet', cx, cloudY - 6);
+    ctx.fillText(t('learn.ip-address.cv_internet'), cx, cloudY - 6);
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#8899aa';
-    ctx.fillText('Global IP', cx, cloudY + 12);
+    ctx.fillText(t('learn.ip-address.cv_globalIP'), cx, cloudY + 12);
 
     // NAT Router
     const natY = h * 0.47;
@@ -374,7 +376,7 @@ const step4_PrivateGlobal = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
-    ctx.fillText('NAT Router', cx, natY + 5);
+    ctx.fillText(t('learn.ip-address.cv_natRouter'), cx, natY + 5);
 
     // Connection line: cloud ↔ NAT
     ctx.beginPath();
@@ -439,7 +441,7 @@ const step4_PrivateGlobal = {
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#ffa726';
       ctx.textAlign = 'center';
-      ctx.fillText('Private addresses (RFC 1918) \u2014 LAN\u5185\u5c02\u7528', cx, privY + boxH + 20);
+      ctx.fillText(t('learn.ip-address.cv_privateNote'), cx, privY + boxH + 20);
       ctx.globalAlpha = 1;
     }
   }
@@ -451,10 +453,10 @@ const step5_SpecialAddresses = {
   get content() { return t('learn.ip-address.s4c'); },
   animation(ctx, w, h, elapsed) {
     const specials = [
-      { addr: '0.0.0.0',         label: 'Default / Unspecified', icon: '\u25cb', color: '#667' },
-      { addr: '127.0.0.1',       label: 'Loopback (self)',       icon: '\u21ba', color: '#4fc3f7' },
-      { addr: '255.255.255.255', label: 'Broadcast (all)',       icon: '\u25c9', color: '#ffa726' },
-      { addr: '169.254.x.x',    label: 'Link-local (APIPA)',    icon: '\u26a0', color: '#ef5350' },
+      { addr: '0.0.0.0',         label: t('learn.ip-address.cv_defaultUnspecified'), icon: '\u25cb', color: '#667' },
+      { addr: '127.0.0.1',       label: t('learn.ip-address.cv_loopback'),           icon: '\u21ba', color: '#4fc3f7' },
+      { addr: '255.255.255.255', label: t('learn.ip-address.cv_broadcastAll'),       icon: '\u25c9', color: '#ffa726' },
+      { addr: '169.254.x.x',    label: t('learn.ip-address.cv_linkLocal'),           icon: '\u26a0', color: '#ef5350' },
     ];
 
     const boxW = Math.min(260, w * 0.6);
@@ -501,17 +503,16 @@ const step6_Summary = {
   get content() { return t('learn.ip-address.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: '32 bits = 4 octets', color: '#4fc3f7' },
-      { text: 'Class A / B / C / D / E', color: '#69f0ae' },
-      { text: 'Private: 10.x / 172.16.x / 192.168.x', color: '#ffa726' },
-      { text: 'NAT: Private \u2192 Global', color: '#ef5350' },
+      { text: t('learn.ip-address.cv_sum32bits'), sub: t('learn.ip-address.cv_sum32bitsSub'), color: '#4fc3f7' },
+      { text: t('learn.ip-address.cv_sumClasses'), sub: t('learn.ip-address.cv_sumClassesSub'), color: '#69f0ae' },
+      { text: t('learn.ip-address.cv_sumPrivate'), sub: t('learn.ip-address.cv_sumPrivateSub'), color: '#ffa726' },
+      { text: t('learn.ip-address.cv_sumNAT'), sub: t('learn.ip-address.cv_sumNATSub'), color: '#ef5350' },
     ];
 
     const cx = w / 2;
-    const cy = h / 2;
-    const radius = Math.min(h * 0.35, w * 0.25);
+    const cy = h * 0.45;
+    const radius = Math.min(h * 0.32, w * 0.22);
 
-    // Rotating circle
     const rot = elapsed / 8000 * Math.PI * 2;
 
     for (let i = 0; i < items.length; i++) {
@@ -524,13 +525,6 @@ const step6_Summary = {
 
       ctx.globalAlpha = appear;
 
-      // Node circle
-      ctx.beginPath();
-      ctx.arc(ix, iy, 8, 0, Math.PI * 2);
-      ctx.fillStyle = items[i].color;
-      ctx.fill();
-
-      // Line to center
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(ix, iy);
@@ -538,18 +532,25 @@ const step6_Summary = {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      // Label
-      ctx.font = '12px sans-serif';
+      ctx.beginPath();
+      ctx.arc(ix, iy, 8, 0, Math.PI * 2);
+      ctx.fillStyle = items[i].color;
+      ctx.fill();
+
+      ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = items[i].color;
       ctx.textAlign = 'center';
-      const labelOffset = iy < cy ? -18 : 22;
-      ctx.fillText(items[i].text, ix, iy + labelOffset);
+      const off = iy < cy ? -22 : 22;
+      ctx.fillText(items[i].text, ix, iy + off);
+
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#8899aa';
+      ctx.fillText(items[i].sub, ix, iy + off + 14);
     }
 
-    // Center
     ctx.globalAlpha = 1;
     ctx.beginPath();
-    ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 22, 0, Math.PI * 2);
     ctx.fillStyle = '#1a2332';
     ctx.fill();
     ctx.strokeStyle = '#4fc3f7';

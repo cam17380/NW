@@ -35,10 +35,10 @@ const step1_Encapsulation = {
     // Layers from inside out: Data → L4 → L3 → L2
     // Each layer appears in order and wraps the previous
     const layers = [
-      { label: 'Data',       color: '#69f0ae', border: '#69f0ae',  desc: '\u30a2\u30d7\u30ea\u30c7\u30fc\u30bf' },
-      { label: 'L4 Header',  color: '#ab47bc', border: '#ab47bc', desc: 'TCP/UDP (\u30dd\u30fc\u30c8\u756a\u53f7)' },
-      { label: 'L3 Header',  color: '#4fc3f7', border: '#4fc3f7', desc: 'IP (\u9001\u4fe1\u5143/\u5b9b\u5148IP)' },
-      { label: 'L2 Header',  color: '#ffa726', border: '#ffa726', desc: 'Ethernet (\u9001\u4fe1\u5143/\u5b9b\u5148MAC)' },
+      { label: 'Data',       color: '#69f0ae', border: '#69f0ae',  desc: t('learn.packet-structure.cv_dataDesc') },
+      { label: 'L4 Header',  color: '#ab47bc', border: '#ab47bc', desc: t('learn.packet-structure.cv_l4Desc') },
+      { label: 'L3 Header',  color: '#4fc3f7', border: '#4fc3f7', desc: t('learn.packet-structure.cv_l3Desc') },
+      { label: 'L2 Header',  color: '#ffa726', border: '#ffa726', desc: t('learn.packet-structure.cv_l2Desc') },
     ];
 
     const innerW = Math.min(w * 0.22, 140);
@@ -51,22 +51,22 @@ const step1_Encapsulation = {
     const encapTime = stepDelay * n;               // Data→L4→L3→L2
     const decapTime = stepDelay * (n - 1);         // L2→L3→L4 stripped
     const cycleTime = encapTime + holdTime + decapTime + holdTime;
-    const t = elapsed % cycleTime;
+    const ct = elapsed % cycleTime;
 
     // Phase: 0=encapsulating, 1=hold, 2=decapsulating, 3=hold(repeat)
     let phase, phaseT;
-    if (t < encapTime) {
+    if (ct < encapTime) {
       phase = 0;
-      phaseT = t;
-    } else if (t < encapTime + holdTime) {
+      phaseT = ct;
+    } else if (ct < encapTime + holdTime) {
       phase = 1;
-      phaseT = t - encapTime;
-    } else if (t < encapTime + holdTime + decapTime) {
+      phaseT = ct - encapTime;
+    } else if (ct < encapTime + holdTime + decapTime) {
       phase = 2;
-      phaseT = t - encapTime - holdTime;
+      phaseT = ct - encapTime - holdTime;
     } else {
       phase = 3;
-      phaseT = t - encapTime - holdTime - decapTime;
+      phaseT = ct - encapTime - holdTime - decapTime;
     }
 
     // Calculate opacity per layer
@@ -119,15 +119,15 @@ const step1_Encapsulation = {
 
     // Step indicator text
     const encapLabels = [
-      'Data \u3092\u7528\u610f',
-      'L4\u30d8\u30c3\u30c0\u3067\u5305\u3080 \u2192 \u30bb\u30b0\u30e1\u30f3\u30c8',
-      'L3\u30d8\u30c3\u30c0\u3067\u5305\u3080 \u2192 \u30d1\u30b1\u30c3\u30c8',
-      'L2\u30d8\u30c3\u30c0\u3067\u5305\u3080 \u2192 \u30d5\u30ec\u30fc\u30e0',
+      t('learn.packet-structure.cv_encapData'),
+      t('learn.packet-structure.cv_encapL4'),
+      t('learn.packet-structure.cv_encapL3'),
+      t('learn.packet-structure.cv_encapL2'),
     ];
     const decapLabels = [
-      'L2\u30d8\u30c3\u30c0\u3092\u5265\u304c\u3059',
-      'L3\u30d8\u30c3\u30c0\u3092\u5265\u304c\u3059',
-      'L4\u30d8\u30c3\u30c0\u3092\u5265\u304c\u3059',
+      t('learn.packet-structure.cv_decapL2'),
+      t('learn.packet-structure.cv_decapL3'),
+      t('learn.packet-structure.cv_decapL4'),
     ];
 
     const outerH = innerH + padH * 2 * (n - 1);
@@ -138,23 +138,23 @@ const step1_Encapsulation = {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText('\u25bc Encapsulate: ' + encapLabels[step], cx, indicatorY);
+      ctx.fillText(t('learn.packet-structure.cv_encapsulate', { layer: encapLabels[step] }), cx, indicatorY);
     } else if (phase === 1) {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText('\u2714 \u9001\u4fe1\u5b8c\u4e86 \u2014 \u53d7\u4fe1\u5074\u3067\u5265\u304c\u3057\u307e\u3059', cx, indicatorY);
+      ctx.fillText(t('learn.packet-structure.cv_txComplete'), cx, indicatorY);
     } else if (phase === 2) {
       const step = Math.min(Math.floor(phaseT / stepDelay), n - 2);
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#ef5350';
       ctx.textAlign = 'center';
-      ctx.fillText('\u25b2 Decapsulate: ' + decapLabels[step], cx, indicatorY);
+      ctx.fillText(t('learn.packet-structure.cv_decapsulate', { layer: decapLabels[step] }), cx, indicatorY);
     } else {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#e0e0e0';
       ctx.textAlign = 'center';
-      ctx.fillText('\u2714 Data \u3092\u53d6\u308a\u51fa\u3057\u5b8c\u4e86', cx, indicatorY);
+      ctx.fillText(t('learn.packet-structure.cv_dataExtracted'), cx, indicatorY);
     }
   }
 };
@@ -184,7 +184,7 @@ const step2_EthernetFrame = {
     ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('Ethernet Frame', cx, barY - 14);
+    ctx.fillText(t('learn.packet-structure.cv_ethernetFrame'), cx, barY - 14);
 
     let fx = startX;
     for (let i = 0; i < fields.length; i++) {
@@ -221,7 +221,7 @@ const step2_EthernetFrame = {
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#8899aa';
       ctx.textAlign = 'center';
-      ctx.fillText('\u4f8b: PC1 \u2192 Router \u3078\u306e\u30d5\u30ec\u30fc\u30e0', cx, exY);
+      ctx.fillText(t('learn.packet-structure.cv_frameExample'), cx, exY);
 
       let ex = startX;
       for (let i = 0; i < fields.length; i++) {
@@ -247,7 +247,7 @@ const step2_EthernetFrame = {
       ctx.textAlign = 'center';
 
       ctx.fillStyle = '#ffa726';
-      ctx.fillText('\u25b6 MAC\u30a2\u30c9\u30ec\u30b9\u306f\u300c\u6b21\u306e\u8ee2\u9001\u5148\u300d\u2014 \u6bce\u30db\u30c3\u30d7\u3067\u66f8\u304d\u63db\u308f\u308b', cx, noteY);
+      ctx.fillText(t('learn.packet-structure.cv_macRewriteNote'), cx, noteY);
 
       ctx.globalAlpha = 1;
     }
@@ -281,7 +281,7 @@ const step3_IPPacket = {
     ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('IP Packet', cx, barY - 14);
+    ctx.fillText(t('learn.packet-structure.cv_ipPacket'), cx, barY - 14);
 
     let fx = startX;
     for (let i = 0; i < fields.length; i++) {
@@ -318,7 +318,7 @@ const step3_IPPacket = {
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#8899aa';
       ctx.textAlign = 'center';
-      ctx.fillText('\u4f8b: PC1 \u2192 Server \u3078\u306e\u30d1\u30b1\u30c3\u30c8', cx, exY);
+      ctx.fillText(t('learn.packet-structure.cv_packetExample'), cx, exY);
 
       let ex = startX;
       for (let i = 0; i < fields.length; i++) {
@@ -343,10 +343,10 @@ const step3_IPPacket = {
       ctx.textAlign = 'center';
 
       ctx.fillStyle = '#4fc3f7';
-      ctx.fillText('\u25b6 Src/Dst IP \u306f\u7d42\u70b9\u9593\u3067\u5909\u308f\u3089\u306a\u3044\uff08\u6700\u7d42\u5b9b\u5148\u3092\u793a\u3059\uff09', cx, noteY);
+      ctx.fillText(t('learn.packet-structure.cv_ipUnchangedNote'), cx, noteY);
 
       ctx.fillStyle = '#ef5350';
-      ctx.fillText('\u25b6 TTL \u306f\u30eb\u30fc\u30bf\u30fc\u3092\u901a\u904e\u3059\u308b\u305f\u3073\u306b -1\uff080\u306b\u306a\u308b\u3068\u7834\u68c4\uff09', cx, noteY + 22);
+      ctx.fillText(t('learn.packet-structure.cv_ttlNote'), cx, noteY + 22);
 
       ctx.globalAlpha = 1;
     }
@@ -364,10 +364,10 @@ const step4_Nesting = {
 
     // Same layers & sizing as Step 1
     const layers = [
-      { label: 'Data',             color: '#69f0ae', border: '#69f0ae', desc: '\u30a2\u30d7\u30ea\u30c7\u30fc\u30bf' },
-      { label: 'L4 Header',        color: '#ab47bc', border: '#ab47bc', desc: 'TCP/UDP' },
-      { label: 'L3 Header',        color: '#4fc3f7', border: '#4fc3f7', desc: 'IP' },
-      { label: 'L2 Header',        color: '#ffa726', border: '#ffa726', desc: 'Ethernet' },
+      { label: 'Data',             color: '#69f0ae', border: '#69f0ae', desc: t('learn.packet-structure.cv_dataDesc') },
+      { label: 'L4 Header',        color: '#ab47bc', border: '#ab47bc', desc: t('learn.packet-structure.cv_l4DescSimple') },
+      { label: 'L3 Header',        color: '#4fc3f7', border: '#4fc3f7', desc: t('learn.packet-structure.cv_l3DescSimple') },
+      { label: 'L2 Header',        color: '#ffa726', border: '#ffa726', desc: t('learn.packet-structure.cv_l2DescSimple') },
     ];
 
     const innerW = Math.min(w * 0.22, 140);
@@ -420,9 +420,9 @@ const step4_Nesting = {
       const annStartX = cx - totalW / 2;
 
       const devices = [
-        { label: 'Switch (L2)', desc: 'Ethernet\u30d8\u30c3\u30c0\u3092\u898b\u3066\u8ee2\u9001', color: '#ffa726', looks: 'L2\u306e\u307f' },
-        { label: 'Router (L3)', desc: 'IP\u30d8\u30c3\u30c0\u3092\u898b\u3066\u8ee2\u9001', color: '#4fc3f7', looks: 'L2\u3092\u5265\u304c\u3057\u3066L3\u3092\u53c2\u7167' },
-        { label: 'Application', desc: '\u30c7\u30fc\u30bf\u3092\u53d6\u308a\u51fa\u3059', color: '#69f0ae', looks: '\u5168\u5c64\u3092\u5265\u304c\u3059' },
+        { label: t('learn.packet-structure.cv_switchL2'), desc: t('learn.packet-structure.cv_switchL2Desc'), color: '#ffa726', looks: t('learn.packet-structure.cv_switchL2Looks') },
+        { label: t('learn.packet-structure.cv_routerL3'), desc: t('learn.packet-structure.cv_routerL3Desc'), color: '#4fc3f7', looks: t('learn.packet-structure.cv_routerL3Looks') },
+        { label: t('learn.packet-structure.cv_appLayer'), desc: t('learn.packet-structure.cv_appDesc'), color: '#69f0ae', looks: t('learn.packet-structure.cv_appLooks') },
       ];
 
       for (let i = 0; i < devices.length; i++) {
@@ -457,16 +457,16 @@ const step6_Summary = {
   get content() { return t('learn.packet-structure.s4c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: 'Encapsulation', sub: '\u5404\u5c64\u304c\u30d8\u30c3\u30c0\u3067\u5305\u3080', color: '#69f0ae' },
-      { text: 'L2 Frame',      sub: 'MAC\u30a2\u30c9\u30ec\u30b9', color: '#ffa726' },
-      { text: 'L3 Packet',     sub: 'IP\u30a2\u30c9\u30ec\u30b9', color: '#4fc3f7' },
-      { text: 'L4 Segment',    sub: '\u30dd\u30fc\u30c8\u756a\u53f7', color: '#ab47bc' },
+      { text: t('learn.packet-structure.cv_sumEncap'), sub: t('learn.packet-structure.cv_sumEncapSub'), color: '#69f0ae' },
+      { text: t('learn.packet-structure.cv_sumL2Frame'), sub: t('learn.packet-structure.cv_sumL2Sub'), color: '#ffa726' },
+      { text: t('learn.packet-structure.cv_sumL3Packet'), sub: t('learn.packet-structure.cv_sumL3Sub'), color: '#4fc3f7' },
+      { text: t('learn.packet-structure.cv_sumL4Segment'), sub: t('learn.packet-structure.cv_sumL4Sub'), color: '#ab47bc' },
     ];
 
     const cx = w / 2;
     const cy = h * 0.45;
     const radius = Math.min(h * 0.32, w * 0.22);
-    const rot = elapsed / 10000 * Math.PI * 2;
+    const rot = elapsed / 8000 * Math.PI * 2;
 
     for (let i = 0; i < items.length; i++) {
       const angle = rot + (Math.PI * 2 / items.length) * i - Math.PI / 2;
@@ -509,10 +509,10 @@ const step6_Summary = {
     ctx.strokeStyle = '#4fc3f7';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('Packet', cx, cy + 4);
+    ctx.fillText(t('learn.packet-structure.cv_packetLabel'), cx, cy + 4);
   }
 };
 

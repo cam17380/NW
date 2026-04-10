@@ -40,7 +40,7 @@ const step1_NetworkAddress = {
     const ipBits   = ip.map(o => toBinary8(o)).join('');
     const maskBits = mask.map(o => toBinary8(o)).join('');
 
-    const bitSize = Math.min(14, (w - 100) / 32);
+    const bitSize = Math.min(16, (w - 80) / 32);
     const bitGap = 1;
     const totalW = 32 * (bitSize + bitGap) - bitGap;
     const startX = (w - totalW) / 2;
@@ -52,7 +52,7 @@ const step1_NetworkAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'right';
-    ctx.fillText('IP:', startX - 8, ipY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_ip'), startX - 8, ipY + bitSize * 0.7);
     ctx.font = '11px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
     ctx.textAlign = 'left';
@@ -77,7 +77,7 @@ const step1_NetworkAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#ab47bc';
     ctx.textAlign = 'right';
-    ctx.fillText('Mask:', startX - 8, maskY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_mask'), startX - 8, maskY + bitSize * 0.7);
     ctx.font = '11px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
     ctx.textAlign = 'left';
@@ -104,7 +104,7 @@ const step1_NetworkAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'right';
-    ctx.fillText('Net:', startX - 8, netY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_net'), startX - 8, netY + bitSize * 0.7);
 
     for (let i = 0; i < 32; i++) {
       const bx = startX + i * (bitSize + bitGap);
@@ -147,7 +147,7 @@ const step1_NetworkAddress = {
       ctx.font = 'bold 11px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText('Host bits \u2192 all 0', (hostStartX + hostEndX) / 2, arrowY + 20);
+      ctx.fillText(t('learn.network-broadcast.cv_hostBitsZero'), (hostStartX + hostEndX) / 2, arrowY + 20);
       ctx.globalAlpha = 1;
     }
 
@@ -162,7 +162,7 @@ const step1_NetworkAddress = {
       ctx.font = '12px sans-serif';
       ctx.fillStyle = '#8899aa';
       ctx.textAlign = 'center';
-      ctx.fillText('Network Address', w / 2, resY + 17);
+      ctx.fillText(t('learn.network-broadcast.cv_networkAddress'), w / 2, resY + 17);
 
       ctx.font = 'bold 18px Consolas, monospace';
       ctx.fillStyle = '#69f0ae';
@@ -185,7 +185,7 @@ const step2_BroadcastAddress = {
     const ipBits   = ip.map(o => toBinary8(o)).join('');
     const maskBits = mask.map(o => toBinary8(o)).join('');
 
-    const bitSize = Math.min(14, (w - 100) / 32);
+    const bitSize = Math.min(16, (w - 80) / 32);
     const bitGap = 1;
     const totalW = 32 * (bitSize + bitGap) - bitGap;
     const startX = (w - totalW) / 2;
@@ -197,7 +197,7 @@ const step2_BroadcastAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'right';
-    ctx.fillText('IP:', startX - 8, ipY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_ip'), startX - 8, ipY + bitSize * 0.7);
     ctx.font = '11px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
     ctx.textAlign = 'left';
@@ -222,7 +222,7 @@ const step2_BroadcastAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#ab47bc';
     ctx.textAlign = 'right';
-    ctx.fillText('Mask:', startX - 8, maskY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_mask'), startX - 8, maskY + bitSize * 0.7);
     ctx.font = '11px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
     ctx.textAlign = 'left';
@@ -249,7 +249,7 @@ const step2_BroadcastAddress = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'right';
-    ctx.fillText('Bcast:', startX - 8, bcastY + bitSize * 0.7);
+    ctx.fillText(t('learn.network-broadcast.cv_bcast'), startX - 8, bcastY + bitSize * 0.7);
 
     for (let i = 0; i < 32; i++) {
       const bx = startX + i * (bitSize + bitGap);
@@ -292,7 +292,7 @@ const step2_BroadcastAddress = {
       ctx.font = 'bold 11px sans-serif';
       ctx.fillStyle = '#ffa726';
       ctx.textAlign = 'center';
-      ctx.fillText('Host bits \u2192 all 1', (hostStartX + hostEndX) / 2, arrowY + 20);
+      ctx.fillText(t('learn.network-broadcast.cv_hostBitsOne'), (hostStartX + hostEndX) / 2, arrowY + 20);
       ctx.globalAlpha = 1;
     }
 
@@ -307,7 +307,7 @@ const step2_BroadcastAddress = {
       ctx.font = '12px sans-serif';
       ctx.fillStyle = '#8899aa';
       ctx.textAlign = 'center';
-      ctx.fillText('Broadcast Address', w / 2, resY + 17);
+      ctx.fillText(t('learn.network-broadcast.cv_broadcastAddress'), w / 2, resY + 17);
 
       ctx.font = 'bold 18px Consolas, monospace';
       ctx.fillStyle = '#ffa726';
@@ -368,7 +368,7 @@ const step3_UsableRange = {
     ctx.fillText('.128', barX, labelY);
     ctx.font = '10px sans-serif';
     ctx.fillStyle = '#666';
-    ctx.fillText('Network', barX, labelY + 14);
+    ctx.fillText(t('learn.network-broadcast.cv_network'), barX, labelY + 14);
 
     // Broadcast label
     ctx.font = 'bold 11px Consolas, monospace';
@@ -377,7 +377,7 @@ const step3_UsableRange = {
     ctx.fillText('.255', barX + barW, labelY);
     ctx.font = '10px sans-serif';
     ctx.fillStyle = '#996633';
-    ctx.fillText('Broadcast', barX + barW, labelY + 14);
+    ctx.fillText(t('learn.network-broadcast.cv_broadcast'), barX + barW, labelY + 14);
 
     // Usable range label
     ctx.globalAlpha = usablePhase;
@@ -386,7 +386,7 @@ const step3_UsableRange = {
     ctx.textAlign = 'center';
     ctx.fillText('.129 \u2013 .254', barX + barW / 2, labelY);
     ctx.font = '11px sans-serif';
-    ctx.fillText('Usable: 126 hosts', barX + barW / 2, labelY + 16);
+    ctx.fillText(t('learn.network-broadcast.cv_usableHosts', { n: 126 }), barX + barW / 2, labelY + 16);
     ctx.globalAlpha = 1;
 
     // Detail cards
@@ -398,9 +398,9 @@ const step3_UsableRange = {
     const cardStartX = (w - cardsTotal) / 2;
 
     const cards = [
-      { addr: '.128',       label: 'Network',   sub: 'Host\u90e8 = all 0', color: '#888',    bg: '#66666622' },
-      { addr: '.129 \u2013 .254', label: 'Usable',    sub: '126 hosts',       color: '#69f0ae', bg: '#69f0ae11' },
-      { addr: '.255',       label: 'Broadcast', sub: 'Host\u90e8 = all 1', color: '#ffa726', bg: '#ffa72611' },
+      { addr: '.128',       label: t('learn.network-broadcast.cv_network'),   sub: t('learn.network-broadcast.cv_hostPartAllZero'), color: '#888',    bg: '#66666622' },
+      { addr: '.129 \u2013 .254', label: t('learn.network-broadcast.cv_usableLabel'),    sub: t('learn.network-broadcast.cv_usableSub', { n: 126 }),       color: '#69f0ae', bg: '#69f0ae11' },
+      { addr: '.255',       label: t('learn.network-broadcast.cv_broadcast'), sub: t('learn.network-broadcast.cv_hostPartAllOne'), color: '#ffa726', bg: '#ffa72611' },
     ];
 
     for (let i = 0; i < 3; i++) {
@@ -437,7 +437,7 @@ const step3_UsableRange = {
       ctx.font = 'bold 14px Consolas, monospace';
       ctx.fillStyle = '#4fc3f7';
       ctx.textAlign = 'center';
-      ctx.fillText('Hosts = 2\u2077 - 2 = 126', w / 2, fY + 23);
+      ctx.fillText(t('learn.network-broadcast.cv_hostsFormula'), w / 2, fY + 23);
 
       ctx.globalAlpha = 1;
     }
@@ -463,7 +463,7 @@ const step4_UnicastBroadcast = {
     ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('Unicast', uniX, 20);
+    ctx.fillText(t('learn.network-broadcast.cv_unicast'), uniX, 20);
 
     // Sender
     ctx.beginPath();
@@ -476,7 +476,7 @@ const step4_UnicastBroadcast = {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('Src', uniX, senderY + 4);
+    ctx.fillText(t('learn.network-broadcast.cv_src'), uniX, senderY + 4);
 
     // Receivers
     const targetIdx = 1; // second receiver is the target
@@ -541,7 +541,7 @@ const step4_UnicastBroadcast = {
     ctx.font = 'bold 14px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('Broadcast', bcastX, 20);
+    ctx.fillText(t('learn.network-broadcast.cv_broadcast'), bcastX, 20);
 
     // Sender
     ctx.beginPath();
@@ -554,7 +554,7 @@ const step4_UnicastBroadcast = {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('Src', bcastX, senderY + 4);
+    ctx.fillText(t('learn.network-broadcast.cv_src'), bcastX, senderY + 4);
 
     // Receivers (all highlighted)
     for (let i = 0; i < receivers; i++) {
@@ -606,17 +606,17 @@ const step4_UnicastBroadcast = {
     ctx.textAlign = 'center';
 
     ctx.fillStyle = '#4fc3f7';
-    ctx.fillText('dst: 192.168.1.130', uniX, botY);
+    ctx.fillText(t('learn.network-broadcast.cv_unicastDst'), uniX, botY);
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#8899aa';
-    ctx.fillText('\u7279\u5b9aIP\u30a2\u30c9\u30ec\u30b9\u5b9b\u3066', uniX, botY + 18);
+    ctx.fillText(t('learn.network-broadcast.cv_unicastDesc'), uniX, botY + 18);
 
     ctx.font = '12px Consolas, monospace';
     ctx.fillStyle = '#ffa726';
-    ctx.fillText('dst: 192.168.1.255', bcastX, botY);
+    ctx.fillText(t('learn.network-broadcast.cv_broadcastDst'), bcastX, botY);
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#8899aa';
-    ctx.fillText('\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u30a2\u30c9\u30ec\u30b9\u5b9b\u3066', bcastX, botY + 18);
+    ctx.fillText(t('learn.network-broadcast.cv_broadcastDesc'), bcastX, botY + 18);
   }
 };
 
@@ -635,12 +635,12 @@ const step5_SubnetTable = {
     ];
 
     const cols = [
-      { label: 'CIDR',  x: w * 0.08, align: 'center' },
-      { label: 'Mask',  x: w * 0.27, align: 'center' },
-      { label: 'Hosts', x: w * 0.46, align: 'center' },
-      { label: 'Block', x: w * 0.56, align: 'center' },
-      { label: 'Net addr',   x: w * 0.72, align: 'center' },
-      { label: 'Bcast addr', x: w * 0.92, align: 'center' },
+      { label: t('learn.network-broadcast.cv_cidr'),  x: w * 0.08, align: 'center' },
+      { label: t('learn.network-broadcast.cv_mask'),  x: w * 0.27, align: 'center' },
+      { label: t('learn.network-broadcast.cv_hosts'), x: w * 0.46, align: 'center' },
+      { label: t('learn.network-broadcast.cv_block'), x: w * 0.56, align: 'center' },
+      { label: t('learn.network-broadcast.cv_netAddr'),   x: w * 0.72, align: 'center' },
+      { label: t('learn.network-broadcast.cv_bcastAddr'), x: w * 0.92, align: 'center' },
     ];
 
     const headerY = 14;
@@ -712,6 +712,10 @@ const step5_SubnetTable = {
     const barX = 40;
     const barW = w - 80;
 
+    // Fixed edge width: 1 address out of 256 in the /24 bar
+    const edgeW = Math.max(barW / 256 * 4, 14);
+    const rowSpacing = 42;
+
     // Helper: draw a row of subnets
     function drawSubnetRow(ctx, subnets, titleText, titleColor, baseY, barH, parentPhase) {
       const phase2 = easeInOut(Math.min(Math.max(parentPhase, 0), 1));
@@ -735,9 +739,11 @@ const step5_SubnetTable = {
 
         drawRoundedRect(ctx, sx + 1, barY, subW - 2, barH, 3, '#1a2332', sn.color + '66');
 
-        const edgeW = Math.max(subW * 0.05, 3);
+        // Net addr (fixed width)
         drawRoundedRect(ctx, sx + 1, barY, edgeW, barH, 3, '#66666688', '#888');
+        // Bcast addr (fixed width)
         drawRoundedRect(ctx, sx + subW - edgeW - 1, barY, edgeW, barH, 3, '#ffa72644', '#ffa726');
+        // Usable range
         drawRoundedRect(ctx, sx + edgeW + 2, barY + 2, subW - edgeW * 2 - 4, barH - 4, 2, sn.color + '22', sn.color);
 
         const mid = sx + subW / 2;
@@ -760,26 +766,33 @@ const step5_SubnetTable = {
         ctx.fillText(sn.hosts + ' hosts', mid, barY + barH + 33);
       }
       ctx.globalAlpha = 1;
-      return barY + barH + 36;
+      return barY + barH + rowSpacing;
     }
 
+    // /24 example (1 subnet — full range)
+    const ex24Phase = (elapsed / 400 - entries.length * 0.5) / 1.5;
+    const subnets24 = [
+      { net: '.0', bcast: '.255', first: '.1', last: '.254', hosts: 254, color: '#4fc3f7' },
+    ];
+    const after24 = drawSubnetRow(ctx, subnets24, '/24 \u2014 1 subnet', '#4fc3f7', tableBottom, 22, ex24Phase);
+
     // /25 example (2 subnets)
-    const ex25Phase = (elapsed / 400 - entries.length * 0.5) / 1.5;
+    const ex25Phase = ex24Phase - 1.0;
     const subnets25 = [
       { net: '.0',   bcast: '.127', first: '.1',   last: '.126', hosts: 126, color: '#4fc3f7' },
       { net: '.128', bcast: '.255', first: '.129', last: '.254', hosts: 126, color: '#69f0ae' },
     ];
-    const after25 = drawSubnetRow(ctx, subnets25, '/25 \u2014 2 subnets', '#69f0ae', tableBottom, 22, ex25Phase);
+    const after25 = drawSubnetRow(ctx, subnets25, '/25 \u2014 2 subnets', '#69f0ae', after24, 22, ex25Phase);
 
     // /26 example (4 subnets)
-    const ex26Phase = ex25Phase - 1.0;
+    const ex26Phase = ex24Phase - 2.0;
     const subnets26 = [
       { net: '.0',   bcast: '.63',  first: '.1',   last: '.62',  hosts: 62, color: '#4fc3f7' },
       { net: '.64',  bcast: '.127', first: '.65',  last: '.126', hosts: 62, color: '#69f0ae' },
       { net: '.128', bcast: '.191', first: '.129', last: '.190', hosts: 62, color: '#ffa726' },
       { net: '.192', bcast: '.255', first: '.193', last: '.254', hosts: 62, color: '#ab47bc' },
     ];
-    drawSubnetRow(ctx, subnets26, '/26 \u2014 4 subnets', '#ffa726', after25 + 2, 22, ex26Phase);
+    drawSubnetRow(ctx, subnets26, '/26 \u2014 4 subnets', '#ffa726', after25, 22, ex26Phase);
   }
 };
 
@@ -789,17 +802,17 @@ const step6_Summary = {
   get content() { return t('learn.network-broadcast.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: 'Network Addr',   sub: 'Host = all 0', color: '#888' },
-      { text: 'Broadcast Addr', sub: 'Host = all 1', color: '#ffa726' },
-      { text: 'Usable Range',   sub: 'Net+1 ~ Bcast-1', color: '#69f0ae' },
-      { text: 'Unicast',        sub: '1 \u2192 1', color: '#4fc3f7' },
-      { text: 'Broadcast',      sub: '1 \u2192 All', color: '#ef5350' },
+      { text: t('learn.network-broadcast.cv_networkAddr'),   sub: t('learn.network-broadcast.cv_hostPartAllZero'), color: '#888' },
+      { text: t('learn.network-broadcast.cv_broadcastAddr'), sub: t('learn.network-broadcast.cv_hostPartAllOne'), color: '#ffa726' },
+      { text: t('learn.network-broadcast.cv_usableRange'),   sub: t('learn.network-broadcast.cv_usableRangeSub'), color: '#69f0ae' },
+      { text: t('learn.network-broadcast.cv_unicast'),        sub: t('learn.network-broadcast.cv_unicastSub'), color: '#4fc3f7' },
+      { text: t('learn.network-broadcast.cv_broadcast'),      sub: t('learn.network-broadcast.cv_broadcastSub'), color: '#ef5350' },
     ];
 
     const cx = w / 2;
     const cy = h * 0.45;
     const radius = Math.min(h * 0.32, w * 0.22);
-    const rot = elapsed / 10000 * Math.PI * 2;
+    const rot = elapsed / 8000 * Math.PI * 2;
 
     for (let i = 0; i < items.length; i++) {
       const angle = rot + (Math.PI * 2 / items.length) * i - Math.PI / 2;
@@ -843,11 +856,11 @@ const step6_Summary = {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
-    ctx.fillText('Net &', cx, cy - 2);
-    ctx.fillText('Bcast', cx, cy + 10);
+    ctx.fillText(t('learn.network-broadcast.cv_netAndBcast'), cx, cy - 3);
+    ctx.fillText(t('learn.network-broadcast.cv_bcastLabel'), cx, cy + 9);
   }
 };
 
