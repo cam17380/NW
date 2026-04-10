@@ -1,32 +1,8 @@
 // ─── Lesson: Subnet Masks, CIDR, and VLSM ───
 // Animated explanation of how masks divide network/host portions.
 
-// ─── Shared drawing helpers ───
 import { t } from '../../i18n/I18n.js';
-
-function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
-}
-
-function toBinary8(n) {
-  return n.toString(2).padStart(8, '0');
-}
-
-function easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
+import { drawRoundedRect, toBinary8, easeInOut } from '../CanvasUtils.js';
 
 // ─── Step 1: What is a subnet mask? ───
 const step1_WhatIsMask = {
@@ -51,7 +27,7 @@ const step1_WhatIsMask = {
     ctx.font = 'bold 13px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'right';
-    ctx.fillText('IP:', startX - 8, ipY + bitSize * 0.7);
+    ctx.fillText(t('learn.subnet-mask.cv_ip'), startX - 8, ipY + bitSize * 0.7);
 
     for (let i = 0; i < 32; i++) {
       const appear = easeInOut(Math.min(Math.max(phase * 4 - i * 0.05, 0), 1));
@@ -77,7 +53,7 @@ const step1_WhatIsMask = {
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'right';
     ctx.globalAlpha = maskPhase;
-    ctx.fillText('Mask:', startX - 8, maskY + bitSize * 0.7);
+    ctx.fillText(t('learn.subnet-mask.cv_mask'), startX - 8, maskY + bitSize * 0.7);
 
     for (let i = 0; i < 32; i++) {
       const appear = easeInOut(Math.min(Math.max(maskPhase * 4 - i * 0.05, 0), 1));
@@ -115,7 +91,7 @@ const step1_WhatIsMask = {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText('Network (24 bits)', (startX + netEnd) / 2, labelY + 24);
+      ctx.fillText(t('learn.subnet-mask.cv_networkBits', { n: 24 }), (startX + netEnd) / 2, labelY + 24);
 
       // Host part bracket
       const hostStart = netEnd + gap;
@@ -132,7 +108,7 @@ const step1_WhatIsMask = {
       ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = '#ef5350';
       ctx.textAlign = 'center';
-      ctx.fillText('Host (8 bits)', (hostStart + hostEnd) / 2, labelY + 24);
+      ctx.fillText(t('learn.subnet-mask.cv_hostBits', { n: 8 }), (hostStart + hostEnd) / 2, labelY + 24);
 
       ctx.globalAlpha = 1;
     }
@@ -146,10 +122,10 @@ const step1_WhatIsMask = {
       ctx.font = '14px Consolas, monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#e0e0e0';
-      ctx.fillText('IP:    192.168.1.10', w / 2, decY);
-      ctx.fillText('Mask:  255.255.255.0', w / 2, decY + 22);
+      ctx.fillText(t('learn.subnet-mask.cv_ipExample'), w / 2, decY);
+      ctx.fillText(t('learn.subnet-mask.cv_maskExample'), w / 2, decY + 22);
       ctx.fillStyle = '#69f0ae';
-      ctx.fillText('Net:   192.168.1.0  (Network Address)', w / 2, decY + 48);
+      ctx.fillText(t('learn.subnet-mask.cv_netExample'), w / 2, decY + 48);
 
       ctx.globalAlpha = 1;
     }
@@ -178,8 +154,8 @@ const step3_CIDR = {
 
     // Cycle through examples with time or show all
     const cycleTime = 8000;
-    const t = (elapsed % cycleTime) / cycleTime;
-    const activeIdx = Math.floor(t * examples.length);
+    const ct = (elapsed % cycleTime) / cycleTime;
+    const activeIdx = Math.floor(ct * examples.length);
 
     for (let ei = 0; ei < examples.length; ei++) {
       const ex = examples[ei];
@@ -228,7 +204,7 @@ const step3_CIDR = {
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#8899aa';
     ctx.textAlign = 'center';
-    ctx.fillText('Hosts = 2^(32 - prefix) - 2  (\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u30a2\u30c9\u30ec\u30b9\u3068\u30d6\u30ed\u30fc\u30c9\u30ad\u30e3\u30b9\u30c8\u3092\u9664\u304f)', w / 2, botY);
+    ctx.fillText(t('learn.subnet-mask.cv_hostsFormula'), w / 2, botY);
   }
 };
 
@@ -255,9 +231,9 @@ const step2_ANDOperation = {
     const phase = Math.min(elapsed / 3000, 1);
 
     const rows = [
-      { label: 'IP:',   bits: ipBits,   color: '#4fc3f7', dec: ip.join('.') },
-      { label: 'Mask:', bits: maskBits, color: '#69f0ae', dec: mask.join('.') },
-      { label: 'Net:',  bits: netBits,  color: '#ffa726', dec: net.join('.') },
+      { label: t('learn.subnet-mask.cv_ip'),   bits: ipBits,   color: '#4fc3f7', dec: ip.join('.') },
+      { label: t('learn.subnet-mask.cv_mask'), bits: maskBits, color: '#69f0ae', dec: mask.join('.') },
+      { label: t('learn.subnet-mask.cv_net'),  bits: netBits,  color: '#ffa726', dec: net.join('.') },
     ];
 
     for (let r = 0; r < 3; r++) {
@@ -363,12 +339,12 @@ const step4_MaskHostCount = {
   animation(ctx, w, h, elapsed) {
     // Sliding mask visualization
     const cycleTime = 10000;
-    const t = (elapsed % cycleTime) / cycleTime;
+    const ct = (elapsed % cycleTime) / cycleTime;
 
     // Animate prefix from /8 to /30
     const minPrefix = 8;
     const maxPrefix = 30;
-    const pingPong = t < 0.5 ? t * 2 : 2 - t * 2;
+    const pingPong = ct < 0.5 ? ct * 2 : 2 - ct * 2;
     const prefix = Math.round(minPrefix + (maxPrefix - minPrefix) * easeInOut(pingPong));
 
     const bitSize = Math.min(16, (w - 80) / 32);
@@ -407,12 +383,12 @@ const step4_MaskHostCount = {
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
     const netCenter = startX + (prefix * (bitSize + bitGap)) / 2;
-    if (prefix > 2) ctx.fillText(`Network: ${prefix} bits`, netCenter, labelY);
+    if (prefix > 2) ctx.fillText(t('learn.subnet-mask.cv_networkNBits', { n: prefix }), netCenter, labelY);
 
     ctx.fillStyle = '#ef5350';
     const hostBits = 32 - prefix;
     const hostCenter = startX + prefix * (bitSize + bitGap) + (hostBits * (bitSize + bitGap)) / 2;
-    if (hostBits > 1) ctx.fillText(`Host: ${hostBits} bits`, hostCenter, labelY);
+    if (hostBits > 1) ctx.fillText(t('learn.subnet-mask.cv_hostNBits', { n: hostBits }), hostCenter, labelY);
 
     // Host count bar chart
     const chartY = labelY + 30;
@@ -434,7 +410,7 @@ const step4_MaskHostCount = {
 
     ctx.font = '12px sans-serif';
     ctx.fillStyle = '#8899aa';
-    ctx.fillText('usable hosts', barCx, chartY + chartH + 16);
+    ctx.fillText(t('learn.subnet-mask.cv_usableHosts'), barCx, chartY + chartH + 16);
 
     // Subnet mask text
     const maskOctets = [];
@@ -476,7 +452,7 @@ const step5_VLSM = {
     ctx.font = '11px sans-serif';
     ctx.fillStyle = '#667';
     ctx.textAlign = 'center';
-    ctx.fillText('192.168.1.0/24 (256 addresses)', w / 2, barY + barH + 14);
+    ctx.fillText(t('learn.subnet-mask.cv_addresses'), w / 2, barY + barH + 14);
 
     // Subnets stacked in the bar
     const phase = Math.min(elapsed / 3000, 1);
@@ -540,9 +516,9 @@ const step5_VLSM = {
       const infoX = w * 0.55;
       ctx.font = '12px sans-serif';
       ctx.fillStyle = '#8899aa';
-      ctx.fillText(`Need: ${sn.need}`, infoX, ry + 16);
+      ctx.fillText(t('learn.subnet-mask.cv_need', { n: sn.need }), infoX, ry + 16);
       ctx.fillStyle = sn.hosts >= sn.need ? '#69f0ae' : '#ef5350';
-      ctx.fillText(`Available: ${sn.hosts}`, infoX, ry + 34);
+      ctx.fillText(t('learn.subnet-mask.cv_available', { n: sn.hosts }), infoX, ry + 34);
 
       // Usage bar
       const usageX = w * 0.78;
@@ -570,7 +546,7 @@ const step5_VLSM = {
       ctx.font = '12px sans-serif';
       ctx.fillStyle = '#69f0ae';
       ctx.textAlign = 'center';
-      ctx.fillText(`VLSM\u3067\u52b9\u7387\u7684\u306b\u5206\u5272: ${used}/256 \u4f7f\u7528\u3001${free} \u30a2\u30c9\u30ec\u30b9\u4f59\u308a`, w / 2, tableY + 4 * rowH + 10);
+      ctx.fillText(t('learn.subnet-mask.cv_vlsmEfficient', { used, free }), w / 2, tableY + 4 * rowH + 10);
 
       ctx.globalAlpha = 1;
     }
@@ -583,10 +559,10 @@ const step6_Summary = {
   get content() { return t('learn.subnet-mask.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: 'Subnet Mask', sub: '1=Net, 0=Host', color: '#69f0ae' },
-      { text: 'CIDR /prefix', sub: '\u30d3\u30c3\u30c8\u6570\u8868\u8a18', color: '#4fc3f7' },
-      { text: 'AND\u6f14\u7b97', sub: 'IP & Mask = Net', color: '#ffa726' },
-      { text: 'VLSM', sub: '\u53ef\u5909\u9577\u30de\u30b9\u30af', color: '#ab47bc' },
+      { text: t('learn.subnet-mask.cv_subnetMask'), sub: t('learn.subnet-mask.cv_maskDesc'), color: '#69f0ae' },
+      { text: t('learn.subnet-mask.cv_cidrPrefix'), sub: t('learn.subnet-mask.cv_cidrDesc'), color: '#4fc3f7' },
+      { text: t('learn.subnet-mask.cv_andOp'), sub: t('learn.subnet-mask.cv_andDesc'), color: '#ffa726' },
+      { text: t('learn.subnet-mask.cv_vlsm'), sub: t('learn.subnet-mask.cv_vlsmDesc'), color: '#ab47bc' },
     ];
 
     const cx = w / 2;
@@ -620,15 +596,15 @@ const step6_Summary = {
       ctx.fill();
 
       // Labels
-      ctx.font = 'bold 13px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.fillStyle = items[i].color;
       ctx.textAlign = 'center';
-      const labelOff = iy < cy ? -28 : 26;
+      const labelOff = iy < cy ? -22 : 22;
       ctx.fillText(items[i].text, ix, iy + labelOff);
 
-      ctx.font = '11px sans-serif';
+      ctx.font = '10px sans-serif';
       ctx.fillStyle = '#8899aa';
-      ctx.fillText(items[i].sub, ix, iy + labelOff + 16);
+      ctx.fillText(items[i].sub, ix, iy + labelOff + 14);
     }
 
     // Center
@@ -641,10 +617,10 @@ const step6_Summary = {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
-    ctx.fillText('Subnet', cx, cy + 4);
+    ctx.fillText(t('learn.subnet-mask.cv_subnet'), cx, cy + 4);
   }
 };
 

@@ -57,7 +57,10 @@
       <span id="terminalTitle">Terminal — Switch1</span>
       <span id="modeIndicator">User EXEC</span>
     </div>
-    <div class="terminal-output" id="termOutput"></div>
+    <div class="terminal-output-wrap">
+      <div class="terminal-output" id="termOutput"></div>
+      <div class="help-badge" onclick="toggleHelp()" data-i18n="ui.helpBadge">? Help / Commands</div>
+    </div>
     <div class="cmd-hints" id="cmdHints"></div>
     <div class="terminal-input-area">
       <span class="prompt-label" id="promptLabel">Switch1></span>
@@ -68,6 +71,11 @@
   <div class="splitter" id="panelSplitter"></div>
 
   <div class="diagram-panel">
+    <div class="help-overlay" id="helpOverlay">
+      <h2 data-i18n="ui.helpTitle">Available Commands</h2>
+      <div id="helpContent"></div>
+    </div>
+    <button class="design-toggle-btn" id="designToggle" data-i18n="ui.designMode">Design Mode</button>
     <canvas id="netCanvas"></canvas>
     <div class="legend" id="legendArea">
       <div class="legend-row">
@@ -83,12 +91,6 @@
         <div class="legend-item"><div class="legend-line" style="background:#555"></div> <span data-i18n="ui.legendLinkDown">Link Down</span></div>
         <div class="legend-item"><div class="legend-line" style="background:repeating-linear-gradient(90deg,#ab47bc,#ab47bc 3px,transparent 3px,transparent 6px)"></div> <span data-i18n="ui.legendTrunk">Trunk</span></div>
       </div>
-    </div>
-    <div class="help-badge" onclick="toggleHelp()" data-i18n="ui.helpBadge">? Help / Commands</div>
-    <div class="help-overlay" id="helpOverlay">
-      <button class="help-close" onclick="toggleHelp()" data-i18n="ui.helpClose">Close</button>
-      <h2 data-i18n="ui.helpTitle">Available Commands</h2>
-      <div id="helpContent"></div>
     </div>
   </div>
 </div>
