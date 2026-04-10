@@ -1,4 +1,5 @@
 // ─── Command tree and hint data for CLI modes ───
+import { hasCapability } from '../model/DeviceCapabilities.js';
 
 export const commandTree = {
   user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show ip dhcp binding', 'show ip dhcp pool', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'test access', 'exit'],
@@ -14,12 +15,13 @@ export const commandTree = {
 export function getCmdHintData(store) {
   const dev = () => store.getCurrentDevice();
   const isSwitch = () => store.isSwitch();
-  const isFirewall = () => dev().type === 'firewall';
-  const isServer = () => dev().type === 'server';
-  const isRouterOrFW = () => dev().type === 'router' || dev().type === 'firewall';
-  const isRouterOrFWOrSV = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'server';
-  const isL3Capable = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'switch';
-  const isRouterOrFWOrSVOrSW = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'server' || dev().type === 'switch';
+  const d = () => dev();
+  const isFirewall = () => hasCapability(d(), 'firewallPolicy');
+  const isServer = () => d().type === 'server';
+  const isRouterOrFW = () => hasCapability(d(), 'nat');
+  const isRouterOrFWOrSV = () => hasCapability(d(), 'nat') || d().type === 'server';
+  const isL3Capable = () => hasCapability(d(), 'l3Forwarding') || hasCapability(d(), 'vlan');
+  const isRouterOrFWOrSVOrSW = () => hasCapability(d(), 'staticRoute');
   const hasSVI = () => isSwitch() && Object.keys(dev().interfaces).some(n => n.startsWith('Vlan'));
 
   const isTunnel = () => {

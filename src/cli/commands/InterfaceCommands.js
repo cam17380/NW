@@ -1,6 +1,7 @@
 // ─── Interface configuration commands ───
 import { isValidIP, getNetwork } from '../../simulation/NetworkUtils.js';
 import { findL2IPConflict } from '../../simulation/Routing.js';
+import { hasCapability } from '../../model/DeviceCapabilities.js';
 
 function parseTrunkAllowed(input) {
   const trimmed = input.trim().toLowerCase();
@@ -39,7 +40,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     return;
   }
   if (lower === 'ip address dhcp') {
-    if (dev.type !== 'pc') { termWrite('% DHCP client is only available on PCs', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpClient')) { termWrite('% DHCP client is only available on PCs', 'error-line'); return; }
     iface.dhcpClient = true;
     const result = tryDhcpAssign(devices, store.getCurrentDeviceId(), currentInterface);
     if (result) {
@@ -126,8 +127,8 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
 
   // ── ACL on interface (router/firewall/switch SVI) ──
   if (lower.startsWith('ip access-group')) {
-    const isSVI = dev.type === 'switch' && currentInterface.startsWith('Vlan');
-    if (dev.type !== 'router' && dev.type !== 'firewall' && !isSVI) { termWrite('% ip access-group is only available on routers/firewalls/switch SVIs', 'error-line'); return; }
+    const isSVI = hasCapability(dev, 'vlan') && currentInterface.startsWith('Vlan');
+    if (!hasCapability(dev, 'l3Forwarding') && !isSVI) { termWrite('% ip access-group is only available on routers/firewalls/switch SVIs', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: ip access-group <acl-num> in|out', 'error-line'); return; }
     const aclNum = parseInt(args[2]);
@@ -153,13 +154,13 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
 
   // ── NAT interface role (router only) ──
   if (lower === 'ip nat inside') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     iface.natRole = 'inside';
     termWrite(`% Interface ${currentInterface} marked as NAT inside`, 'success-line');
     return;
   }
   if (lower === 'ip nat outside') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     iface.natRole = 'outside';
     termWrite(`% Interface ${currentInterface} marked as NAT outside`, 'success-line');
     return;
@@ -205,7 +206,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
 
   // ── Crypto map on interface (router/firewall) ──
   if (lower.startsWith('crypto map')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto map is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto map is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 3) { termWrite('% Usage: crypto map <name>', 'error-line'); return; }
     iface.cryptoMap = args[2];
@@ -220,7 +221,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
 
   // ── Bond group (LACP) ──
   if (lower.startsWith('bond-group')) {
-    if (dev.type !== 'server' && dev.type !== 'pc') { termWrite('% bond-group is only available on servers/PCs', 'error-line'); return; }
+    if (!hasCapability(dev, 'lag')) { termWrite('% bond-group is only available on servers/PCs', 'error-line'); return; }
     if (parts.length < 2) { termWrite('% Usage: bond-group <name>', 'error-line'); return; }
     iface.bondGroup = parts[1];
     termWrite(`% Interface ${currentInterface} added to bond group ${parts[1]}`, 'success-line');

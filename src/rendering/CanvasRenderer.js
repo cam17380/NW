@@ -1,5 +1,5 @@
 // ─── Canvas Renderer: Main drawing orchestrator ───
-import { drawRouter, drawSwitch, drawPC, drawPrinter, drawFirewall, drawServer } from './DeviceRenderer.js';
+import { drawDeviceIcon, getHostnameYOffset } from './DeviceRenderer.js';
 import { drawLink, getDeviceEdgePoint } from './LinkRenderer.js';
 
 export class CanvasRenderer {
@@ -122,12 +122,7 @@ export class CanvasRenderer {
 
       if (isSelected) { ctx.shadowColor = '#4fc3f7'; ctx.shadowBlur = 15; }
 
-      if (dv.type === 'router') drawRouter(ctx, x, y, dv, isSelected);
-      else if (dv.type === 'switch') drawSwitch(ctx, x, y, dv, isSelected);
-      else if (dv.type === 'firewall') drawFirewall(ctx, x, y, dv, isSelected);
-      else if (dv.type === 'server') drawServer(ctx, x, y, dv, isSelected);
-      else if (dv.icon === 'printer') drawPrinter(ctx, x, y, dv, isSelected);
-      else drawPC(ctx, x, y, dv, isSelected);
+      drawDeviceIcon(ctx, x, y, dv, isSelected);
 
       ctx.shadowBlur = 0;
 
@@ -135,7 +130,7 @@ export class CanvasRenderer {
       ctx.font = 'bold 13px Segoe UI, sans-serif';
       ctx.fillStyle = isSelected ? '#4fc3f7' : '#aab';
       ctx.textAlign = 'center';
-      ctx.fillText(dv.hostname, x, y + (dv.type === 'pc' ? 40 : dv.type === 'server' ? 28 : 35));
+      ctx.fillText(dv.hostname, x, y + getHostnameYOffset(dv));
 
       // Device-type info display
       ctx.font = '10px Consolas, monospace';
@@ -915,12 +910,7 @@ export class CanvasRenderer {
 
     // Draw devices
     for (const [id, dv] of Object.entries(devices)) {
-      if (dv.type === 'router') drawRouter(ctx, dv.x, dv.y, dv, false);
-      else if (dv.type === 'switch') drawSwitch(ctx, dv.x, dv.y, dv, false);
-      else if (dv.type === 'firewall') drawFirewall(ctx, dv.x, dv.y, dv, false);
-      else if (dv.type === 'server') drawServer(ctx, dv.x, dv.y, dv, false);
-      else if (dv.icon === 'printer') drawPrinter(ctx, dv.x, dv.y, dv, false);
-      else drawPC(ctx, dv.x, dv.y, dv, false);
+      drawDeviceIcon(ctx, dv.x, dv.y, dv, false);
 
       // Hostname label
       ctx.font = 'bold 13px Segoe UI, sans-serif';

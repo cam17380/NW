@@ -1,6 +1,7 @@
 // ─── Configuration mode commands ───
 import { normalizeInterface, isValidIP, maskToCIDR } from '../../simulation/NetworkUtils.js';
 import { generateTunnelName } from '../../model/Topology.js';
+import { hasCapability } from '../../model/DeviceCapabilities.js';
 
 export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   const lower = input.toLowerCase();
@@ -18,7 +19,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     const rawName = parts.slice(1).join('');
     const ifName = normalizeInterface(rawName);
     // SVI: "interface vlan <id>" on switches — auto-create if needed
-    if (ifName.startsWith('Vlan') && dev.type === 'switch') {
+    if (ifName.startsWith('Vlan') && hasCapability(dev, 'vlan')) {
       const vid = parseInt(ifName.slice(4));
       if (isNaN(vid) || vid < 1 || vid > 4094) { termWrite('% Invalid VLAN ID (1-4094)', 'error-line'); return; }
       if (!dev.vlans[vid]) {
@@ -34,7 +35,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
       return;
     }
     // Tunnel interface: "interface tunnel <N>" on routers/firewalls — auto-create if needed
-    if (ifName.startsWith('Tunnel') && (dev.type === 'router' || dev.type === 'firewall')) {
+    if (ifName.startsWith('Tunnel') && hasCapability(dev, 'vpn')) {
       const tid = parseInt(ifName.slice(6));
       if (isNaN(tid) || tid < 0) { termWrite('% Invalid tunnel number (0+)', 'error-line'); return; }
       if (!dev.interfaces[ifName]) {
@@ -60,8 +61,8 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
     termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return;
   }
   if (lower.startsWith('ip route ')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server' && dev.type !== 'switch') { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
-    if (dev.type === 'switch' && !dev.routes) dev.routes = [];
+    if (!hasCapability(dev, 'staticRoute')) { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
+    if (hasCapability(dev, 'vlan') && !dev.routes) dev.routes = [];
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[2], mask = args[3], nextHop = args[4];
@@ -78,7 +79,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip route <network> <mask> <next-hop>
   if (lower.startsWith('no ip route')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server' && dev.type !== 'switch') { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'staticRoute')) { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 6) { termWrite('% Incomplete command — usage: no ip route <network> <mask> <next-hop>', 'error-line'); return; }
     const network = args[3], mask = args[4], nextHop = args[5];
@@ -91,7 +92,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip default-gateway <ip> — PC/Server
   if (lower.startsWith('ip default-gateway')) {
-    if (dev.type !== 'pc' && dev.type !== 'server') { termWrite('% ip default-gateway is for PCs/servers. On routers, use: ip route 0.0.0.0 0.0.0.0 <next-hop>', 'error-line'); return; }
+    if (!hasCapability(dev, 'defaultGateway')) { termWrite('% ip default-gateway is for PCs/servers. On routers, use: ip route 0.0.0.0 0.0.0.0 <next-hop>', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 3) { termWrite('% Incomplete command — usage: ip default-gateway <ip>', 'error-line'); return; }
     if (!isValidIP(args[2])) { termWrite('% Invalid IP address', 'error-line'); return; }
@@ -135,7 +136,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat inside source static <inside-local> <inside-global>
   if (lower.startsWith('ip nat inside source static')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
     const insideLocal = args[5], insideGlobal = args[6];
@@ -149,7 +150,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat inside source static <inside-local> <inside-global>
   if (lower.startsWith('no ip nat inside source static')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 8) { termWrite('% Incomplete command — usage: no ip nat inside source static <local-ip> <global-ip>', 'error-line'); return; }
     const insideLocal = args[6], insideGlobal = args[7];
@@ -163,7 +164,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat inside source list <acl-num> pool <pool-name>
   if (lower.startsWith('ip nat inside source list')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 8 || args[6].toLowerCase() !== 'pool') {
       termWrite('% Incomplete command — usage: ip nat inside source list <acl-num> pool <pool-name>', 'error-line'); return;
@@ -181,7 +182,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat inside source list <acl-num> pool <pool-name>
   if (lower.startsWith('no ip nat inside source list')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 9) { termWrite('% Incomplete command', 'error-line'); return; }
     const aclNum = parseInt(args[6]);
@@ -195,7 +196,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip nat pool <name> <start-ip> <end-ip> netmask <mask>
   if (lower.startsWith('ip nat pool')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 7) { termWrite('% Incomplete command — usage: ip nat pool <name> <start-ip> <end-ip> netmask <mask>', 'error-line'); return; }
     const poolName = args[3], startIP = args[4], endIP = args[5];
@@ -212,7 +213,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip nat pool <name>
   if (lower.startsWith('no ip nat pool')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat')) { termWrite('% ip nat is only available on routers/firewalls', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Incomplete command — usage: no ip nat pool <name>', 'error-line'); return; }
     const poolName = args[4];
@@ -229,7 +230,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   // Extended ACL (100-199): access-list <num> permit|deny <proto> <src> <srcWC> <dst> <dstWC> [eq <port>]
   //                         supports "any" and "host <ip>" keywords for src/dst
   if (cmd === 'access-list') {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'acl')) { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
     if (!dev.accessLists) dev.accessLists = {};
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Incomplete command — usage: access-list <num> permit|deny ...', 'error-line'); return; }
@@ -311,7 +312,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no access-list <num>
   if (lower.startsWith('no access-list')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'acl')) { termWrite('% access-list is only available on routers/firewalls/L3 switches', 'error-line'); return; }
     const args = input.split(/\s+/);
     const aclNum = parseInt(args[2]);
     if (isNaN(aclNum)) { termWrite('% Incomplete command — usage: no access-list <num>', 'error-line'); return; }
@@ -332,7 +333,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // firewall policy <seq> permit|deny <src> <srcWC> <dst> <dstWC> <proto> [port]
   if (lower.startsWith('firewall policy')) {
-    if (dev.type !== 'firewall') { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
+    if (!hasCapability(dev, 'firewallPolicy')) { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 9) {
       termWrite('% Usage: firewall policy <seq> permit|deny <src> <srcWC> <dst> <dstWC> <protocol> [port]', 'error-line');
@@ -384,7 +385,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no firewall policy <seq> | no firewall policy all
   if (lower.startsWith('no firewall policy')) {
-    if (dev.type !== 'firewall') { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
+    if (!hasCapability(dev, 'firewallPolicy')) { termWrite('% firewall policy is only available on firewall devices', 'error-line'); return; }
     if (!dev.policies) dev.policies = [];
     const arg = parts[3];
     if (!arg) { termWrite('% Usage: no firewall policy <seq> | no firewall policy all', 'error-line'); return; }
@@ -406,7 +407,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip dhcp pool <name>
   if (lower.startsWith('ip dhcp pool')) {
-    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
     if (!dev.dhcp) dev.dhcp = { pools: {}, excludedAddresses: [] };
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: ip dhcp pool <pool-name>', 'error-line'); return; }
@@ -422,7 +423,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip dhcp pool <name>
   if (lower.startsWith('no ip dhcp pool')) {
-    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Usage: no ip dhcp pool <pool-name>', 'error-line'); return; }
     const poolName = args[4];
@@ -445,7 +446,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // ip dhcp excluded-address <start> [end]
   if (lower.startsWith('ip dhcp excluded-address')) {
-    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
     if (!dev.dhcp) dev.dhcp = { pools: {}, excludedAddresses: [] };
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: ip dhcp excluded-address <start-ip> [end-ip]', 'error-line'); return; }
@@ -461,7 +462,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no ip dhcp excluded-address <start> [end]
   if (lower.startsWith('no ip dhcp excluded-address')) {
-    if (dev.type !== 'router') { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% ip dhcp commands are only available on routers', 'error-line'); return; }
     if (!dev.dhcp) return;
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Usage: no ip dhcp excluded-address <start-ip> [end-ip]', 'error-line'); return; }
@@ -478,7 +479,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // crypto isakmp policy <num>
   if (lower.startsWith('crypto isakmp policy')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: crypto isakmp policy <number>', 'error-line'); return; }
@@ -494,7 +495,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no crypto isakmp policy <num>
   if (lower.startsWith('no crypto isakmp policy')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) return;
     const args = input.split(/\s+/);
     const policyNum = parseInt(args[4]);
@@ -507,7 +508,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // crypto ipsec transform-set <name> <transform1> [transform2]
   if (lower.startsWith('crypto ipsec transform-set')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Usage: crypto ipsec transform-set <name> <transform1> [transform2]', 'error-line'); return; }
@@ -521,7 +522,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no crypto ipsec transform-set <name>
   if (lower.startsWith('no crypto ipsec transform-set')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) return;
     const args = input.split(/\s+/);
     if (args.length < 5) { termWrite('% Usage: no crypto ipsec transform-set <name>', 'error-line'); return; }
@@ -534,7 +535,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // crypto map <name> <seq> ipsec-isakmp
   if (lower.startsWith('crypto map')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) dev.crypto = { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} };
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: crypto map <name> <seq> ipsec-isakmp', 'error-line'); return; }
@@ -553,7 +554,7 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
 
   // no crypto map <name>
   if (lower.startsWith('no crypto map')) {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) return;
     const args = input.split(/\s+/);
     if (args.length < 4) { termWrite('% Usage: no crypto map <name>', 'error-line'); return; }

@@ -169,6 +169,33 @@ export function drawArrowHead(ctx, x, y, angle) {
   ctx.stroke();
 }
 
+// ─── Drawing registry ───
+// Maps device type (and icon overrides) to draw functions.
+// Adding a new device type only requires one entry here.
+
+const DEVICE_DRAW_MAP = {
+  router:   drawRouter,
+  switch:   drawSwitch,
+  firewall: drawFirewall,
+  server:   drawServer,
+  pc:       drawPC,
+};
+
+const ICON_DRAW_MAP = {
+  printer: drawPrinter,
+};
+
+export function drawDeviceIcon(ctx, x, y, dv, selected) {
+  const fn = (dv.icon && ICON_DRAW_MAP[dv.icon]) || DEVICE_DRAW_MAP[dv.type] || drawPC;
+  fn(ctx, x, y, dv, selected);
+}
+
+const HOSTNAME_Y_OFFSET = { pc: 40, server: 28 };
+
+export function getHostnameYOffset(dv) {
+  return HOSTNAME_Y_OFFSET[dv.type] || 35;
+}
+
 // ─── Device type base colors ───
 const DEVICE_COLORS = {
   router:   { active: '#69f0ae', partial: '#3a8c64', inactive: '#2a4a38' },
