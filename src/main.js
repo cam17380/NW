@@ -25,27 +25,19 @@ import { showToast } from './ui/Toast.js';
 import { ChallengeEngine } from './challenge/ChallengeEngine.js';
 import { ChallengeUI } from './challenge/ChallengeUI.js';
 import { ChallengeSelector } from './challenge/ChallengeSelector.js';
-import { beginnerScenarios } from './challenge/scenarios/BeginnerScenarios.js';
-import { intermediateScenarios } from './challenge/scenarios/IntermediateScenarios.js';
-import { advancedScenarios } from './challenge/scenarios/AdvancedScenarios.js';
+import { beginnerScenarios, intermediateScenarios, advancedScenarios } from './challenge/scenarios/index.js';
 import { LearnEngine } from './learn/LearnEngine.js';
 import { LearnSelector } from './learn/LearnSelector.js';
 import { LearnUI } from './learn/LearnUI.js';
-import { lessonIPAddress } from './learn/lessons/Lesson_IPAddress.js';
-import { lessonSubnetMask } from './learn/lessons/Lesson_SubnetMask.js';
-import { lessonNetworkBroadcast } from './learn/lessons/Lesson_NetworkBroadcast.js';
-import { lessonEthernetSwitch } from './learn/lessons/Lesson_EthernetSwitch.js';
-import { lessonPacketStructure } from './learn/lessons/Lesson_PacketStructure.js';
-import { lessonRouting } from './learn/lessons/Lesson_Routing.js';
+import {
+  lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast,
+  lessonEthernetSwitch, lessonPacketStructure, lessonRouting,
+} from './learn/lessons/index.js';
 import { registerLocale, setLocale, getLocale, loadSavedLocale, onLocaleChanged, t } from './i18n/I18n.js';
-import { en } from './i18n/locales/en.js';
-import { ja } from './i18n/locales/ja.js';
-import { enChallenge } from './i18n/locales/en_challenge.js';
-import { jaChallenge } from './i18n/locales/ja_challenge.js';
-import { enLearn } from './i18n/locales/en_learn.js';
-import { jaLearn } from './i18n/locales/ja_learn.js';
-import { enHelp } from './i18n/locales/en_help.js';
-import { jaHelp } from './i18n/locales/ja_help.js';
+import {
+  en, ja, enChallenge, jaChallenge,
+  enLearn, jaLearn, enHelp, jaHelp,
+} from './i18n/locales/index.js';
 import { renderHelpContent } from './ui/HelpRenderer.js';
 
 // ─── Initialize core ───
