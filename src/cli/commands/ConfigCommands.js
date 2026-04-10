@@ -56,6 +56,9 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   }
 
   // ip route <network> <mask> <next-hop> — router/firewall/server/switch(L3)
+  if (lower === 'ip route') {
+    termWrite('% Incomplete command — usage: ip route <network> <mask> <next-hop>', 'error-line'); return;
+  }
   if (lower.startsWith('ip route ')) {
     if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'server' && dev.type !== 'switch') { termWrite('% ip route is only available on routers/firewalls/servers/L3 switches', 'error-line'); return; }
     if (dev.type === 'switch' && !dev.routes) dev.routes = [];

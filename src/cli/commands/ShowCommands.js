@@ -592,6 +592,10 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'show packet-flow') {
+    termWrite('% Incomplete command — usage: show packet-flow <target-ip> [tcp|udp|icmp] [port]', 'error-line');
+    return;
+  }
   if (lower.startsWith('show packet-flow ')) {
     const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
     if (dev.type === 'switch' && !hasSVI) { termWrite('% packet-flow is not available on L2 switches', 'error-line'); return; }
@@ -621,6 +625,10 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'test access') {
+    termWrite('% Incomplete command — usage: test access <target-ip> <tcp|udp|icmp> [port]', 'error-line');
+    return;
+  }
   if (lower.startsWith('test access ')) {
     const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
     if (dev.type === 'switch' && !hasSVI) { termWrite('% test access is not available on L2 switches', 'error-line'); return; }

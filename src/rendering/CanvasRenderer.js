@@ -37,6 +37,13 @@ export class CanvasRenderer {
     this.draw();
   }
 
+  fitView() {
+    this.resize();
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+    this.store.fitView(w, h);
+  }
+
   // Convert screen (CSS pixel) coordinates to logical coordinates
   screenToLogical(screenX, screenY) {
     const w = this.canvas.width / this.dpr;

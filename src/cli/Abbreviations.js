@@ -92,8 +92,16 @@ const abbreviations = {
   'int tunnel': 'interface tunnel',
   'sh crypto isakmp': 'show crypto isakmp sa',
   'show crypto isakmp': 'show crypto isakmp sa',
+  'sh crypto isakmp sa': 'show crypto isakmp sa',
+  'show crypto isakmp sa': 'show crypto isakmp sa',
+  'sh crypto isakmp policy': 'show crypto isakmp policy',
+  'show crypto isakmp policy': 'show crypto isakmp policy',
   'sh crypto ipsec': 'show crypto ipsec sa',
   'show crypto ipsec': 'show crypto ipsec sa',
+  'sh crypto ipsec sa': 'show crypto ipsec sa',
+  'show crypto ipsec sa': 'show crypto ipsec sa',
+  'sh crypto ipsec transform-set': 'show crypto ipsec transform-set',
+  'show crypto ipsec transform-set': 'show crypto ipsec transform-set',
   'sh int tunnel': 'show interfaces tunnel',
   'show int tunnel': 'show interfaces tunnel',
   'tun src': 'tunnel source',
@@ -119,11 +127,17 @@ const abbreviations = {
   'dns': 'dns-server',
 };
 
-export function expandAbbrev(input) {
-  const lower = input.toLowerCase().trim();
+export function expandAbbrev(rawInput) {
+  const input = rawInput.trim().replace(/\s+/g, ' ');
+  const lower = input.toLowerCase();
+  let bestAbbr = null, bestFull = null, bestLen = -1;
   for (const [abbr, full] of Object.entries(abbreviations)) {
-    if (lower === abbr) return full + input.slice(abbr.length);
-    if (lower.startsWith(abbr + ' ')) return full + input.slice(abbr.length);
+    if (abbr.length > bestLen && (lower === abbr || lower.startsWith(abbr + ' '))) {
+      bestAbbr = abbr;
+      bestFull = full;
+      bestLen = abbr.length;
+    }
   }
+  if (bestAbbr) return bestFull + input.slice(bestAbbr.length);
   return input;
 }

@@ -30,8 +30,8 @@ export class CLIEngine {
 
     this.store.pushHistory(rawInput);
 
-    const input = expandAbbrev(rawInput.trim());
-    const parts = input.split(/\s+/);
+    const input = expandAbbrev(rawInput.trim()).replace(/\s+/g, ' ');
+    const parts = input.split(' ');
     const cmd = parts[0].toLowerCase();
 
     const mode = this.store.getCLIMode();

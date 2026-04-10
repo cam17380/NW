@@ -136,7 +136,7 @@ function refreshUI() {
   if (curDev) terminal.write(t('ui.connectedTo', { name: curDev.hostname }) + '\n', 'success-line');
   doUpdatePrompt();
   doUpdateTabs();
-  renderer.draw();
+  renderer.fitView();
   doUpdateVlanLegend();
   updateSaveInfo();
   document.getElementById('cmdInput').focus();
@@ -223,7 +223,10 @@ function updateHelpContent() {
 
 function toggleHelp() {
   updateHelpContent();
-  document.getElementById('helpOverlay').classList.toggle('show');
+  const overlay = document.getElementById('helpOverlay');
+  const badge = document.querySelector('.help-badge');
+  overlay.classList.toggle('show');
+  if (badge) badge.classList.toggle('active', overlay.classList.contains('show'));
 }
 
 // ─── Expose to HTML onclick handlers ───
@@ -316,7 +319,7 @@ learnSelector.onSelect = (lessonId) => {
 window.showLessons = () => learnSelector.show();
 
 // ─── Initial render ───
-renderer.resize();
+renderer.fitView();
 doUpdateTabs();
 doUpdatePrompt();
 doUpdateVlanLegend();
@@ -327,7 +330,7 @@ const loaded = autoLoadConfig(store);
 if (loaded) {
   doUpdateTabs();
   doUpdatePrompt();
-  renderer.draw();
+  renderer.fitView();
   doUpdateVlanLegend();
   terminal.write(t('ui.welcome'), 'success-line');
   terminal.write(t('ui.savedRestored') + '\n', 'success-line');
