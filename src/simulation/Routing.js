@@ -27,6 +27,12 @@ export function deviceHasReachableIP(dv, targetIP) {
       if (partner) return true;
     }
   }
+  // NAT insideGlobal addresses are "virtual" IPs owned by this device
+  if (dv.nat?.staticEntries) {
+    for (const entry of dv.nat.staticEntries) {
+      if (entry.insideGlobal === targetIP) return true;
+    }
+  }
   return false;
 }
 
