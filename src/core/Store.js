@@ -1,5 +1,6 @@
 // ─── Store: Centralized state management ───
 import { createDefaultDevices, createDefaultLinks, createDevice, generateDeviceId, createInterfaceForDevice } from '../model/Topology.js';
+import { recomputeAllOspf } from '../simulation/OspfEngine.js';
 
 export class Store {
   constructor(eventBus) {
@@ -238,6 +239,10 @@ export class Store {
     if (!this.devices[this.currentDeviceId] && ids.length > 0) {
       this.currentDeviceId = ids[0];
     }
+    // Populate OSPF route tables for any devices that arrive with OSPF
+    // configured but no learned routes yet (e.g. test topologies, challenge
+    // scenarios, "Open in Simulator").
+    recomputeAllOspf(this.devices);
     this.eventBus.emit('device:listChanged');
     this.eventBus.emit('topology:changed');
   }
