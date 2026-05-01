@@ -25,7 +25,7 @@ export function getRouterId(dv) {
   return highest || '0.0.0.0';
 }
 
-// Get all interfaces on dv that are covered by an OSPF network statement and are up
+// Get all interfaces on dv covered by any OSPF network statement and currently up
 function getOspfInterfaces(dv) {
   if (!dv.ospf || !dv.ospf.processes) return [];
   const result = [];
@@ -45,10 +45,84 @@ function getOspfInterfaces(dv) {
   return result;
 }
 
+// Same as above but restricted to a single process's network statements (for per-process show)
+export function getOspfProcessInterfaces(dv, proc) {
+  const result = [];
+  const seen = new Set();
+  for (const stmt of proc.networks) {
+    for (const [ifName, iface] of Object.entries(dv.interfaces)) {
+      if (!iface.ip || iface.status !== 'up') continue;
+      if (seen.has(ifName)) continue;
+      if (matchesOspfNetwork(iface.ip, stmt.ip, stmt.wildcard)) {
+        seen.add(ifName);
+        result.push({ ifName, iface });
+      }
+    }
+  }
+  return result;
+}
+
 function hasOspfEnabled(dv) {
   if (!dv.ospf || !dv.ospf.processes) return false;
   for (const proc of Object.values(dv.ospf.processes)) {
     if (proc.networks.length > 0) return true;
+  }
+  return false;
+}
+
+// Check if two interfaces share the same L2 broadcast domain
+// (directly cabled, or reachable through one or more switches honoring VLAN membership)
+function portCarriesVlan(iface, vlan) {
+  if (!iface.switchport) return false;
+  if (iface.switchport.mode === 'access') return iface.switchport.accessVlan === vlan;
+  if (iface.switchport.mode === 'trunk') {
+    const allowed = iface.switchport.trunkAllowed;
+    return allowed === 'all' || (Array.isArray(allowed) && allowed.includes(vlan));
+  }
+  return false;
+}
+
+function interfacesL2Reachable(devices, devId1, ifName1, devId2, ifName2) {
+  const dv1 = devices[devId1];
+  const if1 = dv1 && dv1.interfaces[ifName1];
+  if (!if1 || if1.status !== 'up' || !if1.connected) return false;
+
+  // Direct cable
+  if (if1.connected.device === devId2 && if1.connected.iface === ifName2) {
+    const if2 = devices[devId2] && devices[devId2].interfaces[ifName2];
+    return !!(if2 && if2.status === 'up');
+  }
+
+  // Otherwise must traverse a switch fabric
+  const entrySwId = if1.connected.device;
+  const entrySw = devices[entrySwId];
+  const entryPort = entrySw && entrySw.interfaces[if1.connected.iface];
+  if (!entrySw || entrySw.type !== 'switch' || !entryPort || entryPort.status !== 'up') return false;
+
+  // Determine VLAN from the entry switch port (router IFs are untagged)
+  let vlan = 1;
+  if (entryPort.switchport && entryPort.switchport.mode === 'access') {
+    vlan = entryPort.switchport.accessVlan;
+  }
+
+  const visited = new Set([entrySwId]);
+  const queue = [entrySwId];
+  while (queue.length > 0) {
+    const curId = queue.shift();
+    const sw = devices[curId];
+    for (const swIf of Object.values(sw.interfaces)) {
+      if (swIf.status !== 'up' || !swIf.connected || !swIf.switchport) continue;
+      if (!portCarriesVlan(swIf, vlan)) continue;
+      if (swIf.connected.device === devId2 && swIf.connected.iface === ifName2) {
+        const if2 = devices[devId2] && devices[devId2].interfaces[ifName2];
+        if (if2 && if2.status === 'up') return true;
+      }
+      const peerDev = devices[swIf.connected.device];
+      if (peerDev && peerDev.type === 'switch' && !visited.has(swIf.connected.device)) {
+        visited.add(swIf.connected.device);
+        queue.push(swIf.connected.device);
+      }
+    }
   }
   return false;
 }
@@ -77,7 +151,8 @@ function buildNeighborGraph(devices) {
           const net1 = getNetwork(of1.iface.ip, of1.iface.mask);
           const net2 = getNetwork(of2.iface.ip, of2.iface.mask);
           if (net1 !== net2) continue;
-          // Same subnet — they are OSPF neighbors
+          // Same subnet — verify L2 reachability before forming adjacency
+          if (!interfacesL2Reachable(devices, id1, of1.ifName, id2, of2.ifName)) continue;
           graph.get(id1).push({ neighborId: id2, localIfName: of1.ifName, localIP: of1.iface.ip, neighborIP: of2.iface.ip });
           graph.get(id2).push({ neighborId: id1, localIfName: of2.ifName, localIP: of2.iface.ip, neighborIP: of1.iface.ip });
         }

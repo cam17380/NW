@@ -4,7 +4,7 @@ import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
 import { hasCapability } from '../../model/DeviceCapabilities.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
 import { tryDhcpAssign } from './InterfaceCommands.js';
-import { getOspfNeighborInfo, getRouterId, wildcardToMask } from '../../simulation/OspfEngine.js';
+import { getOspfNeighborInfo, getRouterId, wildcardToMask, getOspfProcessInterfaces } from '../../simulation/OspfEngine.js';
 
 function findTunnelPeer(devices, srcDev, destIP) {
   if (!destIP) return null;
@@ -150,16 +150,19 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
-  if (lower === 'show ip ospf' || lower === 'show ip ospf database') {
+  if (lower === 'show ip ospf') {
     if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
     if (!dev.ospf || Object.keys(dev.ospf.processes).length === 0) {
       termWrite('% OSPF is not configured on this device'); return;
     }
     for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
       const rid = getRouterId(dev);
+      const ifaces = getOspfProcessInterfaces(dev, proc);
+      const areas = new Set(proc.networks.map(n => String(n.area)));
+      const areaCount = areas.size || 1;
       termWrite(`Routing Process "ospf ${pid}" with ID ${rid}`);
-      termWrite(`  Number of areas: 1 (1 normal)`);
-      termWrite(`  Number of interfaces in this process: ${proc.networks.length > 0 ? 'configured' : '0'}`);
+      termWrite(`  Number of areas: ${areaCount} (${areaCount} normal)`);
+      termWrite(`  Number of interfaces in this process: ${ifaces.length}`);
       if (proc.networks.length > 0) {
         termWrite('  Network Statements:');
         for (const n of proc.networks) {
@@ -167,6 +170,16 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         }
       }
     }
+    return;
+  }
+
+  if (lower === 'show ip ospf database') {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.ospf || Object.keys(dev.ospf.processes).length === 0) {
+      termWrite('% OSPF is not configured on this device'); return;
+    }
+    termWrite('% OSPF LSDB display is not supported in this simulator');
+    termWrite('  (use "show ip ospf neighbor" or "show ip route" instead)');
     return;
   }
 
@@ -592,9 +605,14 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       termWrite('!');
     }
     if (dev.ospf && Object.keys(dev.ospf.processes).length > 0) {
+      // router-id is device-level in the data model — emit under the first process only
+      let routerIdEmitted = false;
       for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
         termWrite(`router ospf ${pid}`);
-        if (dev.ospf.routerId) termWrite(` router-id ${dev.ospf.routerId}`);
+        if (dev.ospf.routerId && !routerIdEmitted) {
+          termWrite(` router-id ${dev.ospf.routerId}`);
+          routerIdEmitted = true;
+        }
         for (const n of proc.networks) {
           termWrite(` network ${n.ip} ${n.wildcard} area ${n.area}`);
         }

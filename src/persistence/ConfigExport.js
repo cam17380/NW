@@ -173,9 +173,14 @@ export function exportCommandScript(store) {
     // OSPF
     if (dev.ospf && Object.keys(dev.ospf.processes).length > 0) {
       lines.push('!');
+      // router-id is device-level in the data model — emit under the first process only
+      let routerIdEmitted = false;
       for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
         lines.push(`router ospf ${pid}`);
-        if (dev.ospf.routerId) lines.push(` router-id ${dev.ospf.routerId}`);
+        if (dev.ospf.routerId && !routerIdEmitted) {
+          lines.push(` router-id ${dev.ospf.routerId}`);
+          routerIdEmitted = true;
+        }
         for (const n of proc.networks) {
           lines.push(` network ${n.ip} ${n.wildcard} area ${n.area}`);
         }

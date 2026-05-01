@@ -2,6 +2,7 @@
 import { isValidIP, getNetwork } from '../../simulation/NetworkUtils.js';
 import { findL2IPConflict } from '../../simulation/Routing.js';
 import { hasCapability } from '../../model/DeviceCapabilities.js';
+import { recomputeAllOspf } from '../../simulation/OspfEngine.js';
 
 function parseTrunkAllowed(input) {
   const trimmed = input.trim().toLowerCase();
@@ -27,6 +28,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     }
     termWrite(`%LINK-3-UPDOWN: Interface ${currentInterface}, changed state to up`, 'success-line');
     termWrite(`%LINEPROTO-5-UPDOWN: Line protocol on Interface ${currentInterface}, changed state to up`, 'success-line');
+    recomputeAllOspf(devices);
     return;
   }
   if (cmd === 'shutdown') {
@@ -37,6 +39,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
       if (ri) { ri.status = 'down'; ri.protocol = 'down'; }
     }
     termWrite(`%LINK-5-CHANGED: Interface ${currentInterface}, changed state to administratively down`, 'error-line');
+    recomputeAllOspf(devices);
     return;
   }
   if (lower === 'ip address dhcp') {
@@ -52,6 +55,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
       iface.ip = ''; iface.mask = '';
       termWrite('% DHCP: No DHCP server found — use "renew dhcp" to retry', 'error-line');
     }
+    recomputeAllOspf(devices);
     return;
   }
   if (lower === 'no ip address dhcp') {
@@ -60,6 +64,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
       iface.dhcpClient = false; iface.ip = ''; iface.mask = '';
       if (dev.dhcpGateway) { dev.defaultGateway = ''; delete dev.dhcpGateway; }
       termWrite('% DHCP client disabled, IP released', 'success-line');
+      recomputeAllOspf(devices);
     }
     return;
   }
@@ -79,6 +84,7 @@ export function execConfigIf(input, parts, cmd, store, termWrite) {
     if (conflict) {
       termWrite(`%IP-4-DUPADDR: Duplicate address ${args[2]} on ${currentInterface}, sourced by ${conflict.hostname} ${conflict.ifName}`, 'error-line');
     }
+    recomputeAllOspf(devices);
     return;
   }
   if (cmd === 'description') {
