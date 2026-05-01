@@ -494,34 +494,32 @@ export function lookupRoute(dv, targetIP) {
     }
   }
 
-  // Static routes (AD 1 — checked first, take priority over OSPF AD 110)
-  let bestRoute = null;
-  let bestCIDR = -1;
+  // Static (AD 1) and OSPF (AD 110) — longest-prefix-match first, AD as tiebreaker
+  const best = pickBestRoute(dv, targetIP);
+  return best ? best.route.nextHop : null;
+}
+
+// Pick best route from static + OSPF tables: longest prefix match wins,
+// AD (static=1, OSPF=110) is the tiebreaker only when prefix lengths are equal.
+function pickBestRoute(dv, targetIP) {
+  const candidates = [];
   if (dv.routes) {
     for (const r of dv.routes) {
-      const routeNet = getNetwork(r.network, r.mask);
-      const targetNet = getNetwork(targetIP, r.mask);
-      if (routeNet === targetNet) {
-        const cidr = maskToCIDR(r.mask);
-        if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+      if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
+        candidates.push({ route: r, cidr: maskToCIDR(r.mask), ad: 1, source: 'static' });
       }
     }
   }
-  if (bestRoute) return bestRoute.nextHop;
-
-  // OSPF routes (AD 110 — fallback when no static route matches)
-  if (dv.ospfRoutes && dv.ospfRoutes.length > 0) {
-    let bestOspf = null, bestOspfCIDR = -1;
+  if (dv.ospfRoutes) {
     for (const r of dv.ospfRoutes) {
       if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
-        const cidr = maskToCIDR(r.mask);
-        if (cidr > bestOspfCIDR) { bestOspfCIDR = cidr; bestOspf = r; }
+        candidates.push({ route: r, cidr: maskToCIDR(r.mask), ad: 110, source: 'ospf' });
       }
     }
-    if (bestOspf) return bestOspf.nextHop;
   }
-
-  return null;
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.cidr - a.cidr || a.ad - b.ad);
+  return candidates[0];
 }
 
 export function findDeviceByIP(devices, ip) {
@@ -875,34 +873,16 @@ export function describeRouteLookup(dv, targetIP) {
       return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
     }
   }
-  let bestRoute = null, bestCIDR = -1;
-  if (dv.routes) {
-    for (const r of dv.routes) {
-      const routeNet = getNetwork(r.network, r.mask);
-      const targetNet = getNetwork(targetIP, r.mask);
-      if (routeNet === targetNet) {
-        const cidr = maskToCIDR(r.mask);
-        if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
-      }
+  // Static (AD 1) and OSPF (AD 110) — longest prefix match first, AD as tiebreaker
+  const best = pickBestRoute(dv, targetIP);
+  if (best) {
+    const r = best.route;
+    if (best.source === 'static') {
+      const isDefault = r.network === '0.0.0.0' && r.mask === '0.0.0.0';
+      const prefix = isDefault ? 'default route' : `static route ${r.network}/${best.cidr}`;
+      return { nextHop: r.nextHop, description: `Matched ${prefix} via ${r.nextHop}` };
     }
-  }
-  if (bestRoute) {
-    const isDefault = bestRoute.network === '0.0.0.0' && bestRoute.mask === '0.0.0.0';
-    const prefix = isDefault ? 'default route' : `static route ${bestRoute.network}/${maskToCIDR(bestRoute.mask)}`;
-    return { nextHop: bestRoute.nextHop, description: `Matched ${prefix} via ${bestRoute.nextHop}` };
-  }
-  // OSPF routes (AD 110 — fallback when no static route matches)
-  if (dv.ospfRoutes && dv.ospfRoutes.length > 0) {
-    let bestOspf = null, bestOspfCIDR = -1;
-    for (const r of dv.ospfRoutes) {
-      if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
-        const cidr = maskToCIDR(r.mask);
-        if (cidr > bestOspfCIDR) { bestOspfCIDR = cidr; bestOspf = r; }
-      }
-    }
-    if (bestOspf) {
-      return { nextHop: bestOspf.nextHop, description: `Matched OSPF route ${bestOspf.network}/${maskToCIDR(bestOspf.mask)} via ${bestOspf.nextHop}` };
-    }
+    return { nextHop: r.nextHop, description: `Matched OSPF route ${r.network}/${best.cidr} via ${r.nextHop}` };
   }
   return { nextHop: null, description: 'No matching route' };
 }
