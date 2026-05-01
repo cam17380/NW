@@ -23,6 +23,16 @@
   </div>
 </div>
 <input type="file" id="importFile" accept=".json" style="display:none">
+<div class="script-modal" id="scriptModal">
+  <div class="script-modal-box">
+    <h3 data-i18n="ui.loadScriptTitle">Load CLI Script</h3>
+    <textarea id="scriptInput" rows="20" placeholder="! Cisco IOS CLI Script&#10;enable&#10;configure terminal&#10;hostname R1&#10;..."></textarea>
+    <div class="script-modal-btns">
+      <button onclick="closeScriptModal()" data-i18n="ui.cancel">Cancel</button>
+      <button class="run" onclick="runScript()" data-i18n="ui.run">Run</button>
+    </div>
+  </div>
+</div>
 
 <div class="main-container">
   <div class="terminal-panel">
@@ -39,6 +49,8 @@
           <button onclick="exportScript()" data-i18n="ui.exportCisco">Export Script (Cisco)</button>
           <button onclick="exportYamaha()" data-i18n="ui.exportYamaha">Export Script (YAMAHA)</button>
           <button onclick="exportImage()" data-i18n="ui.exportImage">Export Image</button>
+          <div class="dropdown-sep"></div>
+          <button onclick="loadScript()" data-i18n="ui.loadScript">Load Script</button>
           <div class="dropdown-sep"></div>
           <button onclick="confirmReset()" data-i18n="ui.resetTopology">Reset Topology</button>
           <div class="dropdown-sep"></div>

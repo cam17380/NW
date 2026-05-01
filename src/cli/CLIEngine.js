@@ -3,6 +3,7 @@ import { expandAbbrev } from './Abbreviations.js';
 import { execShow } from './commands/ShowCommands.js';
 import { execConfig, execConfigVlan, execConfigIsakmp, execConfigCryptoMap, execConfigDhcpPool } from './commands/ConfigCommands.js';
 import { execConfigIf } from './commands/InterfaceCommands.js';
+import { execConfigRouter } from './commands/RouterOspfCommands.js';
 
 export class CLIEngine {
   constructor(store, terminal, eventBus) {
@@ -44,6 +45,7 @@ export class CLIEngine {
       case 'config-isakmp': this._execConfigIsakmp(input, parts, cmd); break;
       case 'config-crypto-map': this._execConfigCryptoMap(input, parts, cmd); break;
       case 'config-dhcp-pool': this._execConfigDhcpPool(input, parts, cmd); break;
+      case 'config-router': this._execConfigRouter(input, parts, cmd); break;
     }
 
     this.eventBus.emit('command:executed');
@@ -57,6 +59,7 @@ export class CLIEngine {
       case 'user': return h + '>';
       case 'privileged': return h + '#';
       case 'config': return h + '(config)#';
+      case 'config-router': return h + '(config-router)#';
       case 'config-if': return h + '(config-if)#';
       case 'config-vlan': return h + '(config-vlan)#';
       case 'config-isakmp': return h + '(config-isakmp)#';
@@ -119,5 +122,18 @@ export class CLIEngine {
 
   _execConfigDhcpPool(input, parts, cmd) {
     execConfigDhcpPool(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
+  }
+
+  _execConfigRouter(input, parts, cmd) {
+    execConfigRouter(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
+  }
+
+  executeScript(text) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('#')) continue;
+      this.executeCommand(trimmed);
+    }
   }
 }
