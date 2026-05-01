@@ -1,8 +1,10 @@
 // ─── Show commands ───
 import { shortIfName, generateMAC, isValidIP } from '../../simulation/NetworkUtils.js';
 import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
+import { hasCapability } from '../../model/DeviceCapabilities.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
 import { tryDhcpAssign } from './InterfaceCommands.js';
+import { getOspfNeighborInfo, getRouterId, wildcardToMask } from '../../simulation/OspfEngine.js';
 
 function findTunnelPeer(devices, srcDev, destIP) {
   if (!destIP) return null;
@@ -32,7 +34,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show firewall policy') {
-    if (dev.type !== 'firewall') { termWrite('% Firewall policy is only available on firewall devices', 'error-line'); return; }
+    if (!hasCapability(dev, 'firewallPolicy')) { termWrite('% Firewall policy is only available on firewall devices', 'error-line'); return; }
     const policies = dev.policies || [];
     termWrite('Seq    Action  Source                Destination           Protocol  Port');
     termWrite('-----  ------  --------------------  --------------------  --------  ------');
@@ -57,7 +59,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show access-lists' || lower === 'show ip access-lists') {
-    if (dev.type !== 'router' && dev.type !== 'firewall' && dev.type !== 'switch') { termWrite('% ACLs are not available on this device', 'error-line'); return; }
+    if (!hasCapability(dev, 'acl')) { termWrite('% ACLs are not available on this device', 'error-line'); return; }
     if (!dev.accessLists || Object.keys(dev.accessLists).length === 0) {
       termWrite('  (no access lists configured)');
       return;
@@ -96,9 +98,9 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show ip route') {
-    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
-    if (dev.type === 'switch' && !hasSVI) { termWrite('% Routing table is not available on L2 switches (configure SVIs for L3)', 'error-line'); return; }
-    termWrite('Codes: C - connected, S - static, * - candidate default\n');
+    const hasSVI = hasCapability(dev, 'vlan') && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (hasCapability(dev, 'vlan') && !hasSVI) { termWrite('% Routing table is not available on L2 switches (configure SVIs for L3)', 'error-line'); return; }
+    termWrite('Codes: C - connected, S - static, O - OSPF, * - candidate default\n');
     const defaultRoute = dev.routes ? dev.routes.find(r => r.network === '0.0.0.0') : null;
     const gwLastResort = defaultRoute ? defaultRoute.nextHop : (dev.defaultGateway || 'not set');
     termWrite('Gateway of last resort is ' + gwLastResort);
@@ -121,14 +123,55 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       }
     }
 
-    if ((dev.type === 'pc' || dev.type === 'server') && dev.defaultGateway) {
+    if (dev.ospfRoutes && dev.ospfRoutes.length > 0) {
+      for (const r of dev.ospfRoutes) {
+        termWrite(`O    ${r.network}/${maskToCIDR(r.mask)} [110/1] via ${r.nextHop}`);
+      }
+    }
+
+    if (hasCapability(dev, 'defaultGateway') && dev.defaultGateway) {
       termWrite(`S*   0.0.0.0/0 via ${dev.defaultGateway}`);
     }
     return;
   }
 
+  if (lower === 'show ip ospf neighbor') {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    const neighbors = getOspfNeighborInfo(store.getDevices(), store.getCurrentDeviceId());
+    if (neighbors.length === 0) {
+      termWrite('% No OSPF neighbors found');
+      return;
+    }
+    termWrite('Neighbor ID     State       Interface');
+    termWrite('--------------- ----------- -----------------------');
+    for (const n of neighbors) {
+      termWrite(`${n.neighborId.padEnd(16)}FULL        ${n.localIfName}`);
+    }
+    return;
+  }
+
+  if (lower === 'show ip ospf' || lower === 'show ip ospf database') {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.ospf || Object.keys(dev.ospf.processes).length === 0) {
+      termWrite('% OSPF is not configured on this device'); return;
+    }
+    for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
+      const rid = getRouterId(dev);
+      termWrite(`Routing Process "ospf ${pid}" with ID ${rid}`);
+      termWrite(`  Number of areas: 1 (1 normal)`);
+      termWrite(`  Number of interfaces in this process: ${proc.networks.length > 0 ? 'configured' : '0'}`);
+      if (proc.networks.length > 0) {
+        termWrite('  Network Statements:');
+        for (const n of proc.networks) {
+          termWrite(`    network ${n.ip} ${n.wildcard} area ${n.area}  (mask ${wildcardToMask(n.wildcard)})`);
+        }
+      }
+    }
+    return;
+  }
+
   if (lower === 'show vlan brief') {
-    if (dev.type !== 'switch') { termWrite('% VLAN information is only available on switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'vlan')) { termWrite('% VLAN information is only available on switches', 'error-line'); return; }
     termWrite('VLAN Name                             Status    Ports');
     termWrite('---- -------------------------------- --------- -------------------------------');
     for (const [vid, vlan] of Object.entries(dev.vlans)) {
@@ -147,7 +190,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show interfaces trunk') {
-    if (dev.type !== 'switch') { termWrite('% Trunk information is only available on switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'vlan')) { termWrite('% Trunk information is only available on switches', 'error-line'); return; }
     let hasTrunk = false;
     termWrite('Port        Mode     Encapsulation  Status       Allowed VLANs');
     termWrite('----------- -------- -------------- ------------ ----------------------');
@@ -165,7 +208,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show interfaces switchport') {
-    if (dev.type !== 'switch') { termWrite('% Switchport info is only available on switches', 'error-line'); return; }
+    if (!hasCapability(dev, 'vlan')) { termWrite('% Switchport info is only available on switches', 'error-line'); return; }
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
       if (!iface.switchport) continue;
       const sp = iface.switchport;
@@ -184,7 +227,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show ip nat translations') {
-    if ((dev.type !== 'router' && dev.type !== 'firewall') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
     // Build translation table from static entries + active translations
     const allTrans = [];
     for (const e of dev.nat.staticEntries) {
@@ -208,7 +251,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show ip nat statistics') {
-    if ((dev.type !== 'router' && dev.type !== 'firewall') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
+    if (!hasCapability(dev, 'nat') || !dev.nat) { termWrite('% NAT is not configured on this device', 'error-line'); return; }
     const nat = dev.nat;
     const totalTrans = nat.staticEntries.length + nat.translations.filter(t => t.type === 'dynamic').length;
     termWrite(`Total active translations: ${totalTrans} (${nat.staticEntries.length} static, ${totalTrans - nat.staticEntries.length} dynamic)`);
@@ -234,7 +277,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
 
   // ── DHCP show commands ──
   if (lower === 'show ip dhcp binding') {
-    if (dev.type !== 'router') { termWrite('% DHCP binding is only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% DHCP binding is only available on routers', 'error-line'); return; }
     if (!dev.dhcp || Object.keys(dev.dhcp.pools).length === 0) { termWrite('  (no DHCP pools configured)'); return; }
     termWrite('IP Address        Client-ID             Pool');
     termWrite('----------------  --------------------  ----------------');
@@ -250,7 +293,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show ip dhcp pool') {
-    if (dev.type !== 'router') { termWrite('% DHCP pool is only available on routers', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpServer')) { termWrite('% DHCP pool is only available on routers', 'error-line'); return; }
     if (!dev.dhcp || Object.keys(dev.dhcp.pools).length === 0) { termWrite('  (no DHCP pools configured)'); return; }
     for (const [poolName, pool] of Object.entries(dev.dhcp.pools)) {
       termWrite(`Pool ${poolName}:`);
@@ -272,7 +315,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'renew dhcp') {
-    if (dev.type !== 'pc') { termWrite('% renew dhcp is only available on PCs', 'error-line'); return; }
+    if (!hasCapability(dev, 'dhcpClient')) { termWrite('% renew dhcp is only available on PCs', 'error-line'); return; }
     // Find DHCP-enabled interface
     let dhcpIf = null, dhcpIfName = null;
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
@@ -305,7 +348,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
 
   // ── VPN / Crypto show commands ──
   if (lower === 'show crypto isakmp sa' || lower === 'show crypto isakmp policy') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto || Object.keys(dev.crypto.isakmpPolicies).length === 0) {
       termWrite('  (no ISAKMP policies configured)');
       return;
@@ -323,7 +366,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show crypto ipsec sa' || lower === 'show crypto ipsec transform-set') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% crypto commands are only available on routers/firewalls', 'error-line'); return; }
     if (!dev.crypto) { termWrite('  (no IPsec configuration)'); return; }
     // Transform sets
     if (Object.keys(dev.crypto.transformSets).length > 0) {
@@ -363,7 +406,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show interfaces tunnel') {
-    if (dev.type !== 'router' && dev.type !== 'firewall') { termWrite('% tunnel interfaces are only available on routers/firewalls', 'error-line'); return; }
+    if (!hasCapability(dev, 'vpn')) { termWrite('% tunnel interfaces are only available on routers/firewalls', 'error-line'); return; }
     let hasTunnel = false;
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
       if (!ifName.startsWith('Tunnel')) continue;
@@ -548,7 +591,17 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       }
       termWrite('!');
     }
-    if ((dev.type === 'pc' || dev.type === 'server') && dev.defaultGateway) {
+    if (dev.ospf && Object.keys(dev.ospf.processes).length > 0) {
+      for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
+        termWrite(`router ospf ${pid}`);
+        if (dev.ospf.routerId) termWrite(` router-id ${dev.ospf.routerId}`);
+        for (const n of proc.networks) {
+          termWrite(` network ${n.ip} ${n.wildcard} area ${n.area}`);
+        }
+        termWrite('!');
+      }
+    }
+    if (hasCapability(dev, 'defaultGateway') && dev.defaultGateway) {
       termWrite(`ip default-gateway ${dev.defaultGateway}`);
       termWrite('!');
     }
@@ -572,8 +625,8 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   }
 
   if (lower === 'show arp') {
-    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
-    if (dev.type === 'switch' && !hasSVI) { termWrite('% ARP table is not available on L2 switches', 'error-line'); return; }
+    const hasSVI = hasCapability(dev, 'vlan') && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (hasCapability(dev, 'vlan') && !hasSVI) { termWrite('% ARP table is not available on L2 switches', 'error-line'); return; }
     termWrite('Protocol  Address          Age (min)  Hardware Addr   Type   Interface');
     // Self entries: device's own interfaces
     for (const [ifName, iface] of Object.entries(dev.interfaces)) {
@@ -592,9 +645,13 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'show packet-flow') {
+    termWrite('% Incomplete command — usage: show packet-flow <target-ip> [tcp|udp|icmp] [port]', 'error-line');
+    return;
+  }
   if (lower.startsWith('show packet-flow ')) {
-    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
-    if (dev.type === 'switch' && !hasSVI) { termWrite('% packet-flow is not available on L2 switches', 'error-line'); return; }
+    const hasSVI = hasCapability(dev, 'vlan') && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (hasCapability(dev, 'vlan') && !hasSVI) { termWrite('% packet-flow is not available on L2 switches', 'error-line'); return; }
     const targetIP = parts[2];
     if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: show packet-flow <target-ip> [tcp|udp|icmp] [port]', 'error-line'); return; }
 
@@ -621,9 +678,13 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
     return;
   }
 
+  if (lower === 'test access') {
+    termWrite('% Incomplete command — usage: test access <target-ip> <tcp|udp|icmp> [port]', 'error-line');
+    return;
+  }
   if (lower.startsWith('test access ')) {
-    const hasSVI = dev.type === 'switch' && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
-    if (dev.type === 'switch' && !hasSVI) { termWrite('% test access is not available on L2 switches', 'error-line'); return; }
+    const hasSVI = hasCapability(dev, 'vlan') && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
+    if (hasCapability(dev, 'vlan') && !hasSVI) { termWrite('% test access is not available on L2 switches', 'error-line'); return; }
     // test access <ip> <proto> [port]
     const targetIP = parts[2];
     if (!targetIP || !isValidIP(targetIP)) { termWrite('% Usage: test access <target-ip> <tcp|udp|icmp> [port]', 'error-line'); return; }

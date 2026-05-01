@@ -1,28 +1,8 @@
 // ─── Lesson: Routing Basics ───
 // Router role, default gateway, routing table, packet journey (MAC rewrite).
 
-// ─── Shared drawing helpers ───
 import { t } from '../../i18n/I18n.js';
-
-function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
-}
-
-function easeInOut(t) {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
+import { drawRoundedRect, easeInOut } from '../CanvasUtils.js';
 
 function drawDevice(ctx, x, y, r, label, color, sub) {
   ctx.beginPath();
@@ -108,22 +88,22 @@ const step1_RouterRole = {
       drawDevice(ctx, px, py, 12, 'PC', '#4fc3f7');
     }
 
-    // Network 2 (green)
+    // Network 2 (purple)
     const n2Phase = easeInOut(Math.min(Math.max(phase * 2 - 0.3, 0), 1));
     ctx.globalAlpha = n2Phase;
 
     ctx.beginPath();
     ctx.arc(net2X, netY, netR, 0, Math.PI * 2);
-    ctx.fillStyle = '#69f0ae0a';
+    ctx.fillStyle = '#ab47bc0a';
     ctx.fill();
-    ctx.strokeStyle = '#69f0ae44';
+    ctx.strokeStyle = '#ab47bc44';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
     ctx.font = 'bold 11px Consolas, monospace';
-    ctx.fillStyle = '#69f0ae';
+    ctx.fillStyle = '#ab47bc';
     ctx.textAlign = 'center';
     ctx.fillText('10.0.0.0/24', net2X, netY - netR - 6);
 
@@ -131,7 +111,7 @@ const step1_RouterRole = {
       const angle = Math.PI * 1.6 + (Math.PI * 0.8 / 2) * i;
       const px = net2X + Math.cos(angle) * netR * 0.6;
       const py = netY + Math.sin(angle) * netR * 0.6;
-      drawDevice(ctx, px, py, 12, 'SV', '#69f0ae');
+      drawDevice(ctx, px, py, 12, 'SV', '#ab47bc');
     }
     ctx.globalAlpha = 1;
 
@@ -143,14 +123,14 @@ const step1_RouterRole = {
 
     // Links
     drawLink(ctx, net1X + netR * 0.5, netY - netR * 0.2, cx - 22, routerY, '#4fc3f744');
-    drawLink(ctx, cx + 22, routerY, net2X - netR * 0.5, netY - netR * 0.2, '#69f0ae44');
+    drawLink(ctx, cx + 22, routerY, net2X - netR * 0.5, netY - netR * 0.2, '#ab47bc44');
 
     // Interface labels
     ctx.font = '9px Consolas, monospace';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'right';
     ctx.fillText('.1', cx - 24, routerY - 8);
-    ctx.fillStyle = '#69f0ae';
+    ctx.fillStyle = '#ab47bc';
     ctx.textAlign = 'left';
     ctx.fillText('.1', cx + 24, routerY - 8);
 
@@ -186,20 +166,56 @@ const step2_DefaultGateway = {
     // PC
     const pcX = w * 0.18;
     const pcY = h * 0.5;
-    drawDevice(ctx, pcX, pcY, 18, 'PC1', '#4fc3f7', '.10');
 
     // Router (gateway)
     const gwX = cx;
     const gwY = h * 0.35;
-    drawRouter(ctx, gwX, gwY, 20, 'R1', '#69f0ae');
-    ctx.font = '9px Consolas, monospace';
-    ctx.fillStyle = '#69f0ae';
-    ctx.textAlign = 'center';
-    ctx.fillText('.1 (Gateway)', gwX, gwY + 28);
 
     // Remote server
     const svX = w * 0.82;
     const svY = h * 0.35;
+
+    // Subnet boundary: 192.168.1.0/24 (PC1 ~ R1 center)
+    const seg1X = pcX - 40;
+    const seg1Y = gwY - 38;
+    const seg1W = gwX - seg1X;
+    const seg1H = pcY - gwY + 60;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#4fc3f744';
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#4fc3f70a';
+    ctx.fillRect(seg1X, seg1Y, seg1W, seg1H);
+    ctx.strokeRect(seg1X, seg1Y, seg1W, seg1H);
+    ctx.setLineDash([]);
+    ctx.font = 'bold 11px Consolas, monospace';
+    ctx.fillStyle = '#4fc3f7';
+    ctx.textAlign = 'center';
+    ctx.fillText('192.168.1.0/24', seg1X + seg1W / 2, seg1Y - 6);
+
+    // Subnet boundary: 10.0.0.0/24 (R1 center ~ SV)
+    const seg2X = gwX;
+    const seg2Y = svY - 38;
+    const seg2W = svX - gwX + 40;
+    const seg2H = 76;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#ab47bc44';
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#ab47bc0a';
+    ctx.fillRect(seg2X, seg2Y, seg2W, seg2H);
+    ctx.strokeRect(seg2X, seg2Y, seg2W, seg2H);
+    ctx.setLineDash([]);
+    ctx.font = 'bold 11px Consolas, monospace';
+    ctx.fillStyle = '#ab47bc';
+    ctx.textAlign = 'center';
+    ctx.fillText('10.0.0.0/24', seg2X + seg2W / 2, seg2Y - 6);
+
+    // Draw devices
+    drawDevice(ctx, pcX, pcY, 18, 'PC1', '#4fc3f7', '.10');
+    drawRouter(ctx, gwX, gwY, 20, 'R1', '#69f0ae');
+    ctx.font = '9px Consolas, monospace';
+    ctx.fillStyle = '#69f0ae';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('learn.routing.cv_gateway'), gwX, gwY + 28);
     drawDevice(ctx, svX, svY, 18, 'SV', '#ab47bc', '10.0.0.10');
 
     // Links
@@ -216,9 +232,9 @@ const step2_DefaultGateway = {
 
     // Step 1: Check destination
     const boxes = [
-      { text: '\u5b9b\u5148IP\u78ba\u8a8d', sub: '10.0.0.10', color: '#4fc3f7', w: flowW * 0.28 },
-      { text: '\u540c\u3058\u30b5\u30d6\u30cd\u30c3\u30c8\uff1f', sub: 'No (10.x \u2260 192.168.1.x)', color: '#ffa726', w: flowW * 0.34 },
-      { text: 'Gateway\u3078\u9001\u4fe1', sub: '192.168.1.1', color: '#69f0ae', w: flowW * 0.28 },
+      { text: t('learn.routing.cv_checkDstIP'), sub: '10.0.0.10', color: '#4fc3f7', w: flowW * 0.28 },
+      { text: t('learn.routing.cv_sameSubnet'), sub: t('learn.routing.cv_sameSubnetNo'), color: '#ffa726', w: flowW * 0.34 },
+      { text: t('learn.routing.cv_sendToGW'), sub: '192.168.1.1', color: '#69f0ae', w: flowW * 0.28 },
     ];
 
     let bx = flowStartX;
@@ -302,7 +318,7 @@ const step3_RoutingTable = {
     ctx.font = 'bold 12px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'left';
-    ctx.fillText('Routing Table (show ip route)', tableX + 12, tableY + 22);
+    ctx.fillText(t('learn.routing.cv_routingTable'), tableX + 12, tableY + 22);
 
     // Header
     const headerY = tableY + 36;
@@ -311,10 +327,10 @@ const step3_RoutingTable = {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'left';
-    ctx.fillText('Type', colX[0], headerY);
-    ctx.fillText('Network', colX[1], headerY);
-    ctx.fillText('Next Hop', colX[2], headerY);
-    ctx.fillText('Interface', colX[3], headerY);
+    ctx.fillText(t('learn.routing.cv_colType'), colX[0], headerY);
+    ctx.fillText(t('learn.routing.cv_colNetwork'), colX[1], headerY);
+    ctx.fillText(t('learn.routing.cv_colNextHop'), colX[2], headerY);
+    ctx.fillText(t('learn.routing.cv_colInterface'), colX[3], headerY);
 
     ctx.beginPath();
     ctx.moveTo(tableX + 8, headerY + 6);
@@ -378,7 +394,7 @@ const step3_RoutingTable = {
       ctx.font = '11px sans-serif';
       ctx.fillStyle = '#ffa726';
       ctx.textAlign = 'center';
-      ctx.fillText('\u2192 lookup', rX, rY + 34);
+      ctx.fillText(t('learn.routing.cv_lookup'), rX, rY + 34);
     }
   }
 };
@@ -423,8 +439,8 @@ const step4_PacketJourney = {
 
     // Hop segments and header states
     const hops = [
-      { fromIdx: 0, toIdx: 2, srcMAC: 'AA:11', dstMAC: 'BB:22', label: 'Hop 1: PC1 \u2192 R1' },
-      { fromIdx: 2, toIdx: 4, srcMAC: 'CC:33', dstMAC: 'DD:44', label: 'Hop 2: R1 \u2192 SV1' },
+      { fromIdx: 0, toIdx: 2, srcMAC: 'AA:11', dstMAC: 'BB:22', label: t('learn.routing.cv_hop1') },
+      { fromIdx: 2, toIdx: 4, srcMAC: 'CC:33', dstMAC: 'DD:44', label: t('learn.routing.cv_hop2') },
     ];
 
     // Packet header display area
@@ -438,7 +454,7 @@ const step4_PacketJourney = {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = '#4fc3f7';
     ctx.textAlign = 'center';
-    ctx.fillText('L3 (IP) \u2014 \u5909\u308f\u3089\u306a\u3044', l3X + l3BoxW / 2, headerY + 14);
+    ctx.fillText(t('learn.routing.cv_l3Unchanged'), l3X + l3BoxW / 2, headerY + 14);
 
     ctx.font = '10px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
@@ -459,7 +475,7 @@ const step4_PacketJourney = {
     ctx.font = 'bold 10px sans-serif';
     ctx.fillStyle = '#ffa726';
     ctx.textAlign = 'center';
-    ctx.fillText('L2 (MAC) \u2014 \u6bce\u30db\u30c3\u30d7\u3067\u66f8\u304d\u63db\u3048', l3X + l3BoxW / 2, l2Y + 14);
+    ctx.fillText(t('learn.routing.cv_l2Rewrite'), l3X + l3BoxW / 2, l2Y + 14);
 
     ctx.font = '10px Consolas, monospace';
     ctx.fillStyle = '#e0e0e0';
@@ -618,9 +634,9 @@ const step5_WhatChanges = {
       ctx.textAlign = 'center';
 
       ctx.fillStyle = '#ffa726';
-      ctx.fillText('\u25a0 MAC / TTL: \u30db\u30c3\u30d7\u3054\u3068\u306b\u5909\u5316', cx - 120, legY);
+      ctx.fillText(t('learn.routing.cv_legendMacTTL'), cx - 120, legY);
       ctx.fillStyle = '#4fc3f7';
-      ctx.fillText('\u25a0 IP: \u7d42\u70b9\u9593\u3067\u4e0d\u5909', cx + 120, legY);
+      ctx.fillText(t('learn.routing.cv_legendIP'), cx + 120, legY);
 
       ctx.globalAlpha = 1;
     }
@@ -633,17 +649,17 @@ const step6_Summary = {
   get content() { return t('learn.routing.s5c'); },
   animation(ctx, w, h, elapsed) {
     const items = [
-      { text: 'Router',       sub: '\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u9593\u8ee2\u9001', color: '#69f0ae' },
-      { text: 'Gateway',      sub: '\u30b5\u30d6\u30cd\u30c3\u30c8\u5916\u3078\u306e\u51fa\u53e3', color: '#4fc3f7' },
-      { text: 'Routing Table', sub: 'Net \u2192 Next Hop', color: '#ffa726' },
-      { text: 'IP Header',    sub: '\u7d42\u70b9\u9593\u3067\u4e0d\u5909', color: '#ab47bc' },
-      { text: 'MAC Header',   sub: '\u6bce\u30db\u30c3\u30d7\u66f8\u304d\u63db\u3048', color: '#ef5350' },
+      { text: t('learn.routing.cv_sumRouter'),       sub: t('learn.routing.cv_sumRouterSub'), color: '#69f0ae' },
+      { text: t('learn.routing.cv_sumGateway'),      sub: t('learn.routing.cv_sumGatewaySub'), color: '#4fc3f7' },
+      { text: t('learn.routing.cv_sumRoutingTable'), sub: t('learn.routing.cv_sumTableSub'), color: '#ffa726' },
+      { text: t('learn.routing.cv_sumIPHeader'),    sub: t('learn.routing.cv_sumIPSub'), color: '#ab47bc' },
+      { text: t('learn.routing.cv_sumMACHeader'),   sub: t('learn.routing.cv_sumMACSub'), color: '#ef5350' },
     ];
 
     const cx = w / 2;
     const cy = h * 0.45;
     const radius = Math.min(h * 0.32, w * 0.22);
-    const rot = elapsed / 10000 * Math.PI * 2;
+    const rot = elapsed / 8000 * Math.PI * 2;
 
     for (let i = 0; i < items.length; i++) {
       const angle = rot + (Math.PI * 2 / items.length) * i - Math.PI / 2;
@@ -686,10 +702,10 @@ const step6_Summary = {
     ctx.strokeStyle = '#69f0ae';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 11px sans-serif';
     ctx.fillStyle = '#69f0ae';
     ctx.textAlign = 'center';
-    ctx.fillText('L3', cx, cy + 4);
+    ctx.fillText(t('learn.routing.cv_l3Label'), cx, cy + 4);
   }
 };
 

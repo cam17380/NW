@@ -14,6 +14,7 @@ export class Store {
     this.currentCryptoMapName = null;
     this.currentCryptoMapSeq = null;
     this.currentDhcpPoolName = null;
+    this.currentOspfPid = null;
     this.commandHistory = [];
     this.historyIndex = -1;
     this.deviceSessions = {};  // deviceId -> { termBuffer, cliMode, currentInterface, currentVlanId, cryptoPolicyNum, cryptoMapName, cryptoMapSeq }
@@ -42,6 +43,7 @@ export class Store {
       cryptoMapName: this.currentCryptoMapName,
       cryptoMapSeq: this.currentCryptoMapSeq,
       dhcpPoolName: this.currentDhcpPoolName,
+      ospfPid: this.currentOspfPid,
     };
   }
 
@@ -55,6 +57,7 @@ export class Store {
       this.currentCryptoMapName = session.cryptoMapName;
       this.currentCryptoMapSeq = session.cryptoMapSeq;
       this.currentDhcpPoolName = session.dhcpPoolName;
+      this.currentOspfPid = session.ospfPid ?? null;
       return session.termBuffer;
     }
     // No saved session — reset to defaults
@@ -65,6 +68,7 @@ export class Store {
     this.currentCryptoMapName = null;
     this.currentCryptoMapSeq = null;
     this.currentDhcpPoolName = null;
+    this.currentOspfPid = null;
     return null;
   }
 

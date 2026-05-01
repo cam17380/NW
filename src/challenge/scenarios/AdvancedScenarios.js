@@ -8,6 +8,93 @@ function natBase() {
 }
 
 export const advancedScenarios = [
+  // ─── OSPF マルチルーター ───
+  {
+    id: 'adv-ospf',
+    get title() { return t('challenge.adv-ospf.title'); },
+    difficulty: 'advanced',
+    category: 'OSPF',
+    get description() { return t('challenge.adv-ospf.desc'); },
+    topology() {
+      const devices = {
+        R1: {
+          type: 'router', hostname: 'Router1', x: 100, y: 150,
+          routes: [],
+          nat: natBase(), accessLists: {},
+          // ospf initialized empty — user must configure
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0',   status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '10.1.0.1',    mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-R2', connected: { device: 'R2', iface: 'GigabitEthernet0/0' } },
+          }
+        },
+        R2: {
+          type: 'router', hostname: 'Router2', x: 350, y: 150,
+          routes: [],
+          nat: natBase(), accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '10.1.0.2',    mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-R1', connected: { device: 'R1', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '10.1.0.5',    mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-R3', connected: { device: 'R3', iface: 'GigabitEthernet0/0' } },
+          }
+        },
+        R3: {
+          type: 'router', hostname: 'Router3', x: 600, y: 150,
+          routes: [],
+          nat: natBase(), accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/0': { ip: '10.1.0.6',    mask: '255.255.255.252', status: 'up', protocol: 'up', description: 'To-R2', connected: { device: 'R2', iface: 'GigabitEthernet0/1' } },
+            'GigabitEthernet0/1': { ip: '172.16.0.1',  mask: '255.255.255.0',   status: 'up', protocol: 'up', description: 'LAN', connected: { device: 'SW2', iface: 'GigabitEthernet0/1' } },
+          }
+        },
+        SW1: {
+          type: 'switch', hostname: 'SW-LAN1', x: 100, y: 300,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'PC1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        SW2: {
+          type: 'switch', hostname: 'SW-LAN2', x: 600, y: 300,
+          vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+          interfaces: {
+            'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R3', iface: 'GigabitEthernet0/1' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+            'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'SV1', iface: 'Ethernet0' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+          }
+        },
+        PC1: { type: 'pc', hostname: 'PC1', x: 100, y: 430, defaultGateway: '192.168.1.1', interfaces: { 'Ethernet0': { ip: '192.168.1.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } } } },
+        SV1: { type: 'server', hostname: 'Server1', x: 600, y: 430, routes: [], defaultGateway: '172.16.0.1', interfaces: { 'Ethernet0': { ip: '172.16.0.10', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: { device: 'SW2', iface: 'GigabitEthernet0/2' } } } },
+      };
+      return { devices };
+    },
+    objectives: [
+      {
+        get text() { return t('challenge.adv-ospf.obj0'); },
+        check: (devices) => canReach(devices, 'PC1', '172.16.0.10'),
+      },
+      {
+        get text() { return t('challenge.adv-ospf.obj1'); },
+        check: (devices) => canReach(devices, 'SV1', '192.168.1.10'),
+      },
+      {
+        get text() { return t('challenge.adv-ospf.obj2'); },
+        check: (devices) => {
+          return ['R1', 'R2', 'R3'].every(id => {
+            const dv = devices[id];
+            return dv && dv.ospf && Object.values(dv.ospf.processes || {}).some(p => p.networks && p.networks.length > 0);
+          });
+        },
+      },
+    ],
+    hints: [
+      { get text() { return t('challenge.adv-ospf.hint0'); } },
+      { get text() { return t('challenge.adv-ospf.hint1'); } },
+      { get text() { return t('challenge.adv-ospf.hint2'); } },
+      { get text() { return t('challenge.adv-ospf.hint3'); } },
+      { get text() { return t('challenge.adv-ospf.hint4'); } },
+    ],
+    get congratsMessage() { return t('challenge.adv-ospf.congrats'); },
+  },
+
   // ─── 9. ファイアウォールポリシー ───
   {
     id: 'adv-firewall',

@@ -27,6 +27,12 @@ export function deviceHasReachableIP(dv, targetIP) {
       if (partner) return true;
     }
   }
+  // NAT insideGlobal addresses are "virtual" IPs owned by this device
+  if (dv.nat?.staticEntries) {
+    for (const entry of dv.nat.staticEntries) {
+      if (entry.insideGlobal === targetIP) return true;
+    }
+  }
   return false;
 }
 
@@ -488,22 +494,34 @@ export function lookupRoute(dv, targetIP) {
     }
   }
 
-  if (!dv.routes || dv.routes.length === 0) return null;
-
+  // Static routes (AD 1 — checked first, take priority over OSPF AD 110)
   let bestRoute = null;
   let bestCIDR = -1;
-  for (const r of dv.routes) {
-    const routeNet = getNetwork(r.network, r.mask);
-    const targetNet = getNetwork(targetIP, r.mask);
-    if (routeNet === targetNet) {
-      const cidr = maskToCIDR(r.mask);
-      if (cidr > bestCIDR) {
-        bestCIDR = cidr;
-        bestRoute = r;
+  if (dv.routes) {
+    for (const r of dv.routes) {
+      const routeNet = getNetwork(r.network, r.mask);
+      const targetNet = getNetwork(targetIP, r.mask);
+      if (routeNet === targetNet) {
+        const cidr = maskToCIDR(r.mask);
+        if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
       }
     }
   }
-  return bestRoute ? bestRoute.nextHop : null;
+  if (bestRoute) return bestRoute.nextHop;
+
+  // OSPF routes (AD 110 — fallback when no static route matches)
+  if (dv.ospfRoutes && dv.ospfRoutes.length > 0) {
+    let bestOspf = null, bestOspfCIDR = -1;
+    for (const r of dv.ospfRoutes) {
+      if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
+        const cidr = maskToCIDR(r.mask);
+        if (cidr > bestOspfCIDR) { bestOspfCIDR = cidr; bestOspf = r; }
+      }
+    }
+    if (bestOspf) return bestOspf.nextHop;
+  }
+
+  return null;
 }
 
 export function findDeviceByIP(devices, ip) {
@@ -857,22 +875,34 @@ export function describeRouteLookup(dv, targetIP) {
       return { nextHop: null, description: `Directly connected on ${ifName} (${getNetwork(iface.ip, iface.mask)}/${maskToCIDR(iface.mask)})` };
     }
   }
-  if (!dv.routes || dv.routes.length === 0) {
-    return { nextHop: null, description: 'No matching route' };
-  }
   let bestRoute = null, bestCIDR = -1;
-  for (const r of dv.routes) {
-    const routeNet = getNetwork(r.network, r.mask);
-    const targetNet = getNetwork(targetIP, r.mask);
-    if (routeNet === targetNet) {
-      const cidr = maskToCIDR(r.mask);
-      if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+  if (dv.routes) {
+    for (const r of dv.routes) {
+      const routeNet = getNetwork(r.network, r.mask);
+      const targetNet = getNetwork(targetIP, r.mask);
+      if (routeNet === targetNet) {
+        const cidr = maskToCIDR(r.mask);
+        if (cidr > bestCIDR) { bestCIDR = cidr; bestRoute = r; }
+      }
     }
   }
   if (bestRoute) {
     const isDefault = bestRoute.network === '0.0.0.0' && bestRoute.mask === '0.0.0.0';
     const prefix = isDefault ? 'default route' : `static route ${bestRoute.network}/${maskToCIDR(bestRoute.mask)}`;
     return { nextHop: bestRoute.nextHop, description: `Matched ${prefix} via ${bestRoute.nextHop}` };
+  }
+  // OSPF routes (AD 110 — fallback when no static route matches)
+  if (dv.ospfRoutes && dv.ospfRoutes.length > 0) {
+    let bestOspf = null, bestOspfCIDR = -1;
+    for (const r of dv.ospfRoutes) {
+      if (getNetwork(r.network, r.mask) === getNetwork(targetIP, r.mask)) {
+        const cidr = maskToCIDR(r.mask);
+        if (cidr > bestOspfCIDR) { bestOspfCIDR = cidr; bestOspf = r; }
+      }
+    }
+    if (bestOspf) {
+      return { nextHop: bestOspf.nextHop, description: `Matched OSPF route ${bestOspf.network}/${maskToCIDR(bestOspf.mask)} via ${bestOspf.nextHop}` };
+    }
   }
   return { nextHop: null, description: 'No matching route' };
 }

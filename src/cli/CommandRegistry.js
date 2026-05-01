@@ -1,9 +1,11 @@
 // ─── Command tree and hint data for CLI modes ───
+import { hasCapability } from '../model/DeviceCapabilities.js';
 
 export const commandTree = {
-  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show ip dhcp binding', 'show ip dhcp pool', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'test access', 'exit'],
-  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show ip dhcp binding', 'show ip dhcp pool', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'ping', 'traceroute', 'test access', 'clear arp', 'renew dhcp', 'disable', 'exit'],
-  config: ['hostname', 'interface', 'interface vlan', 'interface tunnel', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'ip dhcp pool', 'no ip dhcp pool', 'ip dhcp excluded-address', 'no ip dhcp excluded-address', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'crypto isakmp policy', 'crypto ipsec transform-set', 'crypto map', 'no crypto isakmp policy', 'no crypto ipsec transform-set', 'no crypto map', 'exit', 'end'],
+  user: ['enable', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show ip dhcp binding', 'show ip dhcp pool', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'show ip ospf', 'show ip ospf neighbor', 'ping', 'traceroute', 'test access', 'exit'],
+  privileged: ['configure terminal', 'show ip interface brief', 'show ip route', 'show running-config', 'show interfaces', 'show vlan brief', 'show interfaces trunk', 'show interfaces switchport', 'show interfaces tunnel', 'show ip nat translations', 'show ip nat statistics', 'show ip dhcp binding', 'show ip dhcp pool', 'show firewall policy', 'show access-lists', 'show crypto isakmp sa', 'show crypto ipsec sa', 'show arp', 'show etherchannel summary', 'show packet-flow', 'show ip ospf', 'show ip ospf neighbor', 'ping', 'traceroute', 'test access', 'clear arp', 'renew dhcp', 'disable', 'exit'],
+  config: ['hostname', 'interface', 'interface vlan', 'interface tunnel', 'ip route', 'ip default-gateway', 'no ip route', 'vlan', 'no vlan', 'ip nat inside source static', 'ip nat inside source list', 'ip nat pool', 'no ip nat inside source static', 'no ip nat pool', 'ip dhcp pool', 'no ip dhcp pool', 'ip dhcp excluded-address', 'no ip dhcp excluded-address', 'access-list', 'no access-list', 'firewall policy', 'no firewall policy', 'crypto isakmp policy', 'crypto ipsec transform-set', 'crypto map', 'no crypto isakmp policy', 'no crypto ipsec transform-set', 'no crypto map', 'router ospf', 'no router ospf', 'exit', 'end'],
+  'config-router': ['network', 'no network', 'router-id', 'no router-id', 'exit', 'end'],
   'config-if': ['ip address', 'ip address dhcp', 'no ip address dhcp', 'no shutdown', 'shutdown', 'description', 'switchport mode access', 'switchport mode trunk', 'switchport access vlan', 'switchport trunk allowed vlan', 'ip nat inside', 'ip nat outside', 'no ip nat inside', 'no ip nat outside', 'ip access-group', 'no ip access-group', 'tunnel source', 'tunnel destination', 'tunnel mode', 'crypto map', 'no crypto map', 'bond-group', 'no bond-group', 'exit', 'end'],
   'config-vlan': ['name', 'exit', 'end'],
   'config-isakmp': ['encryption', 'hash', 'authentication', 'group', 'lifetime', 'exit', 'end'],
@@ -14,12 +16,13 @@ export const commandTree = {
 export function getCmdHintData(store) {
   const dev = () => store.getCurrentDevice();
   const isSwitch = () => store.isSwitch();
-  const isFirewall = () => dev().type === 'firewall';
-  const isServer = () => dev().type === 'server';
-  const isRouterOrFW = () => dev().type === 'router' || dev().type === 'firewall';
-  const isRouterOrFWOrSV = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'server';
-  const isL3Capable = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'switch';
-  const isRouterOrFWOrSVOrSW = () => dev().type === 'router' || dev().type === 'firewall' || dev().type === 'server' || dev().type === 'switch';
+  const d = () => dev();
+  const isFirewall = () => hasCapability(d(), 'firewallPolicy');
+  const isServer = () => d().type === 'server';
+  const isRouterOrFW = () => hasCapability(d(), 'nat');
+  const isRouterOrFWOrSV = () => hasCapability(d(), 'nat') || d().type === 'server';
+  const isL3Capable = () => hasCapability(d(), 'l3Forwarding') || hasCapability(d(), 'vlan');
+  const isRouterOrFWOrSVOrSW = () => hasCapability(d(), 'staticRoute');
   const hasSVI = () => isSwitch() && Object.keys(dev().interfaces).some(n => n.startsWith('Vlan'));
 
   const isTunnel = () => {
@@ -49,6 +52,8 @@ export function getCmdHintData(store) {
       { label: 'show ip dhcp pool', fill: 'show ip dhcp pool', cat: 'dhcp', cond: () => dev().type === 'router' },
       { label: 'show etherchannel summary', fill: 'show etherchannel summary', cat: 'show', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
+      { label: 'show ip ospf neighbor', fill: 'show ip ospf neighbor', cat: 'ospf', cond: isRouterOrFW },
+      { label: 'show ip ospf', fill: 'show ip ospf', cat: 'ospf', cond: isRouterOrFW },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
       { label: 'test access <ip> <proto> [port]', fill: 'test access ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
@@ -74,6 +79,8 @@ export function getCmdHintData(store) {
       { label: 'show ip dhcp pool', fill: 'show ip dhcp pool', cat: 'dhcp', cond: () => dev().type === 'router' },
       { label: 'show etherchannel summary', fill: 'show etherchannel summary', cat: 'show', cond: () => dev().type === 'server' || dev().type === 'pc' },
       { label: 'show packet-flow <ip>', fill: 'show packet-flow ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
+      { label: 'show ip ospf neighbor', fill: 'show ip ospf neighbor', cat: 'ospf', cond: isRouterOrFW },
+      { label: 'show ip ospf', fill: 'show ip ospf', cat: 'ospf', cond: isRouterOrFW },
       { label: 'ping <ip>', fill: 'ping ', cat: 'show' },
       { label: 'traceroute <ip>', fill: 'traceroute ', cat: 'show' },
       { label: 'test access <ip> <proto> [port]', fill: 'test access ', cat: 'show', cond: () => dev().type !== 'switch' || hasSVI() },
@@ -105,6 +112,16 @@ export function getCmdHintData(store) {
       { label: 'crypto map <name> <seq> ipsec-isakmp', fill: 'crypto map ', cat: 'vpn', cond: isRouterOrFW },
       { label: 'vlan <id>', fill: 'vlan ', cat: 'vlan', cond: isSwitch },
       { label: 'no vlan <id>', fill: 'no vlan ', cat: 'vlan', cond: isSwitch },
+      { label: 'router ospf <pid>', fill: 'router ospf ', cat: 'ospf', cond: isRouterOrFW },
+      { label: 'no router ospf <pid>', fill: 'no router ospf ', cat: 'ospf', cond: isRouterOrFW },
+      { label: 'exit', fill: 'exit', cat: 'nav' },
+      { label: 'end', fill: 'end', cat: 'nav' },
+    ],
+    'config-router': [
+      { label: 'network <ip> <wildcard> area <id>', fill: 'network ', cat: 'ospf' },
+      { label: 'no network <ip> <wildcard> area <id>', fill: 'no network ', cat: 'ospf' },
+      { label: 'router-id <ip>', fill: 'router-id ', cat: 'ospf' },
+      { label: 'no router-id', fill: 'no router-id', cat: 'ospf' },
       { label: 'exit', fill: 'exit', cat: 'nav' },
       { label: 'end', fill: 'end', cat: 'nav' },
     ],
