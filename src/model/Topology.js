@@ -7,6 +7,8 @@ export function createDevice(type, id, x, y) {
     return {
       ...base,
       routes: [],
+      ospf: { processes: {}, routerId: null },
+      ospfRoutes: [],
       nat: { staticEntries: [], pools: {}, dynamicRules: [], translations: [], stats: { hits: 0, misses: 0 } },
       accessLists: {},
       crypto: { isakmpPolicies: {}, transformSets: {}, cryptoMaps: {} },

@@ -2,6 +2,7 @@
 import { normalizeInterface, isValidIP, maskToCIDR } from '../../simulation/NetworkUtils.js';
 import { generateTunnelName } from '../../model/Topology.js';
 import { hasCapability } from '../../model/DeviceCapabilities.js';
+import { recomputeAllOspf } from '../../simulation/OspfEngine.js';
 
 export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
   const lower = input.toLowerCase();
@@ -566,6 +567,31 @@ export function execConfig(input, parts, cmd, store, termWrite, updateTabs) {
       if (iface.cryptoMap === mapName) delete iface.cryptoMap;
     }
     termWrite(`% Crypto map "${mapName}" removed`, 'success-line');
+    return;
+  }
+
+  // router ospf <pid>
+  if (lower.startsWith('router ospf')) {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    const pid = parts[2] ? parseInt(parts[2]) : NaN;
+    if (isNaN(pid) || pid < 1 || pid > 65535) { termWrite('% Usage: router ospf <process-id> (1-65535)', 'error-line'); return; }
+    if (!dev.ospf) dev.ospf = { processes: {}, routerId: null };
+    if (!dev.ospf.processes[pid]) dev.ospf.processes[pid] = { networks: [] };
+    store.currentOspfPid = pid;
+    store.setCLIMode('config-router');
+    return;
+  }
+
+  // no router ospf <pid>
+  if (lower.startsWith('no router ospf')) {
+    const pid = parts[3] ? parseInt(parts[3]) : NaN;
+    if (isNaN(pid)) { termWrite('% Usage: no router ospf <process-id>', 'error-line'); return; }
+    if (!dev.ospf || !dev.ospf.processes[pid]) { termWrite(`% OSPF process ${pid} not found`, 'error-line'); return; }
+    delete dev.ospf.processes[pid];
+    if (Object.keys(dev.ospf.processes).length === 0) dev.ospf.routerId = null;
+    dev.ospfRoutes = [];
+    recomputeAllOspf(store.getDevices());
+    termWrite(`% OSPF process ${pid} removed`, 'success-line');
     return;
   }
 

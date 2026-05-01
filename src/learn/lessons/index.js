@@ -5,3 +5,4 @@ export { lessonNetworkBroadcast } from './Lesson_NetworkBroadcast.js';
 export { lessonEthernetSwitch } from './Lesson_EthernetSwitch.js';
 export { lessonPacketStructure } from './Lesson_PacketStructure.js';
 export { lessonRouting } from './Lesson_Routing.js';
+export { lessonOspf } from './Lesson_OSPF.js';

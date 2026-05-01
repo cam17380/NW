@@ -4,6 +4,7 @@ import { maskToCIDR, getNetwork } from '../../simulation/NetworkUtils.js';
 import { hasCapability } from '../../model/DeviceCapabilities.js';
 import { tracePacketFlow } from '../../simulation/PingEngine.js';
 import { tryDhcpAssign } from './InterfaceCommands.js';
+import { getOspfNeighborInfo, getRouterId, wildcardToMask } from '../../simulation/OspfEngine.js';
 
 function findTunnelPeer(devices, srcDev, destIP) {
   if (!destIP) return null;
@@ -99,7 +100,7 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
   if (lower === 'show ip route') {
     const hasSVI = hasCapability(dev, 'vlan') && Object.keys(dev.interfaces).some(n => n.startsWith('Vlan'));
     if (hasCapability(dev, 'vlan') && !hasSVI) { termWrite('% Routing table is not available on L2 switches (configure SVIs for L3)', 'error-line'); return; }
-    termWrite('Codes: C - connected, S - static, * - candidate default\n');
+    termWrite('Codes: C - connected, S - static, O - OSPF, * - candidate default\n');
     const defaultRoute = dev.routes ? dev.routes.find(r => r.network === '0.0.0.0') : null;
     const gwLastResort = defaultRoute ? defaultRoute.nextHop : (dev.defaultGateway || 'not set');
     termWrite('Gateway of last resort is ' + gwLastResort);
@@ -122,8 +123,49 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
       }
     }
 
+    if (dev.ospfRoutes && dev.ospfRoutes.length > 0) {
+      for (const r of dev.ospfRoutes) {
+        termWrite(`O    ${r.network}/${maskToCIDR(r.mask)} [110/1] via ${r.nextHop}`);
+      }
+    }
+
     if (hasCapability(dev, 'defaultGateway') && dev.defaultGateway) {
       termWrite(`S*   0.0.0.0/0 via ${dev.defaultGateway}`);
+    }
+    return;
+  }
+
+  if (lower === 'show ip ospf neighbor') {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    const neighbors = getOspfNeighborInfo(store.getDevices(), store.getCurrentDeviceId());
+    if (neighbors.length === 0) {
+      termWrite('% No OSPF neighbors found');
+      return;
+    }
+    termWrite('Neighbor ID     State       Interface');
+    termWrite('--------------- ----------- -----------------------');
+    for (const n of neighbors) {
+      termWrite(`${n.neighborId.padEnd(16)}FULL        ${n.localIfName}`);
+    }
+    return;
+  }
+
+  if (lower === 'show ip ospf' || lower === 'show ip ospf database') {
+    if (!hasCapability(dev, 'l3Forwarding')) { termWrite('% OSPF is only available on routers/firewalls', 'error-line'); return; }
+    if (!dev.ospf || Object.keys(dev.ospf.processes).length === 0) {
+      termWrite('% OSPF is not configured on this device'); return;
+    }
+    for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
+      const rid = getRouterId(dev);
+      termWrite(`Routing Process "ospf ${pid}" with ID ${rid}`);
+      termWrite(`  Number of areas: 1 (1 normal)`);
+      termWrite(`  Number of interfaces in this process: ${proc.networks.length > 0 ? 'configured' : '0'}`);
+      if (proc.networks.length > 0) {
+        termWrite('  Network Statements:');
+        for (const n of proc.networks) {
+          termWrite(`    network ${n.ip} ${n.wildcard} area ${n.area}  (mask ${wildcardToMask(n.wildcard)})`);
+        }
+      }
     }
     return;
   }
@@ -548,6 +590,16 @@ export function execShow(input, parts, store, termWrite, execPing, execTracerout
         termWrite(`ip route ${r.network} ${r.mask} ${r.nextHop}`);
       }
       termWrite('!');
+    }
+    if (dev.ospf && Object.keys(dev.ospf.processes).length > 0) {
+      for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
+        termWrite(`router ospf ${pid}`);
+        if (dev.ospf.routerId) termWrite(` router-id ${dev.ospf.routerId}`);
+        for (const n of proc.networks) {
+          termWrite(` network ${n.ip} ${n.wildcard} area ${n.area}`);
+        }
+        termWrite('!');
+      }
     }
     if (hasCapability(dev, 'defaultGateway') && dev.defaultGateway) {
       termWrite(`ip default-gateway ${dev.defaultGateway}`);

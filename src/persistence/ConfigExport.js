@@ -170,6 +170,19 @@ export function exportCommandScript(store) {
       }
     }
 
+    // OSPF
+    if (dev.ospf && Object.keys(dev.ospf.processes).length > 0) {
+      lines.push('!');
+      for (const [pid, proc] of Object.entries(dev.ospf.processes)) {
+        lines.push(`router ospf ${pid}`);
+        if (dev.ospf.routerId) lines.push(` router-id ${dev.ospf.routerId}`);
+        for (const n of proc.networks) {
+          lines.push(` network ${n.ip} ${n.wildcard} area ${n.area}`);
+        }
+        lines.push(` exit`);
+      }
+    }
+
     // Default gateway (PC/Server)
     if ((dev.type === 'pc' || dev.type === 'server') && dev.defaultGateway) {
       lines.push(`ip default-gateway ${dev.defaultGateway}`);
