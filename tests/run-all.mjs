@@ -13,6 +13,7 @@ import { registerPacketFlowTests } from '../src/test/tests/PacketFlowTests.js';
 import { registerL3SwitchTests } from '../src/test/tests/L3SwitchTests.js';
 import { registerBondTests } from '../src/test/tests/BondTests.js';
 import { registerVpnTunnelTests } from '../src/test/tests/VpnTunnelTests.js';
+import { registerOspfTests } from '../src/test/tests/OspfTests.js';
 
 const runner = new TestRunner();
 registerVlanTests(runner);
@@ -25,6 +26,7 @@ registerPacketFlowTests(runner);
 registerL3SwitchTests(runner);
 registerBondTests(runner);
 registerVpnTunnelTests(runner);
+registerOspfTests(runner);
 
 runner.onProgress = (cat, test) => {
   const mark = test.status === 'passed' ? '.' : 'F';

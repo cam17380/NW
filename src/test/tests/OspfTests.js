@@ -1,7 +1,7 @@
 // ─── OSPF Tests ───
-import { recomputeAllOspf, getOspfNeighborInfo, getRouterId, wildcardToMask } from '../../simulation/OspfEngine.js';
+import { recomputeAllOspf, getOspfNeighborInfo, getRouterId, wildcardToMask, getOspfProcessInterfaces } from '../../simulation/OspfEngine.js';
 import { canReach, lookupRoute, describeRouteLookup } from '../../simulation/Routing.js';
-import { buildOspfTopology, buildOspfPartialTopology } from '../TestTopologies.js';
+import { buildOspfTopology, buildOspfPartialTopology, buildOspfNoCableTopology, buildOspfSwitchedTopology } from '../TestTopologies.js';
 
 export function registerOspfTests(runner) {
   runner.category('OSPF');
@@ -116,5 +116,95 @@ export function registerOspfTests(runner) {
     const result = describeRouteLookup(devices.R1, '172.16.0.10');
     assert.ok(result.description.includes('OSPF'), 'describeRouting should mention OSPF for route learned via OSPF');
     assert.equal(result.nextHop, '10.1.0.2', 'next-hop should be R2');
+  }, buildOspfTopology);
+
+  // ─── Longest-prefix-match: OSPF /24 must beat static /0 default ───
+
+  runner.test('OSPF /24 wins over static default /0 (longest prefix match, AD ignored)', (assert) => {
+    const { devices } = buildOspfTopology();
+    recomputeAllOspf(devices);
+    // Add a static default route on R1 to a different next-hop
+    devices.R1.routes.push({ network: '0.0.0.0', mask: '0.0.0.0', nextHop: '10.1.0.99' });
+    const hop = lookupRoute(devices.R1, '172.16.0.10');
+    assert.equal(hop, '10.1.0.2', 'OSPF /24 (longer prefix) should win over static /0 default despite higher AD');
+  }, buildOspfTopology);
+
+  runner.test('describeRouteLookup picks OSPF /24 over static /0 default', (assert) => {
+    const { devices } = buildOspfTopology();
+    recomputeAllOspf(devices);
+    devices.R1.routes.push({ network: '0.0.0.0', mask: '0.0.0.0', nextHop: '10.1.0.99' });
+    const result = describeRouteLookup(devices.R1, '172.16.0.10');
+    assert.ok(result.description.includes('OSPF'), 'describeRouteLookup should match OSPF, not the static default');
+    assert.equal(result.nextHop, '10.1.0.2', 'next-hop must come from OSPF, not static default');
+  }, buildOspfTopology);
+
+  runner.test('Static and OSPF tie on prefix length: static (AD 1) wins as tiebreaker', (assert) => {
+    const { devices } = buildOspfTopology();
+    recomputeAllOspf(devices);
+    // Add a static /24 to the same destination as the OSPF /24
+    devices.R1.routes.push({ network: '172.16.0.0', mask: '255.255.255.0', nextHop: '10.1.0.99' });
+    const hop = lookupRoute(devices.R1, '172.16.0.10');
+    assert.equal(hop, '10.1.0.99', 'on equal prefix length, static (AD 1) must beat OSPF (AD 110)');
+  }, buildOspfTopology);
+
+  // ─── Interface state changes must be reflected after recompute ───
+
+  runner.test('Shutting down OSPF interface clears learned routes after recompute', (assert) => {
+    const { devices } = buildOspfTopology();
+    recomputeAllOspf(devices);
+    assert.ok(devices.R1.ospfRoutes.find(r => r.network === '172.16.0.0'), 'baseline: R1 should have 172.16.0.0/24 route');
+    // Take down R2's interface to R1 — adjacency must collapse
+    devices.R2.interfaces['GigabitEthernet0/0'].status = 'down';
+    recomputeAllOspf(devices);
+    assert.ok(!devices.R1.ospfRoutes.find(r => r.network === '172.16.0.0'), 'R1 must lose 172.16.0.0/24 route once R2 G0/0 is down');
+  }, buildOspfTopology);
+
+  runner.test('Bringing OSPF interface back up restores routes after recompute', (assert) => {
+    const { devices } = buildOspfTopology();
+    recomputeAllOspf(devices);
+    devices.R2.interfaces['GigabitEthernet0/0'].status = 'down';
+    recomputeAllOspf(devices);
+    devices.R2.interfaces['GigabitEthernet0/0'].status = 'up';
+    recomputeAllOspf(devices);
+    assert.ok(devices.R1.ospfRoutes.find(r => r.network === '172.16.0.0'), 'R1 should regain 172.16.0.0/24 once R2 G0/0 returns to up');
+  }, buildOspfTopology);
+
+  // ─── L2 reachability gates OSPF adjacency ───
+
+  runner.test('Same-subnet routers without a cable do NOT form OSPF adjacency', (assert) => {
+    const { devices } = buildOspfNoCableTopology();
+    recomputeAllOspf(devices);
+    const neighbors = getOspfNeighborInfo(devices, 'R1');
+    assert.equal(neighbors.length, 0, 'no cable = no neighbor (subnet match alone is not sufficient)');
+    assert.equal(devices.R1.ospfRoutes.length, 0, 'no neighbor = no learned routes');
+  }, buildOspfNoCableTopology);
+
+  runner.test('Routers connected via a switch form OSPF adjacency and exchange routes', (assert) => {
+    const { devices } = buildOspfSwitchedTopology();
+    recomputeAllOspf(devices);
+    const neighbors = getOspfNeighborInfo(devices, 'R1');
+    assert.equal(neighbors.length, 1, 'R1 should see exactly one neighbor via the switch');
+    assert.equal(neighbors[0].neighborIP, '10.0.0.2', 'neighbor IP should be R2 G0/1');
+    const route = devices.R1.ospfRoutes.find(r => r.network === '172.16.0.0');
+    assert.ok(route, 'R1 should learn 172.16.0.0/24 via OSPF over the switch fabric');
+    assert.equal(route.nextHop, '10.0.0.2', 'next-hop must be R2 (10.0.0.2)');
+  }, buildOspfSwitchedTopology);
+
+  // ─── getOspfProcessInterfaces (used by show ip ospf) ───
+
+  runner.test('getOspfProcessInterfaces counts up interfaces matched by network statements', (assert) => {
+    const { devices } = buildOspfTopology();
+    const proc = devices.R1.ospf.processes[1];
+    const ifaces = getOspfProcessInterfaces(devices.R1, proc);
+    assert.equal(ifaces.length, 2, 'R1 has both 192.168.1.0/24 and 10.1.0.0/30 covered, both up');
+  }, buildOspfTopology);
+
+  runner.test('getOspfProcessInterfaces excludes down interfaces', (assert) => {
+    const { devices } = buildOspfTopology();
+    devices.R1.interfaces['GigabitEthernet0/1'].status = 'down';
+    const proc = devices.R1.ospf.processes[1];
+    const ifaces = getOspfProcessInterfaces(devices.R1, proc);
+    assert.equal(ifaces.length, 1, 'down interface should be excluded — only G0/0 remains');
+    assert.equal(ifaces[0].ifName, 'GigabitEthernet0/0', 'remaining interface should be G0/0');
   }, buildOspfTopology);
 }

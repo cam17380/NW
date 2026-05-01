@@ -745,3 +745,68 @@ export function buildOspfPartialTopology() {
   devices.R3.ospfRoutes = [];
   return { devices };
 }
+
+// Two routers configured with the same subnet on their OSPF interface but with
+// no cable between them. Verifies that the L2 reachability gate prevents
+// false-positive OSPF adjacency formation.
+export function buildOspfNoCableTopology() {
+  const devices = {
+    R1: {
+      type: 'router', hostname: 'R1', x: 100, y: 100,
+      routes: [], nat: natBase(), accessLists: {}, ospfRoutes: [],
+      ospf: { processes: { 1: { networks: [{ ip: '10.0.0.0', wildcard: '0.0.0.3', area: 0 }] } }, routerId: null },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '10.0.0.1', mask: '255.255.255.252', status: 'up', protocol: 'up', description: '', connected: null },
+      }
+    },
+    R2: {
+      type: 'router', hostname: 'R2', x: 400, y: 100,
+      routes: [], nat: natBase(), accessLists: {}, ospfRoutes: [],
+      ospf: { processes: { 1: { networks: [{ ip: '10.0.0.0', wildcard: '0.0.0.3', area: 0 }] } }, routerId: null },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '10.0.0.2', mask: '255.255.255.252', status: 'up', protocol: 'up', description: '', connected: null },
+      }
+    },
+  };
+  return { devices };
+}
+
+// Two OSPF routers on a shared LAN through a switch. Verifies the L2 BFS path
+// of the reachability gate accepts switch-mediated adjacency.
+export function buildOspfSwitchedTopology() {
+  const devices = {
+    R1: {
+      type: 'router', hostname: 'R1', x: 100, y: 100,
+      routes: [], nat: natBase(), accessLists: {}, ospfRoutes: [],
+      ospf: { processes: { 1: { networks: [
+        { ip: '192.168.1.0', wildcard: '0.0.0.255', area: 0 },
+        { ip: '10.0.0.0', wildcard: '0.0.0.7', area: 0 },
+      ] } }, routerId: null },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '192.168.1.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: null },
+        'GigabitEthernet0/1': { ip: '10.0.0.1', mask: '255.255.255.248', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/1' } },
+      }
+    },
+    R2: {
+      type: 'router', hostname: 'R2', x: 500, y: 100,
+      routes: [], nat: natBase(), accessLists: {}, ospfRoutes: [],
+      ospf: { processes: { 1: { networks: [
+        { ip: '172.16.0.0', wildcard: '0.0.0.255', area: 0 },
+        { ip: '10.0.0.0', wildcard: '0.0.0.7', area: 0 },
+      ] } }, routerId: null },
+      interfaces: {
+        'GigabitEthernet0/0': { ip: '172.16.0.1', mask: '255.255.255.0', status: 'up', protocol: 'up', description: '', connected: null },
+        'GigabitEthernet0/1': { ip: '10.0.0.2', mask: '255.255.255.248', status: 'up', protocol: 'up', description: '', connected: { device: 'SW1', iface: 'GigabitEthernet0/2' } },
+      }
+    },
+    SW1: {
+      type: 'switch', hostname: 'CoreSW', x: 300, y: 100,
+      vlans: { 1: { name: 'default' } }, routes: [], accessLists: {},
+      interfaces: {
+        'GigabitEthernet0/1': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R1', iface: 'GigabitEthernet0/1' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+        'GigabitEthernet0/2': { ip: '', mask: '', status: 'up', protocol: 'up', description: '', connected: { device: 'R2', iface: 'GigabitEthernet0/1' }, switchport: { mode: 'access', accessVlan: 1, trunkAllowed: 'all' } },
+      }
+    },
+  };
+  return { devices };
+}
