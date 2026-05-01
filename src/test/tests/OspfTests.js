@@ -2,6 +2,8 @@
 import { recomputeAllOspf, getOspfNeighborInfo, getRouterId, wildcardToMask, getOspfProcessInterfaces } from '../../simulation/OspfEngine.js';
 import { canReach, lookupRoute, describeRouteLookup } from '../../simulation/Routing.js';
 import { buildOspfTopology, buildOspfPartialTopology, buildOspfNoCableTopology, buildOspfSwitchedTopology } from '../TestTopologies.js';
+import { Store } from '../../core/Store.js';
+import { EventBus } from '../../core/EventBus.js';
 
 export function registerOspfTests(runner) {
   runner.category('OSPF');
@@ -206,5 +208,22 @@ export function registerOspfTests(runner) {
     const ifaces = getOspfProcessInterfaces(devices.R1, proc);
     assert.equal(ifaces.length, 1, 'down interface should be excluded — only G0/0 remains');
     assert.equal(ifaces[0].ifName, 'GigabitEthernet0/0', 'remaining interface should be G0/0');
+  }, buildOspfTopology);
+
+  // ─── Store.setTopology must auto-populate OSPF routes ───
+  // Regression: "Open in Simulator" / Challenge / Snapshot loaders all call
+  // store.setTopology — without auto-recompute, devices arrive with empty
+  // ospfRoutes and "show ip route" omits OSPF entries even though neighbors
+  // are FULL.
+
+  runner.test('Store.setTopology auto-populates OSPF routes (no explicit recompute needed)', (assert) => {
+    const { devices } = buildOspfTopology();
+    // Sanity: devices arrive with empty ospfRoutes from the topology builder
+    assert.equal(devices.R1.ospfRoutes.length, 0, 'baseline: ospfRoutes empty before setTopology');
+    const store = new Store(new EventBus());
+    store.setTopology(devices, []);
+    const route = devices.R1.ospfRoutes.find(r => r.network === '172.16.0.0');
+    assert.ok(route, 'after setTopology, R1 should have learned 172.16.0.0/24 via OSPF');
+    assert.equal(route.nextHop, '10.1.0.2', 'next-hop should be R2');
   }, buildOspfTopology);
 }
