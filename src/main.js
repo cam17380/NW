@@ -35,6 +35,7 @@ import { registerL3SwitchTests } from './test/tests/L3SwitchTests.js';
 import { registerBondTests } from './test/tests/BondTests.js';
 import { registerVpnTunnelTests } from './test/tests/VpnTunnelTests.js';
 import { registerDhcpTests } from './test/tests/DhcpTests.js';
+import { registerOspfTests } from './test/tests/OspfTests.js';
 import { ChallengeEngine } from './challenge/ChallengeEngine.js';
 import { ChallengeUI } from './challenge/ChallengeUI.js';
 import { ChallengeSelector } from './challenge/ChallengeSelector.js';
@@ -282,6 +283,7 @@ registerL3SwitchTests(testRunner);
 registerBondTests(testRunner);
 registerVpnTunnelTests(testRunner);
 registerDhcpTests(testRunner);
+registerOspfTests(testRunner);
 
 const testModeContainer = document.getElementById('testModeContainer');
 const testUI = new TestUI(testModeContainer, testRunner);
