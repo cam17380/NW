@@ -1,7 +1,7 @@
 # Network Simulator Operation Manual
 
-**Version:** 1.3
-**Last Updated:** 2026-04-06
+**Version:** 1.5.1
+**Last Updated:** 2026-05-01
 
 ---
 
@@ -25,13 +25,13 @@ This manual covers how to launch the network simulator and provides step-by-step
 
 | Area | Description |
 |------|-------------|
-| **Header** | Application title, device tabs, toolbar buttons |
+| **Header** | Application title, toolbar buttons, language toggle |
 | **Terminal (left)** | CLI command input and output |
-| **Canvas (right)** | Network topology visualization with devices and links |
+| **Canvas (right)** | Network topology visualization. Device tabs at the top-right, `Design Mode` button, and `? Help` and legend at the bottom-left |
 
 ### 3.2 Device Tabs
 
-Device tabs appear in the header. Click a tab to switch to that device's CLI.
+Device tabs appear at the top-right of the canvas panel. Click a tab to switch to that device's CLI (each device keeps its own prompt and terminal output).
 
 ### 3.3 Device Type Colors
 
@@ -55,11 +55,13 @@ Each device type has a unique color. Status is indicated by brightness.
 
 | Button | Function |
 |--------|----------|
-| **File ▾** | Dropdown menu (Save/Load/Export JSON/Import JSON/Export Script) |
-| **Templates** | Open template selection screen |
-| **Design Mode** | Toggle design mode |
-| **Reset** | Reset to initial state |
-| **? Help** | Show command reference (bottom-left of canvas) |
+| **File ▾** | Save / Load / Export JSON / Import JSON / Export Script (Cisco) / Export Script (YAMAHA) / Export Image / Load Script / Reset Topology |
+| **Templates** | Open template selection modal |
+| **Learn** | Open Learn Mode (interactive tutorials) |
+| **Challenge** | Open Challenge Mode (exercises) |
+| **JA / EN (top-right)** | Language toggle. Click to switch JA ⇔ EN |
+| **Design Mode** (top-right of canvas) | Toggle design mode |
+| **? Help** (bottom-right of canvas) | Show command reference |
 
 ### 3.5 Splitter
 
@@ -717,57 +719,268 @@ The ping animation displays all hops including the tunnel underlay (physical pat
 
 ---
 
-## 16. Canvas Zoom / Pan
+## 16. OSPF Dynamic Routing Configuration Guide
 
-### 16.1 Zoom
+### 16.1 Overview
+
+Instead of writing static routes by hand, OSPF (Open Shortest Path First) lets routers learn and propagate routes automatically. This simulator implements a single-area-equivalent simplified OSPF — neighbor discovery, route propagation, and verification through `show ip route` / `show ip ospf` are supported.
+
+OSPF runs on routers and firewalls (L3 switch SVIs are not supported).
+
+### 16.2 OSPF Configuration Steps
+
+Three routers R1 → R2 → R3 in a chain so the LANs at both ends (192.168.1.0/24, 172.16.0.0/24) automatically reach each other:
+
+```
+! On R1
+R1> enable
+R1# configure terminal
+R1(config)# router ospf 1
+R1(config-router)# network 192.168.1.0 0.0.0.255 area 0
+R1(config-router)# network 10.1.0.0 0.0.0.3 area 0
+R1(config-router)# router-id 1.1.1.1            ! optional (highest IP used otherwise)
+R1(config-router)# end
+
+! On R2
+R2(config)# router ospf 1
+R2(config-router)# network 10.1.0.0 0.0.0.3 area 0
+R2(config-router)# network 10.1.0.4 0.0.0.3 area 0
+R2(config-router)# end
+
+! On R3
+R3(config)# router ospf 1
+R3(config-router)# network 10.1.0.4 0.0.0.3 area 0
+R3(config-router)# network 172.16.0.0 0.0.0.255 area 0
+R3(config-router)# end
+```
+
+### 16.3 Verifying Neighbors and Routes
+
+```
+R1# show ip ospf neighbor
+Neighbor ID     State       Interface
+--------------- ----------- -----------------------
+10.1.0.2        FULL        GigabitEthernet0/1
+
+R1# show ip route
+Codes: C - connected, S - static, O - OSPF, * - candidate default
+C    192.168.1.0/24 is directly connected, GigabitEthernet0/0
+C    10.1.0.0/30 is directly connected, GigabitEthernet0/1
+O    10.1.0.4/30 [110/1] via 10.1.0.2
+O    172.16.0.0/24 [110/1] via 10.1.0.2
+
+R1# show ip ospf
+Routing Process "ospf 1" with ID 1.1.1.1
+  Number of areas: 1 (1 normal)
+  Number of interfaces in this process: 2
+  Network Statements:
+    network 192.168.1.0 0.0.0.255 area 0  (mask 255.255.255.0)
+    network 10.1.0.0 0.0.0.3 area 0  (mask 255.255.255.252)
+```
+
+### 16.4 Removing OSPF Configuration
+
+```
+R1(config)# no router ospf 1            ! remove the entire process
+R1(config)# router ospf 1
+R1(config-router)# no network 192.168.1.0 0.0.0.255 area 0   ! remove a single network statement
+R1(config-router)# no router-id          ! clear router-id
+```
+
+### 16.5 OSPF vs Static Precedence
+
+When both static (AD 1) and OSPF (AD 110) cover the same destination:
+
+| Case | Winner | Reason |
+|------|--------|--------|
+| static `0.0.0.0/0` + OSPF `172.16.0.0/24` | OSPF | Longest prefix match |
+| static `172.16.0.0/24` + OSPF `172.16.0.0/24` | static | Equal prefix → AD (1 < 110) |
+| static `172.16.0.0/16` + OSPF `172.16.0.0/24` | OSPF | Prefix /24 is longer than /16 |
+
+### 16.6 Troubleshooting
+
+| Symptom | Cause / Action |
+|---------|----------------|
+| No output from `show ip ospf neighbor` | Mismatched `network` wildcard / area. Subnet mask mismatch on the two ends. Interface is `shutdown`. No physical / VLAN reachability |
+| Neighbor is FULL but no `O` route appears | A `network` statement on the other side does not cover the target LAN — add the target subnet to the `network` list explicitly |
+| Routes don't refresh after `shutdown` / `no shutdown` | Should auto-recompute since v1.5.1; older builds may need a reload |
+| Same-subnet routers don't form adjacency | Since v1.5.1, L2 reachability is required. No cable or VLAN-isolated peers will not adjacency-up (matches real-equipment behavior) |
+
+---
+
+## 17. DHCP Configuration Guide
+
+### 17.1 Overview
+
+A router can act as a DHCP server, leasing IP addresses to clients (PCs) on the same L2 segment. (No `ip helper-address` relay across subnets.)
+
+### 17.2 Configuring the DHCP Server (Router)
+
+```
+R1> enable
+R1# configure terminal
+
+! Set the LAN interface IP first
+R1(config)# interface GigabitEthernet0/0
+R1(config-if)# ip address 192.168.1.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+
+! Reserve addresses (gateway itself, servers, etc.)
+R1(config)# ip dhcp excluded-address 192.168.1.1 192.168.1.10
+
+! Define the pool
+R1(config)# ip dhcp pool LAN
+R1(dhcp-config)# network 192.168.1.0 255.255.255.0
+R1(dhcp-config)# default-router 192.168.1.1
+R1(dhcp-config)# dns-server 8.8.8.8
+R1(dhcp-config)# lease 1
+R1(dhcp-config)# end
+```
+
+### 17.3 Configuring a DHCP Client (PC)
+
+```
+PC1> enable
+PC1# configure terminal
+PC1(config)# interface Ethernet0
+PC1(config-if)# ip address dhcp     ! lease from any reachable router
+PC1(config-if)# end
+
+% DHCP: Acquired 192.168.1.11/255.255.255.0 from Router1
+  Gateway: 192.168.1.1  DNS: 8.8.8.8
+```
+
+Re-acquire from privileged EXEC:
+```
+PC1# renew dhcp
+```
+
+### 17.4 Verification
+
+```
+R1# show ip dhcp pool       ! pool config and binding count
+R1# show ip dhcp binding    ! list of leased IPs and clients
+PC1# show ip interface brief
+```
+
+### 17.5 Releasing DHCP
+
+```
+PC1(config-if)# no ip address dhcp   ! stop the client, release IP & GW
+```
+
+---
+
+## 18. Learn Mode (Tutorials)
+
+Click the **Learn** button in the header to launch the interactive tutorial mode. Pick a lesson; the canvas renders illustrative animations and the side panel narrates each step.
+
+### 18.1 Available Lessons
+
+| Lesson | Category | Topic |
+|--------|----------|-------|
+| IP Address Basics | Layer 3 | IPv4 structure, classes, private/global |
+| Subnet Masks and CIDR | Layer 3 | Masks, CIDR, subnet math, VLSM |
+| Network Address & Broadcast | Layer 3 | Network/broadcast, usable host range |
+| Ethernet and Switching | Layer 2 | MAC, L2 switch behavior, broadcast domain, VLAN |
+| Packet & Frame Structure | Fundamentals | Encapsulation, L2/L3 packets, nesting |
+| Routing Fundamentals | Layer 3 | Router role, default GW, routing table, MAC rewrite |
+| OSPF: Dynamic Routing | L3 Routing | Hello / LSA / SPF, neighbor discovery, automatic learning |
+
+### 18.2 Controls
+
+- **Next / Prev**: advance / step back
+- **Close**: exit the lesson
+- The CLI remains usable during a lesson (the actual topology is not modified — the lesson is purely illustrative)
+
+---
+
+## 19. Challenge Mode (Exercises)
+
+Click the **Challenge** button in the header for hands-on exercises. As you achieve each objective (connectivity, configured route, ACL applied, etc.) the corresponding checkmark on the panel turns green.
+
+### 19.1 Scenario List
+
+**Beginner** (`beginner-*`):
+- First Ping
+- DHCP
+- Default Gateway
+- Static Route
+
+**Intermediate** (`inter-*`):
+- VLAN Isolation
+- VLAN Routing
+- NAT
+- ACL
+
+**Advanced** (`adv-*`):
+- OSPF
+- Firewall (DMZ)
+- Site-to-Site VPN
+- Troubleshoot
+- Comprehensive
+
+### 19.2 Controls
+
+- The challenge panel is a floating window — drag its title bar to move
+- `Show Hint` reveals progressive hints
+- Objectives are re-evaluated automatically after each CLI command or state change
+
+---
+
+## 20. Canvas Zoom / Pan
+
+### 20.1 Zoom
 
 - **Mouse wheel up**: Zoom in (centered on cursor position)
 - **Mouse wheel down**: Zoom out (centered on cursor position)
 - Zoom range: **20% to 400%**
 - Current zoom percentage is displayed at the **bottom-left** of the canvas
 
-### 16.2 Pan
+### 20.2 Pan
 
 - **Drag on empty canvas area**: Pan the view
 - **Middle mouse button drag**: Pan the view (works anywhere, even over devices)
 
-### 16.3 Fit View
+### 20.3 Fit View
 
 - **Double-click on empty canvas area**: Automatically adjusts zoom and pan to fit all devices in view
 
 ---
 
-## 17. Saving and Loading Configurations
+## 21. Saving and Loading Configurations
 
 All file operations are accessed from the "**File ▾**" dropdown menu in the toolbar.
 
-### 17.1 Manual Save
+### 21.1 Manual Save
 
 Click "File ▾" > "Save" to save all current configurations to the browser's localStorage.
 
-### 17.2 Manual Load
+### 21.2 Manual Load
 
 Click "File ▾" > "Load" to restore the last saved configuration.
 
-### 17.3 JSON Export
+### 21.3 JSON Export
 
 1. Click "File ▾" > "Export JSON"
 2. A JSON configuration file is automatically downloaded
 3. Keep this file as a backup or for use in other environments
 
-### 17.4 JSON Import
+### 21.4 JSON Import
 
 1. Click "File ▾" > "Import JSON"
 2. Select a JSON file in the file dialog
 3. The configuration is loaded and the topology is restored
 
-### 17.5 Command Script Export
+### 21.5 Command Script Export (Cisco / YAMAHA)
 
-1. Click "File ▾" > "Export Script"
-2. A text file with CLI commands for all devices is downloaded
-3. The commands can be used directly on real equipment or test environments
+| Menu | Format | Use case |
+|------|--------|----------|
+| `Export Script (Cisco)` | Cisco IOS | Drop directly into a Cisco device or test bed |
+| `Export Script (YAMAHA)` | YAMAHA RTX/SWX/UTX | Drop into YAMAHA hardware (RTX1220 / SWX2310 / UTX200) |
 
-Example output:
+Cisco example:
 ```
 ! Device: Router1 (ROUTER) [R1]
 enable
@@ -778,10 +991,38 @@ interface GigabitEthernet0/0
  no shutdown
  exit
 ip route 10.0.0.0 255.255.255.0 192.168.2.2
+!
+router ospf 1
+ router-id 1.1.1.1
+ network 192.168.1.0 0.0.0.255 area 0
+ exit
 end
 ```
 
-### 17.6 Loading from Templates
+OSPF, DHCP pools, and IPsec crypto config are all included.
+
+### 21.6 Image Export
+
+`File ▾ > Export Image` downloads the current canvas as a transparent-background PNG, suitable for documentation and slides.
+
+### 21.7 Load Script (Bulk CLI Execution)
+
+`File ▾ > Load Script` opens a modal where you can paste a Cisco-style CLI script and run all the commands at once.
+
+```
+! Example
+configure terminal
+interface GigabitEthernet0/0
+ ip address 10.0.0.1 255.255.255.0
+ no shutdown
+end
+```
+
+- Comment lines (`!`) are skipped
+- Lines run top-to-bottom; each command's output is shown on the terminal
+- Switch the active device tab beforehand if needed (the script does not switch devices on its own)
+
+### 21.8 Loading from Templates
 
 1. Click the "Templates" button in the toolbar
 2. A template selection screen appears
@@ -796,17 +1037,17 @@ Available templates:
 - **Site-to-Site VPN** — R x3 + SW x2 + PC x4 (IPsec tunnels, crypto pre-configured)
 - **Empty Canvas** — Start from scratch
 
-### 17.7 Reset
+### 21.9 Reset
 
-1. Click the "Reset" button in the toolbar
+1. Click "File ▾" > "Reset Topology"
 2. A confirmation dialog appears
 3. Confirm to restore the default topology and settings
 
 ---
 
-## 18. Troubleshooting
+## 22. Troubleshooting
 
-### 18.1 Ping Fails
+### 22.1 Ping Fails
 
 | Check | Command |
 |-------|---------|
@@ -820,7 +1061,7 @@ Available templates:
 | Identify the cause with packet flow diagnostics | `show packet-flow <destination-ip>` |
 | Test firewall policy for specific protocol/port | `test access <destination-ip> tcp 443` |
 
-### 18.2 VLAN Not Working
+### 22.2 VLAN Not Working
 
 | Check | Command |
 |-------|---------|
@@ -830,7 +1071,7 @@ Available templates:
 | Are both ports in the same VLAN? | `show vlan brief` on both switches |
 | Is ARP crossing a VLAN boundary? | `clear arp` then `ping` to observe ARP visualization |
 
-### 18.3 NAT Not Working
+### 22.3 NAT Not Working
 
 | Check | Command |
 |-------|---------|
@@ -839,7 +1080,7 @@ Available templates:
 | Are IPs available in the NAT pool? | `show ip nat statistics` |
 | Are static NAT entries correct? | `show ip nat translations` |
 
-### 18.4 ACL Blocking Traffic
+### 22.4 ACL Blocking Traffic
 
 | Check | Command |
 |-------|---------|
@@ -848,9 +1089,30 @@ Available templates:
 | Is there a `permit ip any any` at the end to avoid implicit deny? | `show access-lists` |
 | Where exactly is the packet being blocked? | `show packet-flow <destination-ip>` |
 
+### 22.5 OSPF Not Converging / No O Routes
+
+| Check | Command |
+|-------|---------|
+| Are neighbors FULL? | `show ip ospf neighbor` |
+| Do `network` statements cover the interface? | `show ip ospf` |
+| Do both ends share the same subnet mask? | `show ip interface brief` |
+| Is the path L2-reachable (cable / VLAN)? | `show packet-flow <neighbor-ip>` |
+| Is an `O` route in the routing table? | `show ip route` |
+| Is a static route shadowing it? | `show running-config` and inspect `ip route` |
+
+### 22.6 DHCP Lease Failure
+
+| Check | Command |
+|-------|---------|
+| DHCP server (router) configuration | `R1# show running-config` |
+| Pool state | `R1# show ip dhcp pool` |
+| Bindings | `R1# show ip dhcp binding` |
+| Are client and router on the same L2 segment? | Inspect canvas + `show vlan brief` |
+| Is there a free address remaining in the pool? | Compare to `show ip dhcp binding` |
+
 ---
 
-## 19. Keyboard Shortcuts
+## 23. Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
@@ -861,19 +1123,28 @@ Available templates:
 
 ---
 
-## 20. Frequently Asked Questions (FAQ)
+## 24. Frequently Asked Questions (FAQ)
 
 **Q: Will my configuration be lost if I close the browser?**
 A: The auto-save feature preserves your configuration in localStorage. However, clearing browser data will erase it. Use JSON export to back up important configurations.
 
 **Q: Can I use dynamic routing protocols (e.g., OSPF)?**
-A: This simulator supports static routes only. Dynamic routing protocols are not available.
+A: Yes. **OSPF** (simplified) is supported since v1.5. Configure with `router ospf <pid>` and `network` statements; neighbor discovery and route propagation work. See chapter 16 for details. BGP / EIGRP are not supported.
 
 **Q: Is IPv6 supported?**
 A: Only IPv4 is currently supported.
+
+**Q: Can I switch the language?**
+A: Toggle JA / EN with the top-right `JA / EN` button. The choice is persisted to localStorage.
+
+**Q: Can I import an existing Cisco configuration?**
+A: Use `File ▾ > Load Script` to paste a Cisco IOS-style CLI script into the modal and run it line-by-line.
+
+**Q: Can I export YAMAHA-style configuration?**
+A: Use `File ▾ > Export Script (YAMAHA)` to get RTX1220 / SWX2310 / UTX200 commands mapped from the current topology.
 
 **Q: Is there a maximum number of devices I can add?**
 A: There is no hard limit, but adding many devices may impact browser performance.
 
 **Q: Can I share configurations with others?**
-A: Yes. Export your configuration as a JSON file and have others import it.
+A: Yes. Export as JSON and have others import it. You can also share a `Export Image` PNG snapshot of the topology.
