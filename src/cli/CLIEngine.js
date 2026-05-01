@@ -120,4 +120,13 @@ export class CLIEngine {
   _execConfigDhcpPool(input, parts, cmd) {
     execConfigDhcpPool(input, parts, cmd, this.store, (t, c) => this.terminal.write(t, c));
   }
+
+  executeScript(text) {
+    const lines = text.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('!') || trimmed.startsWith('#')) continue;
+      this.executeCommand(trimmed);
+    }
+  }
 }

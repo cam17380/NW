@@ -83,10 +83,10 @@ function doUpdateVlanLegend() { updateVlanLegend(store); }
 registerLocale('en', en);
 registerLocale('en', enChallenge);
 registerLocale('en', enLearn);
+registerLocale('en', enHelp);
 registerLocale('ja', ja);
 registerLocale('ja', jaChallenge);
 registerLocale('ja', jaLearn);
-registerLocale('en', enHelp);
 registerLocale('ja', jaHelp);
 loadSavedLocale();
 
@@ -242,6 +242,19 @@ window.exportImage = () => {
   a.click();
   showToast(t('ui.toastImageExported'), 'success');
 };
+window.loadScript = () => {
+  document.getElementById('scriptInput').value = '';
+  document.getElementById('scriptModal').classList.add('show');
+  document.getElementById('scriptInput').focus();
+};
+window.closeScriptModal = () => {
+  document.getElementById('scriptModal').classList.remove('show');
+};
+window.runScript = () => {
+  const text = document.getElementById('scriptInput').value;
+  window.closeScriptModal();
+  cli.executeScript(text);
+};
 
 // ─── Setup ───
 initTemplateSelector(store, refreshUI);
@@ -327,12 +340,14 @@ if (loaded) {
   terminal.write(t('ui.welcome'), 'success-line');
   terminal.write(t('ui.savedRestored') + '\n', 'success-line');
   terminal.write(t('ui.welcomeHelp') + '\n');
-  terminal.write(t('ui.connectedTo', { name: store.getCurrentDevice().hostname }) + '\n', 'success-line');
+  const curDev1 = store.getCurrentDevice();
+  if (curDev1) terminal.write(t('ui.connectedTo', { name: curDev1.hostname }) + '\n', 'success-line');
 } else {
   terminal.write(t('ui.welcome'), 'success-line');
   terminal.write(t('ui.welcomeSub') + '\n');
   terminal.write(t('ui.welcomeHelp') + '\n');
-  terminal.write(t('ui.connectedTo', { name: store.getCurrentDevice().hostname }) + '\n', 'success-line');
+  const curDev2 = store.getCurrentDevice();
+  if (curDev2) terminal.write(t('ui.connectedTo', { name: curDev2.hostname }) + '\n', 'success-line');
 }
 
 // Apply initial UI text
