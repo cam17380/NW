@@ -1,6 +1,5 @@
 // ─── Snapshot: serialize/deserialize device state ───
 import { createDevice } from '../model/Topology.js';
-import { recomputeAllOspf } from '../simulation/OspfEngine.js';
 
 export function getSnapshot(devices, links) {
   const snap = {};
@@ -106,7 +105,6 @@ export function applySnapshot(store, snap) {
       devices[id] = dv;
     }
     store.setTopology(devices, snap.links || []);
-    recomputeAllOspf(devices);
     return;
   }
 
