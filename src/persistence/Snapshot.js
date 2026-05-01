@@ -1,5 +1,6 @@
 // ─── Snapshot: serialize/deserialize device state ───
 import { createDevice } from '../model/Topology.js';
+import { recomputeAllOspf } from '../simulation/OspfEngine.js';
 
 export function getSnapshot(devices, links) {
   const snap = {};
@@ -11,6 +12,7 @@ export function getSnapshot(devices, links) {
       x: dv.x,
       y: dv.y,
       routes: dv.routes ? JSON.parse(JSON.stringify(dv.routes)) : undefined,
+      ospf: dv.ospf && Object.keys(dv.ospf.processes).length > 0 ? JSON.parse(JSON.stringify(dv.ospf)) : undefined,
       defaultGateway: dv.defaultGateway || undefined,
       vlans: dv.vlans ? JSON.parse(JSON.stringify(dv.vlans)) : undefined,
       nat: dv.nat ? JSON.parse(JSON.stringify({ staticEntries: dv.nat.staticEntries, pools: dv.nat.pools, dynamicRules: dv.nat.dynamicRules })) : undefined,
@@ -55,6 +57,7 @@ export function applySnapshot(store, snap) {
       dv.hostname = saved.hostname;
       if (saved.icon !== undefined) dv.icon = saved.icon;
       if (saved.routes !== undefined) dv.routes = saved.routes;
+      if (saved.ospf !== undefined) dv.ospf = saved.ospf;
       if (saved.defaultGateway !== undefined) dv.defaultGateway = saved.defaultGateway;
       if (saved.vlans !== undefined) dv.vlans = saved.vlans;
       if (saved.nat !== undefined && dv.nat) {
@@ -103,6 +106,7 @@ export function applySnapshot(store, snap) {
       devices[id] = dv;
     }
     store.setTopology(devices, snap.links || []);
+    recomputeAllOspf(devices);
     return;
   }
 

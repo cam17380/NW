@@ -132,5 +132,18 @@ export const enChallenge = {
       hint4: 'Add firewall policy: firewall policy 10 permit 192.168.1.0 0.0.0.255 172.16.0.0 0.0.0.255 tcp 443',
       congrats: 'Excellent! You designed a complete network with routing, firewall, and access control from scratch!',
     },
+    'adv-ospf': {
+      title: 'OSPF Multi-Router Network',
+      desc: 'Three routers connect two LANs. No routing is configured yet. Use OSPF to automatically propagate routes so PC1 and Server1 can communicate across the entire network.',
+      obj0: 'PC1 can reach Server1 (172.16.0.10)',
+      obj1: 'Server1 can reach PC1 (192.168.1.10)',
+      obj2: 'OSPF is configured on all three routers',
+      hint0: 'Select Router1 tab, then: configure terminal > router ospf 1',
+      hint1: 'On R1, add: network 192.168.1.0 0.0.0.255 area 0  and  network 10.1.0.0 0.0.0.3 area 0',
+      hint2: 'Select Router2 tab and configure: network 10.1.0.0 0.0.0.3 area 0  and  network 10.1.0.4 0.0.0.3 area 0',
+      hint3: 'Select Router3 tab and configure: network 10.1.0.4 0.0.0.3 area 0  and  network 172.16.0.0 0.0.0.255 area 0',
+      hint4: 'Use "show ip route" on each router to verify O-type routes appear. Then check connectivity.',
+      congrats: 'All three routers are sharing routes via OSPF. Dynamic routing is working across the entire network!',
+    },
   },
 };

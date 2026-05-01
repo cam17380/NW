@@ -31,7 +31,7 @@ import { LearnSelector } from './learn/LearnSelector.js';
 import { LearnUI } from './learn/LearnUI.js';
 import {
   lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast,
-  lessonEthernetSwitch, lessonPacketStructure, lessonRouting,
+  lessonEthernetSwitch, lessonPacketStructure, lessonRouting, lessonOspf,
 } from './learn/lessons/index.js';
 import { registerLocale, setLocale, getLocale, loadSavedLocale, onLocaleChanged, t } from './i18n/I18n.js';
 import {
@@ -306,7 +306,7 @@ window.showChallenges = () => challengeSelector.show();
 
 // ─── Learn Mode ───
 const learnEngine = new LearnEngine();
-learnEngine.registerLessons([lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast, lessonEthernetSwitch, lessonPacketStructure, lessonRouting]);
+learnEngine.registerLessons([lessonIPAddress, lessonSubnetMask, lessonNetworkBroadcast, lessonEthernetSwitch, lessonPacketStructure, lessonRouting, lessonOspf]);
 
 const learnUI = new LearnUI(learnEngine);
 learnUI.mount(document.body);
